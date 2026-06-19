@@ -1,0 +1,42 @@
+{
+  "totalDemands": 21,
+  "matchedClients": 17,
+  "blocked": [
+    {
+      "uniqueId": "1775229193944x922629695452479500",
+      "reference": "998754,037630358",
+      "creationDate": "Apr 3, 2026 5:13 pm",
+      "address": "15 Rue Dornat, 60220 Formerie, France",
+      "city": "Formerie",
+      "creator": "s.tiennot@eco-solidaire.fr",
+      "reason": "client_missing"
+    },
+    {
+      "uniqueId": "1777899420898x523362234894909440",
+      "reference": "937865,827461708",
+      "creationDate": "May 4, 2026 2:57 pm",
+      "address": "Rue Principale, 60850 Puiseux-en-Bray, France",
+      "city": "Puiseux-en-Bray",
+      "creator": "accueil.recyclerie@eco-solidaire.fr",
+      "reason": "client_missing"
+    },
+    {
+      "uniqueId": "1777924417427x678654812217409500",
+      "reference": "452113,098087844",
+      "creationDate": "May 4, 2026 9:53 pm",
+      "address": "100 Rue Réaumur, 75002 Paris, France",
+      "city": "Paris",
+      "creator": "s.tiennot@eco-solidaire.fr",
+      "reason": "client_missing"
+    },
+    {
+      "uniqueId": "1777925568172x587047073857142800",
+      "reference": "D-325904",
+      "creationDate": "May 4, 2026 10:12 pm",
+      "address": "6 Rue Jean Racine, 60000 Beauvais, France",
+      "city": "Beauvais",
+      "creator": "s.tiennot@eco-solidaire.fr",
+      "reason": "client_missing"
+    }
+  ]
+}

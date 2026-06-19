@@ -1,0 +1,693 @@
+[
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Alain",
+      "lastName": "Guignard",
+      "email": "alain-guignard@orange.fr",
+      "phone": "+33610373039",
+      "address": "98 Rte de Dampierre, 76220 Cuy-Saint-Fiacre, France",
+      "postalCode": "76220",
+      "city": "Cuy-Saint-Fiacre"
+    },
+    "comment": "Pas de sonnette. Klaxonnez à votre arrivée.\nMerci de prévenir de votre jour et heure de passage.",
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 1,
+      "parkingDistance": 5,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "98 Rte de Dampierre, 76220 Cuy-Saint-Fiacre, France",
+        "postalCode": "76220",
+        "city": "Cuy-Saint-Fiacre"
+      },
+      "grosObjets": [
+        "Meubles"
+      ]
+    },
+    "quoteAmount": 43.53,
+    "quoteDetails": ">>> Déplacement\t\t\nDistance totale :\t20,67\tkms\nTps trajet total :\t0,2\th\nCoût déplacement :\t 23,22 € \t\n\t\t\n>>> Chargement, déchargement & tri\t\t\nTps main d œuvre :\t1,00\th\nCoût chargement :\t 13,06 € \t\n\t\t\n>>> Valorisation\t\t\nTotal valeur OBJETS:\t -   € \t\n\t\t\n>>> Déchets\t\t\nVolume déchets :\t0\tm3\nCoût déchets :\t -   € \t\n\t\t\n>>> Montant total\t\t\nHT :\t 36,28 € \t\nTTC :\t 43,53 €",
+    "createdAt": 1777036620000,
+    "updatedAt": 1779109380000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Jerome",
+      "lastName": "Desserre",
+      "email": "Jerome.des@live.fr",
+      "phone": "+33625405273",
+      "address": "115 Rte des Solons, 60650 Ons-en-Bray, France",
+      "postalCode": "60650",
+      "city": "Ons-en-Bray"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 0,
+      "parkingDistance": 0,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "115 Rte des Solons, 60650 Ons-en-Bray, France",
+        "postalCode": "60650",
+        "city": "Ons-en-Bray"
+      },
+      "grosObjets": [
+        "Meubles"
+      ]
+    },
+    "createdAt": 1778082180000,
+    "updatedAt": 1778082180000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Martine",
+      "lastName": "BOUTON",
+      "email": "martinebouton@neuf.fr",
+      "phone": "+33649400355",
+      "address": "2 Imp. des Violettes, 76220 Gournay-en-Bray, France",
+      "postalCode": "76220",
+      "city": "Gournay-en-Bray"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Appartement",
+      "floors": 2,
+      "parkingDistance": 2,
+      "parkingNearby": false,
+      "collectAddress": {
+        "address": "2 Imp. des Violettes, 76220 Gournay-en-Bray, France",
+        "postalCode": "76220",
+        "city": "Gournay-en-Bray"
+      },
+      "grosObjets": [
+        "Meubles"
+      ],
+      "petitsObjets": [
+        "Sports et Loisirs"
+      ]
+    },
+    "createdAt": 1778223180000,
+    "updatedAt": 1779108540000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Marjorie",
+      "lastName": "Alexis",
+      "email": "marjoalexis.60@gmail.com",
+      "phone": "+33672133542",
+      "address": "14 Rue Jean Jaurès, 60850 Saint-Germer-de-Fly, France",
+      "postalCode": "60850",
+      "city": "Saint-Germer-de-Fly"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 0,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "14 Rue Jean Jaurès, 60850 Saint-Germer-de-Fly, France",
+        "postalCode": "60850",
+        "city": "Saint-Germer-de-Fly"
+      },
+      "grosObjets": [
+        "Meubles"
+      ]
+    },
+    "createdAt": 1778857200000,
+    "updatedAt": 1779801180000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Claudine",
+      "lastName": "CAUCHOIS",
+      "email": "claudinecauchois@orange.fr",
+      "phone": "+33629554797",
+      "address": "11 Rés Bellevue, 76220 Ferrières-en-Bray, France",
+      "postalCode": "76220",
+      "city": "Ferrières-en-Bray"
+    },
+    "comment": "Dans petite impasse. \nJe pourrai vous envoyer les photos des meubles ( armoires et buffet)la semaine prochaine par e-mail ou n° de portable merci",
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 1,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "11 Rés Bellevue, 76220 Ferrières-en-Bray, France",
+        "postalCode": "76220",
+        "city": "Ferrières-en-Bray"
+      },
+      "grosObjets": [
+        "Meubles"
+      ],
+      "petitsObjets": [
+        "Vaisselle",
+        "Déco/Bibelots",
+        "Textile"
+      ]
+    },
+    "createdAt": 1779702600000,
+    "updatedAt": 1779788220000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": false,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Jean Luc",
+      "lastName": "Bracquart",
+      "email": "jeanluc.bracquart@gmail.com",
+      "phone": "+33786159385",
+      "address": "107 Chem. du Moulin, 60650 Le Mont-Saint-Adrien, France",
+      "postalCode": "60650",
+      "city": "Le Mont-Saint-Adrien"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": false,
+      "sorted": true,
+      "noWaste": true,
+      "floors": 0,
+      "parkingNearby": false,
+      "collectAddress": {
+        "address": "107 Chem. du Moulin, 60650 Le Mont-Saint-Adrien, France",
+        "postalCode": "60650",
+        "city": "Le Mont-Saint-Adrien"
+      }
+    },
+    "quoteAmount": 200.79,
+    "quoteDetails": ">>> Déplacement\t\t\nDistance totale :\t23,25\tkms\nTps trajet total :\t0,7\th\nCoût déplacement :\t 32,24 € \t\n\t\t\n>>> Chargement, déchargement & tri\t\t\nTps main d œuvre :\t18,00\th\nCoût chargement :\t 235,08 € \t\n\t\t\n>>> Valorisation\t\t\nTotal valeur OBJETS:\t 220,00 € \t\n\t\t\n>>> Déchets\t\t\nVolume déchets :\t2\tm3\nCoût déchets :\t 120,00 € \t\n\t\t\n>>> Montant total\t\t\nHT :\t 167,32 € \t\nTTC :\t 200,79 €",
+    "createdAt": 1779975720000,
+    "updatedAt": 1779975840000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": false,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Stéphane",
+      "lastName": "TIENNOT",
+      "email": "s.tiennot@eco-solidaire.fr",
+      "phone": "+33680082692",
+      "address": "4 Rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "floors": 1,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "20 Rue Saint-Pierre, 60000 Beauvais, France",
+        "postalCode": "60650",
+        "city": "Beauvais"
+      }
+    },
+    "createdAt": 1780404480000,
+    "updatedAt": 1780404480000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "elisabeth",
+      "lastName": "zaccaria",
+      "email": "dorice_caroline@hotmail.fr",
+      "phone": "+33627503766",
+      "address": "9 Rue d'Hevecourt, 60380 Buicourt, France",
+      "postalCode": "60380",
+      "city": "Buicourt"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 1,
+      "parkingDistance": 0,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "9 Rue d'Hevecourt, 60380 Buicourt, France",
+        "postalCode": "60380",
+        "city": "Buicourt"
+      },
+      "grosObjets": [
+        "Meubles"
+      ],
+      "petitsObjets": [
+        "Petit appareil électroménager",
+        "Jouets",
+        "Vaisselle",
+        "Déco/Bibelots",
+        "Textile",
+        "Puériculture",
+        "Bricolage et Jardin",
+        "Autres (précisez)"
+      ],
+      "petitsObjetsAutre": "Autres"
+    },
+    "createdAt": 1780481760000,
+    "updatedAt": 1781268960000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "customer": {
+      "firstName": "joel",
+      "lastName": "waeler",
+      "email": "wajo1960@gmail.com",
+      "phone": "+33644986200",
+      "address": "22 Imp. Omega, 69610 Sainte-Foy-l'Argentière, France",
+      "postalCode": "69610",
+      "city": "Sainte-Foy-l'Argentière"
+    },
+    "comment": "désolé, je n'ai pas de photos du mobilier à vous soumettre car je ne suis pas sur place",
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": true,
+      "sorted": false,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 2,
+      "parkingDistance": 10,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "18 Rue du Chaufour, 60650 Saint-Paul, France",
+        "postalCode": "69610",
+        "city": "Saint-Paul"
+      },
+      "grosObjets": [
+        "Meubles",
+        "Gros appareil électroménager"
+      ],
+      "petitsObjets": [
+        "Petit appareil électroménager",
+        "Vaisselle",
+        "Textile",
+        "Déco/Bibelots",
+        "Bricolage et Jardin"
+      ]
+    },
+    "createdAt": 1780654740000,
+    "updatedAt": 1781171820000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": false,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "CORINNE",
+      "lastName": "BAGUET",
+      "email": "corinne.baguet@orange.fr",
+      "phone": "+33680542068",
+      "address": "5 Rue de Gerberoy, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": false,
+      "sorted": false,
+      "noWaste": false,
+      "floors": 0,
+      "parkingNearby": false,
+      "collectAddress": {
+        "address": "5 Rue de Gerberoy, 60650 Lachapelle-aux-Pots, France",
+        "postalCode": "60650",
+        "city": "Lachapelle-aux-Pots"
+      }
+    },
+    "createdAt": 1781010120000,
+    "updatedAt": 1781010120000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "laurent",
+      "lastName": "girard",
+      "email": "girardlaurent1571@neuf.fr",
+      "phone": "+33630448118",
+      "address": "2 Rue Carnot, 60110 Méru, France",
+      "postalCode": "60110",
+      "city": "Méru"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 0,
+      "parkingDistance": 5,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "2 Rue Carnot, 60110 Méru, France",
+        "postalCode": "60110",
+        "city": "Méru"
+      },
+      "grosObjets": [
+        "Meubles"
+      ]
+    },
+    "createdAt": 1781081880000,
+    "updatedAt": 1781081880000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Francine",
+      "lastName": "Reverand",
+      "email": "frreverand@gmail.com",
+      "phone": "+33677753984",
+      "address": "11 Rue de la Madeleine, 76220 Neuf-Marché, France",
+      "postalCode": "76220",
+      "city": "Neuf-Marché"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 1,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "11 Rue de la Madeleine, 76220 Neuf-Marché, France",
+        "postalCode": "76220",
+        "city": "Neuf-Marché"
+      },
+      "grosObjets": [
+        "Meubles",
+        "Gros appareil électroménager",
+        "Écran"
+      ],
+      "petitsObjets": [
+        "Vaisselle",
+        "Puériculture",
+        "Autres (précisez)"
+      ],
+      "petitsObjetsAutre": "Autres"
+    },
+    "createdAt": 1781275140000,
+    "updatedAt": 1781276580000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": false,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "ISABELLE",
+      "lastName": "GODIN",
+      "email": "godin.isabelle3@orange.fr",
+      "phone": "+33630334786",
+      "address": "1 Rue de Corleux, 60850 Cuigy-en-Bray, France",
+      "postalCode": "60850",
+      "city": "Cuigy-en-Bray"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": false,
+      "sorted": false,
+      "noWaste": true,
+      "floors": 2,
+      "parkingDistance": 5,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "1 Rue de Corleux, 60850 Cuigy-en-Bray, France",
+        "postalCode": "60850",
+        "city": "Cuigy-en-Bray"
+      }
+    },
+    "createdAt": 1781345160000,
+    "updatedAt": 1781345160000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": false,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": ".",
+      "lastName": "LOIN",
+      "email": "nathalie.mercier0984@gmail.com",
+      "phone": "+33616869962",
+      "address": "14 Rue des Tuileries, 60650 Saint-Germain-la-Poterie, France",
+      "postalCode": "60650",
+      "city": "Saint-Germain-la-Poterie"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": false,
+      "sorted": true,
+      "noWaste": true,
+      "floors": 1,
+      "parkingDistance": 3,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "14 Rue des Tuileries, 60650 Saint-Germain-la-Poterie, France",
+        "postalCode": "60650",
+        "city": "Saint-Germain-la-Poterie"
+      }
+    },
+    "createdAt": 1781356080000,
+    "updatedAt": 1781356080000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": false,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Claudine",
+      "lastName": "Dahan",
+      "email": "v.horcholle@eco-solidaire.fr",
+      "phone": "+33630631331",
+      "address": "10 Rte de Mesangueville, 76780 Hodeng-Hodenger, France",
+      "postalCode": "76780",
+      "city": "Hodeng-Hodenger"
+    },
+    "photos": [],
+    "collecte": {
+      "dismountable": false,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "floors": 0,
+      "parkingDistance": 2,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "10 Rte de Mesangueville, 76780 Hodeng-Hodenger, France",
+        "postalCode": "76780",
+        "city": "Hodeng-Hodenger"
+      }
+    },
+    "createdAt": 1781595600000,
+    "updatedAt": 1781595600000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "MICHEL",
+      "lastName": "MONDHER",
+      "email": "0630241845@orange.fr",
+      "phone": "+33630241845",
+      "address": "12 Rue du Lavoir, 76220 Ferrières-en-Bray, France",
+      "postalCode": "76220",
+      "city": "Ferrières-en-Bray"
+    },
+    "comment": "Table de jardin en bois (6/8 personnes) avec 4 chaises",
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": true,
+      "sorted": false,
+      "noWaste": false,
+      "housingType": "Maison",
+      "floors": 0,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "12 Rue du Lavoir, 76220 Ferrières-en-Bray, France",
+        "postalCode": "76220",
+        "city": "Ferrières-en-Bray"
+      },
+      "grosObjets": [
+        "Meubles"
+      ]
+    },
+    "createdAt": 1781620320000,
+    "updatedAt": 1781701020000
+  },
+  {
+    "type": "collecte",
+    "stage": "nouveau",
+    "outcome": "open",
+    "complete": true,
+    "collecteType": "indefini",
+    "processSteps": [],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Cinda",
+      "lastName": "Bahbah",
+      "email": "cindabahbah16@gmail.com",
+      "phone": "+33780706421",
+      "address": "117 Pl. Doffoy Vasseur, 60650 Ons-en-Bray, France",
+      "postalCode": "60650",
+      "city": "Ons-en-Bray"
+    },
+    "comment": "Log 11",
+    "photos": [],
+    "collecte": {
+      "dismountable": true,
+      "reusableGoodCondition": true,
+      "sorted": true,
+      "noWaste": true,
+      "housingType": "Maison",
+      "floors": 2,
+      "parkingNearby": true,
+      "collectAddress": {
+        "address": "117 Pl. Doffoy Vasseur, 60650 Ons-en-Bray, France",
+        "postalCode": "60650",
+        "city": "Ons-en-Bray"
+      },
+      "grosObjets": [
+        "Meubles"
+      ]
+    },
+    "createdAt": 1781674260000,
+    "updatedAt": 1781674260000
+  }
+]

@@ -1,0 +1,100 @@
+{
+  "sourceRows": 49,
+  "requestsAfterGrouping": 35,
+  "readyToImport": 25,
+  "blocked": [
+    {
+      "reference": "A-400220",
+      "clientId": null,
+      "groupedRows": 2,
+      "creationDates": [
+        "Mar 30, 2026 1:44 pm"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-547858",
+      "clientId": null,
+      "groupedRows": 2,
+      "creationDates": [
+        "Mar 30, 2026 1:45 pm",
+        "Mar 30, 2026 1:46 pm"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-667421",
+      "clientId": null,
+      "groupedRows": 2,
+      "creationDates": [
+        "Mar 30, 2026 1:56 pm"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-147558",
+      "clientId": null,
+      "groupedRows": 2,
+      "creationDates": [
+        "Apr 1, 2026 11:11 am"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-691766",
+      "clientId": null,
+      "groupedRows": 1,
+      "creationDates": [
+        "Apr 3, 2026 1:01 am"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-180707",
+      "clientId": null,
+      "groupedRows": 1,
+      "creationDates": [
+        "Apr 3, 2026 4:48 pm"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-209713",
+      "clientId": null,
+      "groupedRows": 2,
+      "creationDates": [
+        "May 4, 2026 11:04 pm",
+        "May 4, 2026 11:07 pm"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-260083",
+      "clientId": null,
+      "groupedRows": 1,
+      "creationDates": [
+        "May 4, 2026 11:21 pm"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-769639",
+      "clientId": null,
+      "groupedRows": 2,
+      "creationDates": [
+        "May 13, 2026 1:55 pm",
+        "May 13, 2026 1:57 pm"
+      ],
+      "reason": "client_missing"
+    },
+    {
+      "reference": "A-317637",
+      "clientId": null,
+      "groupedRows": 1,
+      "creationDates": [
+        "Jun 3, 2026 1:47 pm"
+      ],
+      "reason": "client_missing"
+    }
+  ]
+}

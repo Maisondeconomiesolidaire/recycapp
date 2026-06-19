@@ -1,0 +1,1207 @@
+[
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Léa",
+      "lastName": "BRUMENT",
+      "email": "lea.brument@gmail.com",
+      "phone": "+33675983693",
+      "address": "25 Rue de la Neuville sur Oudeuil, 60860 Oudeuil, France",
+      "postalCode": "60860",
+      "city": "Oudeuil"
+    },
+    "comment": "Bonjour,\n\nJe souhaite obtenir svp un devis pour l’aérogommage de 4 portes de placard.\nIl s’agit de portes que nous pouvons apporter directement sur place, selon vos disponibilités et modalités de dépôt.\nQuels sont vos délais de réalisation ?\nMerci.\nCordialement,\n\nLéa Brument",
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Armoire",
+        "height": 243,
+        "width": 48,
+        "depth": 2,
+        "quantity": 4,
+        "woodType": "Je ne sais pas",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Autre (précisez)",
+        "delivery": false,
+        "retrieval": false,
+        "comment": "Bonjour,\n\nJe souhaite obtenir svp un devis pour l’aérogommage de 4 portes de placard.\nIl s’agit de portes que nous pouvons apporter directement sur place, selon vos disponibilités et modalités de dépôt.\nQuels sont vos délais de réalisation ?\nMerci.\nCordialement,\n\nLéa Brument"
+      }
+    ],
+    "createdAt": 1777447800000,
+    "updatedAt": 1777447800000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Stéphane",
+      "lastName": "TIENNOT",
+      "email": "s.tiennot@eco-solidaire.fr",
+      "phone": "+33680082692",
+      "address": "4 Rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Banc",
+        "height": 82,
+        "width": 165,
+        "depth": 75,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Peinture",
+        "delivery": true,
+        "retrieval": true
+      }
+    ],
+    "createdAt": 1778673660000,
+    "updatedAt": 1778673660000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "customer": {
+      "firstName": "BASTIEN",
+      "lastName": "GIENNATIEMPO",
+      "email": "bgennatiempo@gmail.com",
+      "phone": "+33630562021",
+      "address": "101 La Petite Panne, 27480 Bézu-la-Forêt, France",
+      "postalCode": "27480",
+      "city": "Bézu-la-Forêt"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Commode",
+        "height": 92,
+        "width": 120,
+        "depth": 54,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780392480000,
+    "updatedAt": 1780392480000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Stéphane",
+      "lastName": "TIENNOT",
+      "email": "s.tiennot@eco-solidaire.fr",
+      "phone": "+33680082692",
+      "address": "4 Rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Armoire",
+        "height": 210,
+        "width": 180,
+        "depth": 55,
+        "quantity": 1,
+        "woodType": "Je ne sais pas",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Peinture",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780404540000,
+    "updatedAt": 1780404540000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Stéphane",
+      "lastName": "TIENNOT",
+      "email": "s.tiennot@eco-solidaire.fr",
+      "phone": "+33680082692",
+      "address": "4 Rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Buffet",
+        "height": 233,
+        "width": 32,
+        "depth": 23,
+        "quantity": 1,
+        "woodType": "Bois tendre",
+        "stripping": "Décapage intérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": true
+      }
+    ],
+    "createdAt": 1780404960000,
+    "updatedAt": 1780404960000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Claudine",
+      "lastName": "CAUCHOIS",
+      "email": "claudinecauchois@orange.fr",
+      "phone": "+33629554797",
+      "address": "11 Rés Bellevue, 76220 Ferrières-en-Bray, France",
+      "postalCode": "76220",
+      "city": "Ferrières-en-Bray"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Banc",
+        "height": 23,
+        "width": 23,
+        "depth": 32,
+        "quantity": 1,
+        "woodType": "Bois tendre",
+        "stripping": "Décapage intérieur seulement",
+        "coating": "Peinture",
+        "delivery": false,
+        "retrieval": true
+      }
+    ],
+    "createdAt": 1780405020000,
+    "updatedAt": 1780405020000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Stéphane",
+      "lastName": "TIENNOT",
+      "email": "s.tiennot@eco-solidaire.fr",
+      "phone": "+33680082692",
+      "address": "4 Rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Bibliothèque",
+        "height": 33,
+        "width": 32,
+        "depth": 23,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Peinture",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780405080000,
+    "updatedAt": 1780405080000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Alain",
+      "lastName": "Guignard",
+      "email": "alain-guignard@orange.fr",
+      "phone": "+33610373039",
+      "address": "98 Rte de Dampierre, 76220 Cuy-Saint-Fiacre, France",
+      "postalCode": "76220",
+      "city": "Cuy-Saint-Fiacre"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Banc",
+        "height": 33,
+        "width": 32,
+        "depth": 23,
+        "quantity": 1,
+        "woodType": "Bois tendre",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Peinture",
+        "delivery": true,
+        "retrieval": true
+      }
+    ],
+    "createdAt": 1780405080000,
+    "updatedAt": 1780405080000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Stéphane",
+      "lastName": "TIENNOT",
+      "email": "s.tiennot@eco-solidaire.fr",
+      "phone": "+33680082692",
+      "address": "4 Rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Bahut",
+        "height": 33,
+        "width": 32,
+        "depth": 32,
+        "quantity": 1,
+        "woodType": "Bois tendre",
+        "stripping": "Décapage intérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": true,
+        "retrieval": true
+      }
+    ],
+    "createdAt": 1780405200000,
+    "updatedAt": 1780405200000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "Jerome",
+      "lastName": "Desserre",
+      "email": "Jerome.des@live.fr",
+      "phone": "+33625405273",
+      "address": "115 Rte des Solons, 60650 Ons-en-Bray, France",
+      "postalCode": "60650",
+      "city": "Ons-en-Bray"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Banc",
+        "height": 33,
+        "width": 32,
+        "depth": 23,
+        "quantity": 1,
+        "woodType": "Bois tendre",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Lasure / Teinte",
+        "delivery": true,
+        "retrieval": true
+      }
+    ],
+    "createdAt": 1780405200000,
+    "updatedAt": 1780405200000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "EMELINE",
+      "lastName": "CHANEAC",
+      "email": "eme.rons@free.fr",
+      "phone": "+33680925863",
+      "address": "6 Chem. du Fond des Vignes, 60790 La Drenne, France",
+      "postalCode": "60790",
+      "city": "La Drenne"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Fauteuil",
+        "height": 79,
+        "width": 128,
+        "depth": 42,
+        "quantity": 1,
+        "woodType": "Bois tendre",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780479180000,
+    "updatedAt": 1780479180000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "LAURE",
+      "lastName": "CARPENTIER",
+      "email": "carpentier.laur@laposte.net",
+      "phone": "+33677503574",
+      "address": "17 Rue Paul Dubois, 60850 Le Coudray-Saint-Germer, France",
+      "postalCode": "60850",
+      "city": "Le Coudray-Saint-Germer"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Buffet 2 corps",
+        "height": 200,
+        "width": 120,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780480740000,
+    "updatedAt": 1780480740000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "LAURE",
+      "lastName": "CARPENTIER",
+      "email": "carpentier.laur@laposte.net",
+      "phone": "+33677503574",
+      "address": "17 Rue Paul Dubois, 60850 Le Coudray-Saint-Germer, France",
+      "postalCode": "60850",
+      "city": "Le Coudray-Saint-Germer"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Buffet",
+        "height": 200,
+        "width": 120,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Autre (veuillez préciser)",
+        "height": 200,
+        "width": 90,
+        "depth": 4,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Peinture",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780487040000,
+    "updatedAt": 1780487100000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "HUBERT",
+      "lastName": "DE LATOUR",
+      "email": "huberanne-de-latour@orange.fr",
+      "phone": "+33681977066",
+      "address": "74 Rue Henri Guedier, 76220 Gournay-en-Bray, France",
+      "postalCode": "76220",
+      "city": "Gournay-en-Bray"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Autre (veuillez préciser)",
+        "height": 25,
+        "width": 190,
+        "depth": 3,
+        "quantity": 1,
+        "woodType": "Je ne sais pas",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Peinture",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780488000000,
+    "updatedAt": 1780488000000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "OLIVIER",
+      "lastName": "GUION",
+      "email": "Olivierguion60@orange.fr",
+      "phone": "+33633626904",
+      "address": "1 Rue du Fond Pierre Tain, 60650 Lachapelle-aux-Pots, France",
+      "postalCode": "60650",
+      "city": "Lachapelle-aux-Pots"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Autre (veuillez préciser)",
+        "height": 200,
+        "width": 100,
+        "depth": 4,
+        "quantity": 2,
+        "woodType": "Bois dur",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Peinture",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780489260000,
+    "updatedAt": 1780489260000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "AURELIE",
+      "lastName": "MARINO",
+      "email": "contact@atelierbriquesetbroc.fr",
+      "phone": "+33609393154",
+      "address": "44 Rue du Pont Fleury, 60650 Blacourt, France",
+      "postalCode": "60650",
+      "city": "Blacourt"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Table",
+        "height": 88,
+        "width": 192,
+        "depth": 47,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780489920000,
+    "updatedAt": 1780489920000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "ESTELLE",
+      "lastName": "DUVAUCHEL",
+      "email": "stdirection@forgesleseaux.fr",
+      "phone": "+33060710616",
+      "address": "14 Rue des Potiers, 76440 Forges-les-Eaux, France",
+      "postalCode": "76440",
+      "city": "Forges-les-Eaux"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Buffet 2 corps",
+        "height": 190,
+        "width": 140,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780492260000,
+    "updatedAt": 1780492260000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "MALORIE",
+      "lastName": "BOUTEILLA",
+      "email": "bouteillamalorie@gmail.com",
+      "phone": "+33778203258",
+      "address": "36 Rue du Pont Fleury, 60650 Blacourt, France",
+      "postalCode": "60650",
+      "city": "Blacourt"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Buffet 2 corps",
+        "height": 200,
+        "width": 140,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Table",
+        "height": 85,
+        "width": 200,
+        "depth": 80,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Chaise",
+        "height": 110,
+        "width": 40,
+        "depth": 40,
+        "quantity": 6,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780492800000,
+    "updatedAt": 1780492980000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "MARYSE",
+      "lastName": "GUEGUEN",
+      "email": "gueguen.m@gmail.com",
+      "phone": "+33610637317",
+      "address": "2 Rue de Lanlu, 60650 Villembray, France",
+      "postalCode": "60650",
+      "city": "Villembray"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Autre (veuillez préciser)",
+        "height": 125,
+        "width": 300,
+        "depth": 10,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780493340000,
+    "updatedAt": 1780493340000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "SOPHIE",
+      "lastName": "FOUCAULT",
+      "email": "emeline.foucault@hotmail.fr",
+      "phone": "+33681078002",
+      "address": "2 Ham. de Seronville, 60380 Songeons, France",
+      "postalCode": "60380",
+      "city": "Songeons"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Bahut",
+        "height": 200,
+        "width": 80,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780494420000,
+    "updatedAt": 1780494420000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "SOPHIE",
+      "lastName": "FOUCAULT",
+      "email": "emeline.foucault@hotmail.fr",
+      "phone": "+33681078002",
+      "address": "2 Ham. de Seronville, 60380 Songeons, France",
+      "postalCode": "60380",
+      "city": "Songeons"
+    },
+    "comment": "BONNETIERE VITREE",
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Bahut",
+        "height": 200,
+        "width": 80,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false,
+        "comment": "BONNETIERE VITREE"
+      }
+    ],
+    "createdAt": 1780494780000,
+    "updatedAt": 1780494780000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "ROMAIN",
+      "lastName": "CARON",
+      "email": "romain_25@icloud.com",
+      "phone": "+33648247724",
+      "address": "1 Les Grands Domaines, 60850 Lalandelle, France",
+      "postalCode": "60850",
+      "city": "Lalandelle"
+    },
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Commode",
+        "height": 80,
+        "width": 110,
+        "depth": 40,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Meuble bas",
+        "height": 50,
+        "width": 90,
+        "depth": 40,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Vaisselier",
+        "height": 200,
+        "width": 200,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Meuble bas",
+        "height": 60,
+        "width": 120,
+        "depth": 50,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Buffet",
+        "height": 88,
+        "width": 180,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      },
+      {
+        "objectType": "Autre (veuillez préciser)",
+        "height": 120,
+        "width": 60,
+        "depth": 60,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage extérieur seulement",
+        "coating": "Lasure / Teinte",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1780665540000,
+    "updatedAt": 1780665960000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Julie",
+      "lastName": "Dumesnil",
+      "email": "jukin2507@gmail.com",
+      "phone": "+33684919768",
+      "address": "15 La Croix Verte, 76220 Ferrières-en-Bray, France",
+      "postalCode": "76220",
+      "city": "Ferrières-en-Bray"
+    },
+    "comment": "Bonjour j'ai 6 chaise une table un bahut , un meuble hifi et un meuble bas 2 portes",
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Autre (veuillez préciser)",
+        "label": "Bonjour j'ai 6 chaise une table un bahut , un meuble hifi et un meuble bas 2 portes",
+        "height": 0,
+        "width": 0,
+        "depth": 0,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Vernis",
+        "delivery": false,
+        "retrieval": true
+      }
+    ],
+    "createdAt": 1781103660000,
+    "updatedAt": 1781103660000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "76",
+    "customer": {
+      "firstName": "Julie",
+      "lastName": "Dumesnil",
+      "email": "jukin2507@gmail.com",
+      "phone": "+33684919768",
+      "address": "15 La Croix Verte, 76220 Ferrières-en-Bray, France",
+      "postalCode": "76220",
+      "city": "Ferrières-en-Bray"
+    },
+    "comment": "Bonjour j'ai un bahut 4 portes et 4 tiroirs, 6 chaises ,une table ovale, un meuble bas deux portes et un meubles hi-fi.",
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Bahut",
+        "height": 2,
+        "width": 2,
+        "depth": 2,
+        "quantity": 1,
+        "woodType": "Bois dur",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Vernis",
+        "delivery": true,
+        "retrieval": true,
+        "comment": "Bonjour j'ai un bahut 4 portes et 4 tiroirs, 6 chaises ,une table ovale, un meuble bas deux portes et un meubles hi-fi."
+      }
+    ],
+    "createdAt": 1781106600000,
+    "updatedAt": 1781106600000
+  },
+  {
+    "type": "aerogommage",
+    "stage": "nouveau",
+    "outcome": "open",
+    "requestOrigin": "external",
+    "complete": true,
+    "processSteps": [
+      "Contact pris",
+      "Devis édité",
+      "Devis signé",
+      "Prestation planifiée",
+      "Prestation terminée",
+      "Facture éditée",
+      "Facture réglée"
+    ],
+    "completedSteps": 0,
+    "site": "60",
+    "customer": {
+      "firstName": "ALAIN",
+      "lastName": "LERAILLE",
+      "email": "alain.leraille@gmail.com",
+      "phone": "+33607843655",
+      "address": "50 Bis Rue de Bracheux, 60000 Beauvais, France",
+      "postalCode": "60000",
+      "city": "Beauvais"
+    },
+    "comment": "AEROGOMMAGE POUR REPEINDRE",
+    "photos": [],
+    "aerogommage": [
+      {
+        "objectType": "Autre (veuillez préciser)",
+        "label": "AEROGOMMAGE POUR REPEINDRE",
+        "height": 155,
+        "width": 50,
+        "depth": 3,
+        "quantity": 10,
+        "woodType": "Bois tendre",
+        "stripping": "Décapage intérieur / extérieur",
+        "coating": "Peinture",
+        "delivery": false,
+        "retrieval": false
+      }
+    ],
+    "createdAt": 1781273340000,
+    "updatedAt": 1781273340000
+  }
+]

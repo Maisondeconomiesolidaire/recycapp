@@ -1,0 +1,335 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+/* Geist Sans (variable) — police de toute l'application. */
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Dark mode scopé par classe : le layout CRM ajoute `.dark`,
+   les pages publiques (boutique, formulaires) restent en clair. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Couleur primaire de l'application : orange #ff7700. */
+  --color-brand-50: #fff4eb;
+  --color-brand-100: #ffe4cc;
+  --color-brand-200: #ffc699;
+  --color-brand-300: #ffa766;
+  --color-brand-400: #ff8d33;
+  --color-brand-500: #ff7700;
+  --color-brand-600: #e66b00;
+  --color-brand-700: #b85400;
+  --color-brand-800: #8a3f00;
+  --color-brand-900: #5c2a00;
+
+  /* Couleurs par type de demande (cf. charte Cycle en Bray) */
+  --color-cycle: #196b24; /* Atelier vélo « Cycle en Bray » */
+  --color-aerogommage: #782170;
+  --color-collecte: #317fa0;
+  --color-boutique: #a0315a;
+
+  /* Palette CRM dédiée */
+  --color-crm-black: #070707;
+  --color-crm-onyx: #0d0d0d;
+  --color-crm-onyx-2: #151515;
+  --color-crm-carbon: #202020;
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.dark {
+  --crm-bg: var(--color-crm-black);
+  --crm-surface: var(--color-crm-onyx);
+  --crm-surface-2: var(--color-crm-onyx-2);
+  --crm-surface-3: var(--color-crm-carbon);
+  --crm-border: rgba(255, 255, 255, 0.08);
+  --crm-border-strong: rgba(255, 255, 255, 0.12);
+  --background: var(--crm-bg);
+  --foreground: #faf7f2;
+  --card: var(--crm-surface);
+  --card-foreground: #faf7f2;
+  --popover: var(--crm-surface);
+  --popover-foreground: #faf7f2;
+  --primary: var(--color-brand-500);
+  --primary-foreground: #fff8ef;
+  --secondary: var(--crm-surface-2);
+  --secondary-foreground: #f4f4f5;
+  --muted: var(--crm-surface-2);
+  --muted-foreground: #9f9fa9;
+  --accent: var(--crm-surface-3);
+  --accent-foreground: #faf7f2;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: rgba(255, 119, 0, 0.35);
+  --chart-1: #ffb66b;
+  --chart-2: #ff9b3d;
+  --chart-3: #ff7700;
+  --chart-4: #db6200;
+  --chart-5: #b85400;
+  --sidebar: var(--crm-surface);
+  --sidebar-foreground: #faf7f2;
+  --sidebar-primary: var(--color-brand-500);
+  --sidebar-primary-foreground: #fff8ef;
+  --sidebar-accent: var(--crm-surface-2);
+  --sidebar-accent-foreground: #faf7f2;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: rgba(255, 119, 0, 0.35);
+  font-family: "Inter Variable", "Geist", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ─── CRM light mode ─────────────────────────────────────────────────────── */
+/* Backgrounds */
+.crm-light {
+  --crm-bg: #ffffff;
+  --crm-surface: #ffffff;
+  --crm-surface-2: #f2f2f3;
+  --crm-surface-3: #e6e6e8;
+  --crm-border: rgba(0, 0, 0, 0.08);
+  --crm-border-strong: rgba(0, 0, 0, 0.13);
+  /* shadcn / ui tokens */
+  --background: #f4f4f5;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: var(--color-brand-500);
+  --primary-foreground: #fff8ef;
+  --secondary: #efefef;
+  --secondary-foreground: #18181b;
+  --muted: #efefef;
+  --muted-foreground: #52525b;
+  --accent: #e4e4e7;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: rgba(0, 0, 0, 0.13);
+  --input: rgba(0, 0, 0, 0.07);
+  --ring: rgba(255, 119, 0, 0.3);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #18181b;
+  --sidebar-accent: #efefef;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: rgba(0, 0, 0, 0.1);
+  --sidebar-ring: rgba(255, 119, 0, 0.3);
+  font-family: "Inter Variable", "Geist", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: light;
+  /* ── Zinc scale inversion ──
+     All CRM text uses text-zinc-{n} targeting dark bg.
+     Flipping the scale makes them work on light bg without touching any component. */
+  --color-zinc-50:  oklch(0.145 0 0);
+  --color-zinc-100: oklch(0.21  0 0);
+  --color-zinc-200: oklch(0.274 0 0);
+  --color-zinc-300: oklch(0.354 0 0);
+  --color-zinc-400: oklch(0.479 0 0);
+  --color-zinc-500: oklch(0.585 0 0);
+  --color-zinc-600: oklch(0.671 0 0);
+  --color-zinc-700: oklch(0.769 0 0);
+  --color-zinc-800: oklch(0.965 0 0);
+  --color-zinc-900: oklch(1    0 0);
+  --color-zinc-950: oklch(1    0 0);
+  /* Brand: darken light variants so active-nav text is readable on white */
+  --color-brand-200: var(--color-brand-700);
+  --color-brand-300: var(--color-brand-700);
+  /* Insight card icon/text colors: light variants → darker shades for light bg */
+  --color-amber-100:   oklch(0.32 0.08 75);
+  --color-amber-200:   oklch(0.36 0.10 75);
+  --color-amber-300:   oklch(0.48 0.13 72);
+  --color-sky-200:     oklch(0.40 0.10 220);
+  --color-sky-300:     oklch(0.44 0.11 220);
+  --color-emerald-100: oklch(0.32 0.08 155);
+  --color-emerald-200: oklch(0.36 0.10 155);
+}
+
+/* Scrollbars for light CRM */
+.crm-light ::-webkit-scrollbar { width: 10px; height: 10px; }
+.crm-light ::-webkit-scrollbar-track { background: transparent; }
+.crm-light ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.crm-light ::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+  background-clip: content-box;
+}
+
+/* Scrollbars sobres pour le CRM dark */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+  background-clip: content-box;
+}
+
+/* Animation d'apparition pour drawers / modales */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
+}
+.animate-slide-in-left {
+  animation: slide-in-left 0.2s ease-out;
+}
+
+@theme inline {
+  --font-heading: "Inter Variable", var(--font-sans);
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.553 0.195 38.402);
+  --primary-foreground: oklch(0.98 0.016 73.684);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.837 0.128 66.29);
+  --chart-2: oklch(0.705 0.213 47.604);
+  --chart-3: oklch(0.646 0.222 41.116);
+  --chart-4: oklch(0.553 0.195 38.402);
+  --chart-5: oklch(0.47 0.157 37.304);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.646 0.222 41.116);
+  --sidebar-primary-foreground: oklch(0.98 0.016 73.684);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+}

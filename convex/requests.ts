@@ -1,0 +1,700 @@
+import { mutation, query, MutationCtx } from "./_generated/server";
+import { v } from "convex/values";
+import {
+  requireStaff,
+  isAerogommageComplete,
+  isCollecteComplete,
+  isArticleComplete,
+  isVeloComplete,
+} from "./lib";
+import {
+  aerogommageItem,
+  collecteType,
+  requestLostReason,
+  requestType,
+} from "./schema";
+import { resolveProcess } from "./processes";
+import { Id } from "./_generated/dataModel";
+
+const customerArg = v.object({
+  firstName: v.string(),
+  lastName: v.string(),
+  email: v.string(),
+  phone: v.string(),
+  address: v.optional(v.string()),
+  postalCode: v.optional(v.string()),
+  city: v.optional(v.string()),
+});
+
+async function createNewRequestNotification(
+  ctx: MutationCtx,
+  args: {
+    requestId: Id<"requests">;
+    requestType: "aerogommage" | "collecte" | "article" | "velo";
+    customerName: string;
+  },
+) {
+  await ctx.db.insert("notifications", {
+    kind: "new_request",
+    title: "Nouvelle demande",
+    requestId: args.requestId,
+    requestType: args.requestType,
+    customerName: args.customerName,
+    read: false,
+    createdAt: Date.now(),
+  });
+}
+
+async function generateReference(ctx: MutationCtx): Promise<string> {
+  const all = await ctx.db.query("requests").collect();
+  const n = all.length + 1;
+  return n.toString().padStart(6, "0");
+}
+
+function requestArticleIds(request: {
+  article?: { articleId: Id<"articles"> };
+  articles?: Array<{ articleId: Id<"articles"> }>;
+}) {
+  return Array.from(
+    new Set([
+      ...(request.articles ?? []).map((article) => article.articleId),
+      ...(request.article?.articleId ? [request.article.articleId] : []),
+    ]),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Envois publics (depuis les formulaires clients) — pas d'authentification.
+// ---------------------------------------------------------------------------
+
+export const submitAerogommage = mutation({
+  args: {
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    photos: v.array(v.id("_storage")),
+    items: v.array(aerogommageItem),
+  },
+  handler: async (ctx, { customer, comment, photos, items }) => {
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    const requestId = await ctx.db.insert("requests", {
+      type: "aerogommage",
+      stage: "nouveau",
+      outcome: "open",
+      requestOrigin: "external",
+      complete: isAerogommageComplete(customer, items),
+      processSteps: resolveProcess("aerogommage"),
+      completedSteps: 0,
+      site: "60", // Recyclerie 60 par défaut pour l'aérogommage.
+      customer,
+      comment,
+      photos,
+      aerogommage: items,
+      createdAt: now,
+      updatedAt: now,
+      reference,
+    });
+    await createNewRequestNotification(ctx, {
+      requestId,
+      requestType: "aerogommage",
+      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+    });
+    return requestId;
+  },
+});
+
+export const submitCollecte = mutation({
+  args: {
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    photos: v.array(v.id("_storage")),
+    details: v.object({
+      dismountable: v.optional(v.boolean()),
+      reusableGoodCondition: v.optional(v.boolean()),
+      sorted: v.optional(v.boolean()),
+      noWaste: v.optional(v.boolean()),
+      grosObjets: v.optional(v.array(v.string())),
+      grosObjetsAutre: v.optional(v.string()),
+      petitsObjets: v.optional(v.array(v.string())),
+      petitsObjetsAutre: v.optional(v.string()),
+      housingType: v.optional(v.string()),
+      floors: v.optional(v.number()),
+      dedicatedParking: v.optional(v.boolean()),
+      parkingDistance: v.optional(v.number()),
+      parkingUnknown: v.optional(v.boolean()),
+      collectAddress: v.optional(
+        v.object({
+          address: v.optional(v.string()),
+          postalCode: v.optional(v.string()),
+          city: v.optional(v.string()),
+        }),
+      ),
+    }),
+  },
+  handler: async (ctx, { customer, comment, photos, details }) => {
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    const requestId = await ctx.db.insert("requests", {
+      type: "collecte",
+      stage: "nouveau",
+      outcome: "open",
+      requestOrigin: "external",
+      complete: isCollecteComplete(customer, details),
+      // Arrive en « Collecte à définir » : sous-type choisi ensuite dans le CRM.
+      collecteType: "indefini",
+      processSteps: resolveProcess("collecte", "indefini"),
+      completedSteps: 0,
+      customer,
+      comment,
+      photos,
+      collecte: details,
+      createdAt: now,
+      updatedAt: now,
+      reference,
+    });
+    await createNewRequestNotification(ctx, {
+      requestId,
+      requestType: "collecte",
+      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+    });
+    return requestId;
+  },
+});
+
+export const submitVelo = mutation({
+  args: {
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    photos: v.array(v.id("_storage")),
+    details: v.object({
+      bikeType: v.optional(v.string()),
+      service: v.optional(v.string()),
+      brand: v.optional(v.string()),
+      condition: v.optional(v.string()),
+      description: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, { customer, comment, photos, details }) => {
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    const requestId = await ctx.db.insert("requests", {
+      type: "velo",
+      stage: "nouveau",
+      outcome: "open",
+      requestOrigin: "external",
+      complete: isVeloComplete(customer, details),
+      processSteps: resolveProcess("velo"),
+      completedSteps: 0,
+      customer,
+      comment,
+      photos,
+      velo: details,
+      createdAt: now,
+      updatedAt: now,
+      reference,
+    });
+    await createNewRequestNotification(ctx, {
+      requestId,
+      requestType: "velo",
+      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+    });
+    return requestId;
+  },
+});
+
+export const submitArticleReservation = mutation({
+  args: {
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    articleId: v.id("articles"),
+  },
+  handler: async (ctx, { customer, comment, articleId }) => {
+    const article = await ctx.db.get(articleId);
+    if (!article) throw new Error("Article introuvable.");
+    if (article.status !== "disponible") {
+      throw new Error("Cet article n'est plus disponible.");
+    }
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    // L'article passe en « réservé » dès la demande.
+    await ctx.db.patch(articleId, { status: "reserve" });
+    const requestId = await ctx.db.insert("requests", {
+      type: "article",
+      stage: "nouveau",
+      outcome: "open",
+      requestOrigin: "external",
+      complete: isArticleComplete(customer),
+      processSteps: resolveProcess("article"),
+      completedSteps: 0,
+      customer,
+      comment,
+      photos: [],
+      article: { articleId, articleTitle: article.title },
+      articles: [{ articleId, articleTitle: article.title }],
+      createdAt: now,
+      updatedAt: now,
+      reference,
+    });
+    await createNewRequestNotification(ctx, {
+      requestId,
+      requestType: "article",
+      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+    });
+    return requestId;
+  },
+});
+
+export const submitArticleCartReservation = mutation({
+  args: {
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    articleIds: v.array(v.id("articles")),
+  },
+  handler: async (ctx, { customer, comment, articleIds }) => {
+    const uniqueArticleIds = Array.from(new Set(articleIds));
+    if (uniqueArticleIds.length === 0) {
+      throw new Error("Ajoutez au moins un article au panier.");
+    }
+    const articles = [];
+    for (const articleId of uniqueArticleIds) {
+      const article = await ctx.db.get(articleId);
+      if (!article) throw new Error("Un article du panier est introuvable.");
+      if (article.status !== "disponible") {
+        throw new Error(`"${article.title}" n'est plus disponible.`);
+      }
+      articles.push({ articleId, articleTitle: article.title });
+    }
+
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    for (const articleId of uniqueArticleIds) {
+      await ctx.db.patch(articleId, { status: "reserve" });
+    }
+
+    const requestId = await ctx.db.insert("requests", {
+      type: "article",
+      stage: "nouveau",
+      outcome: "open",
+      requestOrigin: "external",
+      complete: isArticleComplete(customer),
+      processSteps: resolveProcess("article"),
+      completedSteps: 0,
+      customer,
+      comment,
+      photos: [],
+      article: articles[0],
+      articles,
+      createdAt: now,
+      updatedAt: now,
+      reference,
+    });
+    await createNewRequestNotification(ctx, {
+      requestId,
+      requestType: "article",
+      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+    });
+    return requestId;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// CRM (protégé)
+// ---------------------------------------------------------------------------
+
+export const list = query({
+  args: {
+    type: v.optional(requestType),
+  },
+  handler: async (ctx, { type }) => {
+    await requireStaff(ctx);
+    const all = type
+      ? await ctx.db
+          .query("requests")
+          .withIndex("by_type", (q) => q.eq("type", type))
+          .order("desc")
+          .collect()
+      : await ctx.db.query("requests").order("desc").collect();
+    return all;
+  },
+});
+
+export const counts = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireStaff(ctx);
+    const requests = await ctx.db.query("requests").collect();
+    return {
+      complete: requests.filter(
+        (request) => request.complete && request.outcome === "open",
+      ).length,
+    };
+  },
+});
+
+export const get = query({
+  args: { id: v.id("requests") },
+  handler: async (ctx, { id }) => {
+    await requireStaff(ctx);
+    const request = await ctx.db.get(id);
+    if (!request) return null;
+    const photoUrls = await Promise.all(
+      request.photos.map((p) => ctx.storage.getUrl(p)),
+    );
+    const beforePhotoUrls = await Promise.all(
+      (request.beforePhotos ?? []).map((p) => ctx.storage.getUrl(p)),
+    );
+    const afterPhotoUrls = await Promise.all(
+      (request.afterPhotos ?? []).map((p) => ctx.storage.getUrl(p)),
+    );
+    // Résout les URLs des photos rattachées à chaque objet d'aérogommage.
+    const aerogommagePhotos = await Promise.all(
+      (request.aerogommage ?? []).map(async (item) =>
+        (
+          await Promise.all((item.photos ?? []).map((p) => ctx.storage.getUrl(p)))
+        ).filter((u): u is string => u !== null),
+      ),
+    );
+    return {
+      ...request,
+      photoUrls: photoUrls.filter((u): u is string => u !== null),
+      beforePhotoUrls: beforePhotoUrls.filter((u): u is string => u !== null),
+      afterPhotoUrls: afterPhotoUrls.filter((u): u is string => u !== null),
+      aerogommagePhotos,
+    };
+  },
+});
+
+export const setOutcome = mutation({
+  args: {
+    id: v.id("requests"),
+    outcome: v.union(
+      v.literal("open"),
+      v.literal("gagnee"),
+      v.literal("perdue"),
+    ),
+    lostReason: v.optional(v.union(requestLostReason, v.null())),
+    lostReasonDetails: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, { id, outcome, lostReason, lostReasonDetails }) => {
+    await requireStaff(ctx);
+    const request = await ctx.db.get(id);
+    if (!request) throw new Error("Demande introuvable.");
+    await ctx.db.patch(id, {
+      outcome,
+      lostReason: outcome === "perdue" ? (lostReason ?? undefined) : undefined,
+      lostReasonDetails:
+        outcome === "perdue" ? (lostReasonDetails ?? undefined) : undefined,
+      updatedAt: Date.now(),
+    });
+    if (request.type === "article") {
+      const articleStatus =
+        outcome === "gagnee"
+          ? "vendu"
+          : outcome === "perdue"
+            ? "disponible"
+            : "reserve";
+      for (const articleId of requestArticleIds(request)) {
+        await ctx.db.patch(articleId, { status: articleStatus });
+      }
+    }
+  },
+});
+
+export const setComplete = mutation({
+  args: {
+    id: v.id("requests"),
+    complete: v.boolean(),
+  },
+  handler: async (ctx, { id, complete }) => {
+    await requireStaff(ctx);
+    await ctx.db.patch(id, { complete, updatedAt: Date.now() });
+  },
+});
+
+export const backfillRequestOrigins = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireStaff(ctx);
+    const requests = await ctx.db.query("requests").collect();
+    let updated = 0;
+
+    for (const request of requests) {
+      if (request.requestOrigin !== undefined) continue;
+      await ctx.db.patch(request._id, { requestOrigin: "external" });
+      updated += 1;
+    }
+
+    return { updated };
+  },
+});
+
+/**
+ * Met à jour les champs de gestion interne (onglet Gestion).
+ * Une valeur `null` efface le champ ; un champ absent est laissé inchangé.
+ */
+export const patchManagement = mutation({
+  args: {
+    id: v.id("requests"),
+    site: v.optional(v.union(v.literal("60"), v.literal("76"))),
+    assignedTo: v.optional(v.union(v.id("teamMembers"), v.null())),
+    estimatedHours: v.optional(v.union(v.number(), v.null())),
+    actualHours: v.optional(v.union(v.number(), v.null())),
+    quoteAmount: v.optional(v.union(v.number(), v.null())),
+    quoteDetails: v.optional(v.union(v.string(), v.null())),
+    visitNeeded: v.optional(v.union(v.boolean(), v.null())),
+    beforePhotos: v.optional(v.array(v.id("_storage"))),
+    afterPhotos: v.optional(v.array(v.id("_storage"))),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    if (args.site !== undefined) patch.site = args.site;
+    if (args.assignedTo !== undefined)
+      patch.assignedTo = args.assignedTo ?? undefined;
+    if (args.estimatedHours !== undefined)
+      patch.estimatedHours = args.estimatedHours ?? undefined;
+    if (args.actualHours !== undefined)
+      patch.actualHours = args.actualHours ?? undefined;
+    if (args.quoteAmount !== undefined)
+      patch.quoteAmount = args.quoteAmount ?? undefined;
+    if (args.quoteDetails !== undefined)
+      patch.quoteDetails = args.quoteDetails ?? undefined;
+    if (args.visitNeeded !== undefined)
+      patch.visitNeeded = args.visitNeeded ?? undefined;
+    if (args.beforePhotos !== undefined) patch.beforePhotos = args.beforePhotos;
+    if (args.afterPhotos !== undefined) patch.afterPhotos = args.afterPhotos;
+    await ctx.db.patch(args.id, patch);
+  },
+});
+
+/** Planifie (ou déplanifie) la prestation pour le calendrier. */
+export const schedule = mutation({
+  args: { id: v.id("requests"), scheduledDate: v.optional(v.number()) },
+  handler: async (ctx, { id, scheduledDate }) => {
+    await requireStaff(ctx);
+    await ctx.db.patch(id, { scheduledDate, updatedAt: Date.now() });
+  },
+});
+
+/**
+ * Coche l'étape suivante du process (une seule à la fois, pas de saut).
+ * Quand la dernière étape est cochée, la demande passe automatiquement en gagnée.
+ */
+export const advanceProcess = mutation({
+  args: { id: v.id("requests"), by: v.optional(v.string()) },
+  handler: async (ctx, { id, by }) => {
+    await requireStaff(ctx);
+    const r = await ctx.db.get(id);
+    if (!r) throw new Error("Demande introuvable.");
+    const steps = r.processSteps ?? [];
+    const current = r.completedSteps ?? 0;
+    if (current >= steps.length) return;
+    const completedSteps = current + 1;
+    const done = completedSteps >= steps.length && completedSteps > 0;
+    const log = (r.processLog ?? []).filter((e) => e.step < current);
+    log.push({ step: current, by: by?.trim() || "Inconnu", at: Date.now() });
+    await ctx.db.patch(id, {
+      completedSteps,
+      processLog: log,
+      outcome: done ? "gagnee" : "open",
+      updatedAt: Date.now(),
+    });
+    if (done && r.type === "article") {
+      for (const articleId of requestArticleIds(r)) {
+        await ctx.db.patch(articleId, { status: "vendu" });
+      }
+    }
+  },
+});
+
+/** Décoche la dernière étape cochée (retour en arrière d'une étape). */
+export const retreatProcess = mutation({
+  args: { id: v.id("requests") },
+  handler: async (ctx, { id }) => {
+    await requireStaff(ctx);
+    const r = await ctx.db.get(id);
+    if (!r) throw new Error("Demande introuvable.");
+    const current = r.completedSteps ?? 0;
+    if (current <= 0) return;
+    const completedSteps = current - 1;
+    const log = (r.processLog ?? []).filter((e) => e.step < completedSteps);
+    await ctx.db.patch(id, {
+      completedSteps,
+      processLog: log,
+      // Si la demande était gagnée par la dernière étape, on la rouvre.
+      outcome: r.outcome === "gagnee" ? "open" : r.outcome,
+      updatedAt: Date.now(),
+    });
+    if (r.outcome === "gagnee" && r.type === "article") {
+      for (const articleId of requestArticleIds(r)) {
+        await ctx.db.patch(articleId, { status: "reserve" });
+      }
+    }
+  },
+});
+
+/** Définit le sous-type d'une collecte (C1/C2/C3) → recalcule le process. */
+export const setCollecteType = mutation({
+  args: { id: v.id("requests"), collecteType },
+  handler: async (ctx, { id, collecteType: ct }) => {
+    await requireStaff(ctx);
+    const r = await ctx.db.get(id);
+    if (!r) throw new Error("Demande introuvable.");
+    if (r.type !== "collecte") throw new Error("Type de demande invalide.");
+    await ctx.db.patch(id, {
+      collecteType: ct,
+      processSteps: resolveProcess("collecte", ct),
+      completedSteps: 0,
+      processLog: [],
+      outcome: "open",
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/** Met à jour les coordonnées du client d'une demande (onglet Client). */
+export const updateCustomer = mutation({
+  args: { id: v.id("requests"), customer: customerArg },
+  handler: async (ctx, { id, customer }) => {
+    await requireStaff(ctx);
+    await ctx.db.patch(id, { customer, updatedAt: Date.now() });
+  },
+});
+
+/**
+ * Crée une demande directement depuis le CRM (par un membre de l'équipe).
+ * Même logique que les mutations publiques, avec requestOrigin: "internal".
+ */
+export const createInternal = mutation({
+  args: {
+    type: requestType,
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    // Aérogommage
+    items: v.optional(v.array(aerogommageItem)),
+    // Collecte
+    collecteDetails: v.optional(
+      v.object({
+        dismountable: v.optional(v.boolean()),
+        reusableGoodCondition: v.optional(v.boolean()),
+        sorted: v.optional(v.boolean()),
+        noWaste: v.optional(v.boolean()),
+        grosObjets: v.optional(v.array(v.string())),
+        grosObjetsAutre: v.optional(v.string()),
+        petitsObjets: v.optional(v.array(v.string())),
+        petitsObjetsAutre: v.optional(v.string()),
+        housingType: v.optional(v.string()),
+        floors: v.optional(v.number()),
+        dedicatedParking: v.optional(v.boolean()),
+        parkingDistance: v.optional(v.number()),
+        parkingUnknown: v.optional(v.boolean()),
+        collectAddress: v.optional(
+          v.object({
+            address: v.optional(v.string()),
+            postalCode: v.optional(v.string()),
+            city: v.optional(v.string()),
+          }),
+        ),
+      }),
+    ),
+    // Article
+    articleId: v.optional(v.id("articles")),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    const name = `${args.customer.firstName} ${args.customer.lastName}`.trim();
+
+    if (args.type === "aerogommage") {
+      const items = args.items ?? [];
+      const id = await ctx.db.insert("requests", {
+        type: "aerogommage",
+        stage: "nouveau",
+        outcome: "open",
+        requestOrigin: "internal",
+        complete: isAerogommageComplete(args.customer, items),
+        processSteps: resolveProcess("aerogommage"),
+        completedSteps: 0,
+        site: "60",
+        customer: args.customer,
+        comment: args.comment,
+        photos: [],
+        aerogommage: items,
+        createdAt: now,
+        updatedAt: now,
+        reference,
+      });
+      await createNewRequestNotification(ctx, { requestId: id, requestType: "aerogommage", customerName: name });
+      return id;
+    }
+
+    if (args.type === "collecte") {
+      const details = args.collecteDetails ?? {};
+      const id = await ctx.db.insert("requests", {
+        type: "collecte",
+        stage: "nouveau",
+        outcome: "open",
+        requestOrigin: "internal",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        complete: isCollecteComplete(args.customer, details as any),
+        collecteType: "indefini",
+        processSteps: resolveProcess("collecte", "indefini"),
+        completedSteps: 0,
+        customer: args.customer,
+        comment: args.comment,
+        photos: [],
+        collecte: details,
+        createdAt: now,
+        updatedAt: now,
+        reference,
+      });
+      await createNewRequestNotification(ctx, { requestId: id, requestType: "collecte", customerName: name });
+      return id;
+    }
+
+    if (args.type === "article") {
+      const articleId = args.articleId;
+      if (!articleId) throw new Error("articleId requis pour une demande boutique.");
+      const article = await ctx.db.get(articleId);
+      if (!article) throw new Error("Article introuvable.");
+      if (article.status !== "disponible") throw new Error("Cet article n'est plus disponible.");
+      await ctx.db.patch(articleId, { status: "reserve" });
+      const id = await ctx.db.insert("requests", {
+        type: "article",
+        stage: "nouveau",
+        outcome: "open",
+        requestOrigin: "internal",
+        complete: isArticleComplete(args.customer),
+        processSteps: resolveProcess("article"),
+        completedSteps: 0,
+        customer: args.customer,
+        comment: args.comment,
+        photos: [],
+        article: { articleId, articleTitle: article.title },
+        articles: [{ articleId, articleTitle: article.title }],
+        createdAt: now,
+        updatedAt: now,
+        reference,
+      });
+      await createNewRequestNotification(ctx, { requestId: id, requestType: "article", customerName: name });
+      return id;
+    }
+
+    throw new Error("Type de demande non pris en charge.");
+  },
+});
+
+/** Demandes planifiées sur une période (pour le calendrier). */
+export const scheduled = query({
+  args: { from: v.number(), to: v.number() },
+  handler: async (ctx, { from, to }) => {
+    await requireStaff(ctx);
+    return await ctx.db
+      .query("requests")
+      .withIndex("by_scheduledDate", (q) =>
+        q.gte("scheduledDate", from).lte("scheduledDate", to),
+      )
+      .collect();
+  },
+});
