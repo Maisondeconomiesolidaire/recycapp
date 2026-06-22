@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Truck, Plus, Check, MapPin, User,
   ChevronDown, ChevronRight, Printer, Loader2,
-  Calendar, X, AlertCircle, Route, Copy, LocateFixed, Radio,
+  Calendar, X, AlertCircle, Route, Copy, LocateFixed, Radio, Navigation,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -173,6 +174,7 @@ export function Tournees() {
 // ─── Planification ────────────────────────────────────────────────────────────
 
 function PlanificationTab() {
+  const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const { start, end } = useMemo(() => {
     const now = Date.now();
@@ -447,12 +449,28 @@ function PlanificationTab() {
                       {t.status === "planifiee" && (
                         <button
                           type="button"
-                          onClick={() =>
-                            updateStatus({ tourneeId: t._id as Id<"tournees">, status: "en_cours" })
-                          }
+                          onClick={async () => {
+                            await updateStatus({
+                              tourneeId: t._id as Id<"tournees">,
+                              status: "en_cours",
+                            });
+                            navigate(`/crm/conduite/${t._id}`);
+                          }}
                           className="rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/30 transition"
                         >
                           Démarrer
+                        </button>
+                      )}
+                      {t.status === "en_cours" && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/crm/conduite/${t._id}`)}
+                          className="rounded-xl bg-brand-500 px-3 py-1.5 text-xs font-bold text-white shadow-[0_4px_14px_rgba(241,16,79,0.3)] transition hover:opacity-90"
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <Navigation className="h-3.5 w-3.5" />
+                            Mode conduite
+                          </span>
                         </button>
                       )}
                       {t.status === "en_cours" && (

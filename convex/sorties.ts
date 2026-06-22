@@ -599,6 +599,33 @@ export const listTournees = query({
   },
 });
 
+export const getTournee = query({
+  args: { tourneeId: v.id("tournees") },
+  handler: async (ctx, { tourneeId }) => {
+    await requireStaff(ctx);
+    const tournee = await ctx.db.get(tourneeId);
+    if (!tournee) return null;
+    const driver = tournee.driverId ? await ctx.db.get(tournee.driverId) : null;
+    const vehicleLocation = await ctx.db
+      .query("tourneeVehicleLocations")
+      .withIndex("by_tourneeId", (q) => q.eq("tourneeId", tournee._id))
+      .unique();
+    return {
+      ...tournee,
+      driverName: driver?.name ?? null,
+      vehicleLocation: vehicleLocation
+        ? {
+            latitude: vehicleLocation.latitude,
+            longitude: vehicleLocation.longitude,
+            heading: vehicleLocation.heading ?? null,
+            speedKmh: vehicleLocation.speedKmh ?? null,
+            updatedAt: vehicleLocation.updatedAt,
+          }
+        : null,
+    };
+  },
+});
+
 export const listUpcomingCollectes = query({
   handler: async (ctx) => {
     await requireStaff(ctx);

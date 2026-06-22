@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import mapboxgl from "mapbox-gl";
@@ -110,22 +110,50 @@ function buildPinsGeoJson({
   };
 }
 
-function buildTruckGeoJson(truck?: { longitude: number; latitude: number } | null) {
-  return {
-    type: "FeatureCollection" as const,
-    features: truck
-      ? [
-          {
-            type: "Feature" as const,
-            geometry: {
-              type: "Point" as const,
-              coordinates: [truck.longitude, truck.latitude],
-            },
-            properties: { kind: "truck" },
-          },
-        ]
-      : [],
-  };
+function createTruckMarkerElement() {
+  const el = document.createElement("div");
+  el.style.cssText = [
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "width:38px",
+    "height:38px",
+    "border-radius:12px",
+    "background:#2563eb",
+    "box-shadow:0 6px 16px rgba(37,99,235,0.45)",
+    "border:2px solid #ffffff",
+    "cursor:default",
+  ].join(";");
+  el.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+      <path d="M15 18H9"/>
+      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+      <circle cx="7" cy="18" r="2"/>
+      <circle cx="17" cy="18" r="2"/>
+    </svg>`;
+  return el;
+}
+
+function buildContextBounds(
+  points: Array<[number, number] | null | undefined>,
+  routeCoordinates: number[][] = [],
+) {
+  const bounds = new mapboxgl.LngLatBounds();
+  let hasPoint = false;
+  for (const point of points) {
+    if (point) {
+      bounds.extend(point);
+      hasPoint = true;
+    }
+  }
+  for (const coord of routeCoordinates) {
+    if (coord.length >= 2) {
+      bounds.extend([coord[0], coord[1]]);
+      hasPoint = true;
+    }
+  }
+  return hasPoint ? bounds : null;
 }
 
 export function TourneeTracking() {
@@ -136,6 +164,9 @@ export function TourneeTracking() {
   );
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const truckMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const userInteractedRef = useRef(false);
+  const [, setNowTick] = useState(0);
 
   const depotCoordinates = useMemo(
     () =>
@@ -154,6 +185,22 @@ export function TourneeTracking() {
         : null,
     [tracking],
   );
+  const truckCoordinates = useMemo(
+    () =>
+      tracking?.vehicleLocation
+        ? ([tracking.vehicleLocation.longitude, tracking.vehicleLocation.latitude] as [
+            number,
+            number,
+          ])
+        : null,
+    [tracking],
+  );
+
+  // Refresh relative time labels / live status every 20s.
+  useEffect(() => {
+    const interval = window.setInterval(() => setNowTick((tick) => tick + 1), 20_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!MAPBOX_PUBLIC_TOKEN || !mapContainerRef.current || mapRef.current || !tracking) return;
@@ -162,11 +209,20 @@ export function TourneeTracking() {
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: "mapbox://styles/mapbox/standard",
-      center: recipientCoordinates ?? depotCoordinates ?? [2.2, 48.85],
-      zoom: 10,
+      center: recipientCoordinates ?? truckCoordinates ?? depotCoordinates ?? [2.2, 48.85],
+      zoom: 12,
     });
 
     const map = mapRef.current;
+
+    // Stop auto-following as soon as the user pans/zooms/rotates the map.
+    const markIfUser = (event: { originalEvent?: unknown }) => {
+      if (event.originalEvent) userInteractedRef.current = true;
+    };
+    map.on("dragstart", (event) => markIfUser(event));
+    map.on("zoomstart", (event) => markIfUser(event as { originalEvent?: unknown }));
+    map.on("rotatestart", (event) => markIfUser(event as { originalEvent?: unknown }));
+
     map.on("load", () => {
       map.addSource("route", {
         type: "geojson",
@@ -180,7 +236,8 @@ export function TourneeTracking() {
         id: "route-line",
         type: "line",
         source: "route",
-        paint: { "line-color": "#f1104f", "line-width": 5, "line-opacity": 0.8 },
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#16a34a", "line-width": 5, "line-opacity": 0.9 },
       });
 
       map.addSource("pins", {
@@ -192,59 +249,47 @@ export function TourneeTracking() {
         type: "circle",
         source: "pins",
         paint: {
-          "circle-radius": 8,
+          "circle-radius": ["match", ["get", "kind"], "recipient", 9, 6],
           "circle-color": [
             "match",
             ["get", "kind"],
             "depot",
             "#0f766e",
             "recipient",
-            "#f97316",
+            "#ef4444",
             "#52525b",
           ],
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#ffffff",
-        },
-      });
-
-      map.addSource("truck", {
-        type: "geojson",
-        data: buildTruckGeoJson(
-          tracking.vehicleLocation
-            ? {
-                longitude: tracking.vehicleLocation.longitude,
-                latitude: tracking.vehicleLocation.latitude,
-              }
-            : null,
-        ),
-      });
-      map.addLayer({
-        id: "truck-circle",
-        type: "circle",
-        source: "truck",
-        paint: {
-          "circle-radius": 12,
-          "circle-color": "#2563eb",
           "circle-stroke-width": 3,
           "circle-stroke-color": "#ffffff",
         },
       });
 
-      const bounds = new mapboxgl.LngLatBounds();
-      [depotCoordinates, recipientCoordinates].forEach((c) => {
-        if (c) bounds.extend(c);
-      });
-      if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, { padding: 56, maxZoom: 12 });
+      // Blue truck marker (Mapbox On-Demand Logistics style).
+      const truckMarker = new mapboxgl.Marker({ element: createTruckMarkerElement() });
+      if (truckCoordinates) {
+        truckMarker.setLngLat(truckCoordinates).addTo(map);
+      }
+      truckMarkerRef.current = truckMarker;
+
+      const bounds = buildContextBounds(
+        [depotCoordinates, recipientCoordinates, truckCoordinates],
+        tracking.tournee.routeCoordinates,
+      );
+      if (bounds) {
+        map.fitBounds(bounds, { padding: 64, maxZoom: 14 });
       }
     });
 
     return () => {
+      truckMarkerRef.current?.remove();
+      truckMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
-  }, [depotCoordinates, recipientCoordinates, tracking]);
+  }, [depotCoordinates, recipientCoordinates, truckCoordinates, tracking]);
 
+  // Live updates: refresh sources + truck marker, and follow the truck unless
+  // the user has taken control of the map (Amazon-style behaviour).
   useEffect(() => {
     if (!mapRef.current || !tracking) return;
     const map = mapRef.current;
@@ -259,17 +304,25 @@ export function TourneeTracking() {
     (map.getSource("pins") as mapboxgl.GeoJSONSource | undefined)?.setData(
       buildPinsGeoJson({ depot: depotCoordinates, recipient: recipientCoordinates }),
     );
-    (map.getSource("truck") as mapboxgl.GeoJSONSource | undefined)?.setData(
-      buildTruckGeoJson(
-        tracking.vehicleLocation
-          ? {
-              longitude: tracking.vehicleLocation.longitude,
-              latitude: tracking.vehicleLocation.latitude,
-            }
-          : null,
-      ),
-    );
-  }, [depotCoordinates, recipientCoordinates, tracking]);
+
+    if (truckMarkerRef.current) {
+      if (truckCoordinates) {
+        truckMarkerRef.current.setLngLat(truckCoordinates).addTo(map);
+      } else {
+        truckMarkerRef.current.remove();
+      }
+    }
+
+    if (!userInteractedRef.current) {
+      const bounds = buildContextBounds(
+        [recipientCoordinates, truckCoordinates],
+        truckCoordinates ? [] : tracking.tournee.routeCoordinates,
+      );
+      if (bounds) {
+        map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 1200 });
+      }
+    }
+  }, [depotCoordinates, recipientCoordinates, truckCoordinates, tracking]);
 
   if (tracking === undefined) {
     return <FullSpinner label="Chargement du suivi…" />;

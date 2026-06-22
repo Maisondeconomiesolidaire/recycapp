@@ -21,6 +21,7 @@ import { Caisse } from "./pages/crm/Caisse";
 import { Ateliers } from "./pages/crm/Ateliers";
 import { Sorties } from "./pages/crm/Sorties";
 import { Tournees } from "./pages/crm/Tournees";
+import { TourneeConduite } from "./pages/crm/TourneeConduite";
 
 export default function App() {
   return (
@@ -54,6 +55,9 @@ export default function App() {
         <Route path="tournees" element={<Tournees />} />
         <Route path="equipe" element={<Equipe />} />
       </Route>
+
+      {/* Mode conduite (plein écran mobile, protégé Clerk) */}
+      <Route path="/crm/conduite/:tourneeId" element={<TourneeConduite />} />
 
       <Route path="*" element={<Navigate to="/boutique" replace />} />
     </Routes>
