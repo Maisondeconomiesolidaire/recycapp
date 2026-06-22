@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Truck,
   User,
+  XCircle,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -33,11 +34,19 @@ const TYPE_LABELS: Record<string, string> = {
   velo: "Vélo",
 };
 
-const STAGE_STEPS = [
+const STATUS_FLOW = [
   { key: "nouveau", label: "Demande reçue" },
   { key: "validation", label: "Validation" },
   { key: "planifie", label: "Planifiée" },
+  { key: "termine", label: "Terminée" },
 ];
+
+type ClientStatus = {
+  key: string;
+  label: string;
+  index: number;
+  cancelled: boolean;
+};
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString("fr-FR", {
@@ -239,47 +248,28 @@ export function AccountInfo() {
 
 type RequestTypeFilter = "all" | "article" | "aerogommage" | "collecte" | "velo";
 
-function StatusProgress({
-  stage,
-  outcome,
-  completedSteps,
-  totalSteps,
-}: {
-  stage: string;
-  outcome: string;
-  completedSteps: number;
-  totalSteps: number;
-}) {
-  if (outcome === "perdue") {
+function StatusProgress({ status }: { status: ClientStatus }) {
+  if (status.cancelled) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-500">
-        Clôturée
+        Annulée
       </span>
     );
   }
-  const activeIndex = STAGE_STEPS.findIndex((s) => s.key === stage);
-  const done = outcome === "gagnee";
   return (
-    <div className="flex items-center gap-1.5">
-      {STAGE_STEPS.map((s, i) => {
-        const reached = done || i <= activeIndex;
+    <div className="flex flex-wrap items-center gap-1.5">
+      {STATUS_FLOW.map((s, i) => {
+        const reached = i <= status.index;
         return (
           <div key={s.key} className="flex items-center gap-1.5">
-            <span
-              className={`h-2 w-2 rounded-full ${reached ? "bg-brand-500" : "bg-zinc-200"}`}
-            />
+            <span className={`h-2 w-2 rounded-full ${reached ? "bg-brand-500" : "bg-zinc-200"}`} />
             <span className={`text-[11px] ${reached ? "text-zinc-700" : "text-zinc-400"}`}>
               {s.label}
             </span>
-            {i < STAGE_STEPS.length - 1 && <span className="text-zinc-300">·</span>}
+            {i < STATUS_FLOW.length - 1 && <span className="text-zinc-300">·</span>}
           </div>
         );
       })}
-      {totalSteps > 0 && (
-        <span className="ml-1 text-[11px] text-zinc-400">
-          ({completedSteps}/{totalSteps})
-        </span>
-      )}
     </div>
   );
 }
@@ -378,12 +368,7 @@ export function AccountOrders() {
               </div>
               <p className="mt-0.5 text-xs text-zinc-400">Demande du {formatDate(r.createdAt)}</p>
               <div className="mt-2">
-                <StatusProgress
-                  stage={r.stage}
-                  outcome={r.outcome}
-                  completedSteps={r.completedSteps}
-                  totalSteps={r.processSteps.length}
-                />
+                <StatusProgress status={r.status} />
               </div>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-zinc-300" />
@@ -423,7 +408,7 @@ export function AccountOrderDetail() {
     );
   }
 
-  const activeIndex = STAGE_STEPS.findIndex((s) => s.key === request.stage);
+  const status = request.status as ClientStatus;
   const liveTrackable =
     request.tracking?.shareToken &&
     (request.tracking.tourneeStatus === "planifiee" ||
@@ -455,29 +440,40 @@ export function AccountOrderDetail() {
             </div>
 
             {/* Stage timeline */}
-            <div className="mt-5 space-y-3">
-              {STAGE_STEPS.map((s, i) => {
-                const reached = request.outcome === "gagnee" || i <= activeIndex;
-                const current = i === activeIndex && request.outcome === "open";
-                return (
-                  <div key={s.key} className="flex items-center gap-3">
-                    <div
-                      className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                        reached ? "bg-brand-500 text-white" : "bg-zinc-100 text-zinc-400"
-                      }`}
-                    >
-                      {reached ? <CheckCircle2 className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+            {status.cancelled ? (
+              <div className="mt-5 flex items-center gap-3 rounded-xl bg-zinc-100 p-4">
+                <XCircle className="h-5 w-5 text-zinc-400" />
+                <span className="text-sm font-semibold text-zinc-600">Demande annulée</span>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-3">
+                {STATUS_FLOW.map((s, i) => {
+                  const reached = i <= status.index;
+                  const current = i === status.index && status.index < STATUS_FLOW.length - 1;
+                  return (
+                    <div key={s.key} className="flex items-center gap-3">
+                      <div
+                        className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                          reached ? "bg-brand-500 text-white" : "bg-zinc-100 text-zinc-400"
+                        }`}
+                      >
+                        {reached ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : (
+                          <Clock className="h-4 w-4" />
+                        )}
+                      </div>
+                      <span
+                        className={`text-sm ${current ? "font-bold text-zinc-900" : reached ? "font-medium text-zinc-700" : "text-zinc-400"}`}
+                      >
+                        {s.label}
+                        {current && " — en cours"}
+                      </span>
                     </div>
-                    <span
-                      className={`text-sm ${current ? "font-bold text-zinc-900" : reached ? "font-medium text-zinc-700" : "text-zinc-400"}`}
-                    >
-                      {s.label}
-                      {current && " — en cours"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
             {request.processSteps.length > 0 && (
               <div className="mt-5">

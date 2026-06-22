@@ -1,7 +1,39 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { requireUser } from "./lib";
-import type { Id } from "./_generated/dataModel";
+import { STEP } from "./processes";
+import type { Doc, Id } from "./_generated/dataModel";
+
+/**
+ * Statut client dérivé de l'avancement réel de la demande (et non du champ
+ * `stage` figé). Reste synchronisé avec le CRM : à chaque étape cochée /
+ * outcome modifié côté staff, le client voit le statut bouger.
+ *
+ * Flux : Demande reçue → Validation → Planifiée → Terminée (ou Annulée).
+ */
+export const CLIENT_STATUS_FLOW = [
+  { key: "nouveau", label: "Demande reçue" },
+  { key: "validation", label: "Validation" },
+  { key: "planifie", label: "Planifiée" },
+  { key: "termine", label: "Terminée" },
+] as const;
+
+export function deriveClientStatus(request: Doc<"requests">) {
+  if (request.outcome === "perdue") {
+    return { key: "annulee", label: "Annulée", index: -1, cancelled: true };
+  }
+  if (request.outcome === "gagnee") {
+    return { key: "termine", label: "Terminée", index: 3, cancelled: false };
+  }
+  const done = (request.processSteps ?? []).slice(0, request.completedSteps ?? 0);
+  if (done.includes(STEP.prestaPlanifiee)) {
+    return { key: "planifie", label: "Planifiée", index: 2, cancelled: false };
+  }
+  if (done.includes(STEP.devisEdite) || done.includes(STEP.devisSigne)) {
+    return { key: "validation", label: "Validation", index: 1, cancelled: false };
+  }
+  return { key: "nouveau", label: "Demande reçue", index: 0, cancelled: false };
+}
 
 async function getProfileByClerkId(ctx: QueryCtx | MutationCtx, clerkId: string) {
   return await ctx.db
@@ -135,6 +167,7 @@ export const listMyRequests = query({
           reference: r.reference ?? null,
           stage: r.stage,
           outcome: r.outcome,
+          status: deriveClientStatus(r),
           stageLabel: PROGRESS_LABELS[r.stage] ?? r.stage,
           complete: r.complete,
           processSteps: r.processSteps,
@@ -187,6 +220,7 @@ export const getMyRequest = query({
       stage: request.stage,
       stageLabel: PROGRESS_LABELS[request.stage] ?? request.stage,
       outcome: request.outcome,
+      status: deriveClientStatus(request),
       complete: request.complete,
       processSteps: request.processSteps,
       completedSteps: request.completedSteps,
