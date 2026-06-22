@@ -187,6 +187,7 @@ export function TourneeTracking() {
         .map((s) => [s.longitude as number, s.latitude as number] as [number, number]),
     [stops],
   );
+  const isTrackingVisible = tracking?.tournee.status === "en_cours";
 
   useEffect(() => {
     if (!token) return;
@@ -217,7 +218,13 @@ export function TourneeTracking() {
   }, []);
 
   useEffect(() => {
-    if (!MAPBOX_PUBLIC_TOKEN || !mapContainerRef.current || mapRef.current || !tracking) return;
+    if (
+      !MAPBOX_PUBLIC_TOKEN ||
+      !mapContainerRef.current ||
+      mapRef.current ||
+      !tracking ||
+      !isTrackingVisible
+    ) return;
 
     mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
     mapRef.current = new mapboxgl.Map({
@@ -278,12 +285,12 @@ export function TourneeTracking() {
       map.remove();
       mapRef.current = null;
     };
-  }, [depotCoordinates, recipientCoordinates, truckCoordinates, tracking]);
+  }, [depotCoordinates, recipientCoordinates, truckCoordinates, isTrackingVisible, tracking]);
 
   // Live updates: refresh sources + truck marker, and follow the truck unless
   // the user has taken control of the map (Amazon-style behaviour).
   useEffect(() => {
-    if (!mapRef.current || !tracking) return;
+    if (!mapRef.current || !tracking || !isTrackingVisible) return;
     const map = mapRef.current;
 
     (map.getSource("route") as mapboxgl.GeoJSONSource | undefined)?.setData(
@@ -351,7 +358,7 @@ export function TourneeTracking() {
         map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 1200 });
       }
     }
-  }, [depotCoordinates, recipientCoordinates, truckCoordinates, stops, stopCoordinates, tracking]);
+  }, [depotCoordinates, recipientCoordinates, truckCoordinates, isTrackingVisible, stops, stopCoordinates, tracking]);
 
   if (tracking === undefined) {
     return <FullSpinner label="Chargement du suivi…" />;
@@ -394,6 +401,32 @@ export function TourneeTracking() {
   const isCompleted = stopStatus === "effectue";
   const isTourActive = status === "en_cours";
   const isTourDone = status === "terminee" || status === "annulee";
+
+  if (!isTourActive) {
+    return (
+      <div className="mx-auto w-full max-w-4xl px-5 py-16">
+        <section className="rounded-[24px] border border-zinc-200 bg-white p-6 text-center shadow-[0_20px_60px_rgba(24,24,27,0.08)]">
+          <Clock className="mx-auto h-10 w-10 text-sky-500" />
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">
+            Suivi de collecte
+          </p>
+          <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-zinc-950">
+            Suivi bientôt disponible
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            La carte en temps réel s'affichera automatiquement dès que le conducteur démarrera la tournée.
+          </p>
+          <div className={`mx-auto mt-5 inline-flex items-start gap-3 rounded-2xl border px-4 py-3 text-left ${statusConfig.color}`}>
+            <StatusIcon className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold">{statusConfig.label}</p>
+              <p className="mt-0.5 text-xs opacity-80">{statusConfig.description}</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-7 sm:py-8 lg:px-8">

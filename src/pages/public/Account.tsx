@@ -410,9 +410,7 @@ export function AccountOrderDetail() {
 
   const status = request.status as ClientStatus;
   const liveTrackable =
-    request.tracking?.shareToken &&
-    (request.tracking.tourneeStatus === "planifiee" ||
-      request.tracking.tourneeStatus === "en_cours");
+    request.tracking?.shareToken && request.tracking.tourneeStatus === "en_cours";
 
   return (
     <div className="space-y-5">
@@ -528,7 +526,7 @@ export function AccountOrderDetail() {
             </div>
             <p className="mt-2 text-sm text-zinc-500">
               Le suivi en temps réel s'affichera ici automatiquement dès que votre collecte sera
-              planifiée dans une tournée.
+              démarrée par le conducteur.
             </p>
           </div>
         ))}
