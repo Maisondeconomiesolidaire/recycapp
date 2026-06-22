@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Truck } from "lucide-react";
@@ -63,7 +63,10 @@ function formatAge(updatedAt?: number | null) {
  * partout à partir d'un `token` de partage public.
  */
 export function LiveDeliveryTracking({ token }: { token: string }) {
-  const tracking = useQuery(api.sorties.getPublicTrackingByToken, { token });
+  const convex = useConvex();
+  const subscribedTracking = useQuery(api.sorties.getPublicTrackingByToken, { token });
+  const [polledTracking, setPolledTracking] = useState<typeof subscribedTracking>(undefined);
+  const tracking = polledTracking === undefined ? subscribedTracking : polledTracking;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const truckMarkerRef = useRef<mapboxgl.Marker | null>(null);
@@ -100,6 +103,27 @@ export function LiveDeliveryTracking({ token }: { token: string }) {
         .map((s) => [s.longitude as number, s.latitude as number] as [number, number]),
     [stops],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    setPolledTracking(undefined);
+
+    const refreshTracking = async () => {
+      try {
+        const latest = await convex.query(api.sorties.getPublicTrackingByToken, { token });
+        if (!cancelled) setPolledTracking(latest);
+      } catch {
+        /* Convex subscriptions keep the last known state if a poll fails. */
+      }
+    };
+
+    void refreshTracking();
+    const interval = window.setInterval(refreshTracking, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [convex, token]);
 
   useEffect(() => {
     const i = window.setInterval(() => setTick((t) => t + 1), 20_000);

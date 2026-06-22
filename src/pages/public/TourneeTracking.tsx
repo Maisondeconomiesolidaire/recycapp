@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { CheckCircle2, Clock, MapPin, Radio, Truck, XCircle } from "lucide-react";
@@ -138,10 +138,13 @@ function buildContextBounds(
 
 export function TourneeTracking() {
   const { token } = useParams<{ token: string }>();
-  const tracking = useQuery(
+  const convex = useConvex();
+  const subscribedTracking = useQuery(
     api.sorties.getPublicTrackingByToken,
     token ? { token } : "skip",
   );
+  const [polledTracking, setPolledTracking] = useState<typeof subscribedTracking>(undefined);
+  const tracking = polledTracking === undefined ? subscribedTracking : polledTracking;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const truckMarkerRef = useRef<mapboxgl.Marker | null>(null);
@@ -184,6 +187,28 @@ export function TourneeTracking() {
         .map((s) => [s.longitude as number, s.latitude as number] as [number, number]),
     [stops],
   );
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    setPolledTracking(undefined);
+
+    const refreshTracking = async () => {
+      try {
+        const latest = await convex.query(api.sorties.getPublicTrackingByToken, { token });
+        if (!cancelled) setPolledTracking(latest);
+      } catch {
+        /* Convex subscriptions keep the last known state if a poll fails. */
+      }
+    };
+
+    void refreshTracking();
+    const interval = window.setInterval(refreshTracking, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [convex, token]);
 
   // Refresh relative time labels / live status every 20s.
   useEffect(() => {
