@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireStaff } from "./lib";
-import type { Id } from "./_generated/dataModel";
 
 const originValidator = v.union(
   v.literal("decheterie"),

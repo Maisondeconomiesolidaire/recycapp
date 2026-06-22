@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
-  ArrowUpRight, Package, Weight, Plus, Check, Loader2,
-  Globe, Recycle, X, AlertCircle,
+  ArrowUpRight, Weight, Plus, Check, Loader2,
+  Globe, Recycle, X,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
 
 type Tab = "hors_magasin" | "matieres";

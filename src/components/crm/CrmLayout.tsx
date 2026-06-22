@@ -19,10 +19,8 @@ import {
   Menu,
   Sun,
   Moon,
-  Truck,
   ShoppingCart,
   Wrench,
-  ArrowUpRight,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { api } from "../../../convex/_generated/api";

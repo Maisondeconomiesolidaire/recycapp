@@ -185,7 +185,6 @@ export const listTournees = query({
 export const listUpcomingCollectes = query({
   handler: async (ctx) => {
     await requireStaff(ctx);
-    const now = Date.now();
     return await ctx.db
       .query("requests")
       .filter((q) => q.eq(q.field("type"), "collecte"))

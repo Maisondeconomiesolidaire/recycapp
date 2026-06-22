@@ -17,7 +17,6 @@ import {
   Loader2,
   Check,
   Printer,
-  X,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
@@ -146,7 +145,6 @@ export function Articles() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const articles = useQuery(api.articles.listAll, {});
   const remove = useMutation(api.articles.remove);
-  const patchStatus = useMutation(api.articles.patchStatus);
   const publishLot = useMutation(api.articles.publishLot);
   const analyzePotentialLots = useAction(api.ai.analyzePotentialLots);
   const [editing, setEditing] = useState<ArticleDoc | null>(null);

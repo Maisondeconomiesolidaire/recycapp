@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
-  Wrench, ScanLine, Plus, Check, Clock, ChevronRight,
+  Wrench, ScanLine, Plus, Check, Clock,
   Package, Loader2, ArrowRight, Tag, X, BarChart3, Camera,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
@@ -9,7 +9,6 @@ const CameraScanner = lazy(() => import("../../components/ui/CameraScanner").the
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
-import { Barcode } from "../../components/ui/Barcode";
 import { PrintLabels } from "../../components/crm/PrintLabels";
 
 const ATELIER_TYPES = [

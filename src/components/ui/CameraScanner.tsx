@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import type { IScannerControls } from "@zxing/browser";
 import { NotFoundException } from "@zxing/library";
 import { X, Camera, AlertCircle, Loader2 } from "lucide-react";
 
@@ -13,11 +14,10 @@ export function CameraScanner({ onDetected, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
 
   useEffect(() => {
     const reader = new BrowserMultiFormatReader();
-    readerRef.current = reader;
     let stopped = false;
 
     (async () => {
@@ -36,7 +36,7 @@ export function CameraScanner({ onDetected, onClose }: Props) {
 
         if (!videoRef.current || stopped) return;
 
-        await reader.decodeFromVideoDevice(
+        controlsRef.current = await reader.decodeFromVideoDevice(
           backCamera.deviceId,
           videoRef.current,
           (result, err) => {
@@ -67,7 +67,9 @@ export function CameraScanner({ onDetected, onClose }: Props) {
 
     return () => {
       stopped = true;
-      try { reader.reset(); } catch { }
+      try {
+        controlsRef.current?.stop();
+      } catch {}
     };
   }, [onDetected, onClose]);
 
