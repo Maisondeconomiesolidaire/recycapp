@@ -1433,16 +1433,16 @@ function ArticleRequestPreview({
         <button
           type="button"
           onClick={() => setLb(0)}
-          className="block w-full cursor-zoom-in"
+          className="block w-full cursor-zoom-in bg-[var(--crm-surface-2)]"
         >
           <img
             src={article.imageUrls[0]}
             alt={article.title}
-            className="aspect-[4/3] w-full object-cover"
+            className="mx-auto h-72 w-auto max-w-full object-contain"
           />
         </button>
       ) : (
-        <div className="flex aspect-[4/3] w-full items-center justify-center bg-zinc-800 text-zinc-600">
+        <div className="flex h-72 w-full items-center justify-center bg-[var(--crm-surface-2)] text-zinc-600">
           <PackageOpen className="h-10 w-10" />
         </div>
       )}
