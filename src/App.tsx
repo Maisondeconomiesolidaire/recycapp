@@ -15,6 +15,11 @@ import { Articles } from "./pages/crm/Articles";
 import { Clients } from "./pages/crm/Clients";
 import { Equipe } from "./pages/crm/Equipe";
 import { Notifications } from "./pages/crm/Notifications";
+import { Arrivages } from "./pages/crm/Arrivages";
+import { Caisse } from "./pages/crm/Caisse";
+import { Ateliers } from "./pages/crm/Ateliers";
+import { Sorties } from "./pages/crm/Sorties";
+import { Tournees } from "./pages/crm/Tournees";
 
 export default function App() {
   return (
@@ -40,6 +45,11 @@ export default function App() {
         <Route path="calendrier" element={<Calendrier />} />
         <Route path="clients" element={<Clients />} />
         <Route path="articles" element={<Articles />} />
+        <Route path="arrivages" element={<Arrivages />} />
+        <Route path="caisse" element={<Caisse />} />
+        <Route path="ateliers" element={<Ateliers />} />
+        <Route path="sorties" element={<Sorties />} />
+        <Route path="tournees" element={<Tournees />} />
         <Route path="equipe" element={<Equipe />} />
       </Route>
 

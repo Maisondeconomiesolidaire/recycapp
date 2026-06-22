@@ -19,10 +19,15 @@ import {
   Menu,
   Sun,
   Moon,
+  Truck,
+  ShoppingCart,
+  Wrench,
+  ArrowUpRight,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { api } from "../../../convex/_generated/api";
 import { Drawer } from "../ui/Drawer";
+import { GlobalScanner } from "./GlobalScanner";
 
 const nav = [
   { to: "/crm", end: true, icon: LayoutDashboard, label: "Tableau de bord" },
@@ -30,7 +35,10 @@ const nav = [
   { to: "/crm/demandes", icon: KanbanSquare, label: "Demandes" },
   { to: "/crm/calendrier", icon: CalendarDays, label: "Calendrier" },
   { to: "/crm/clients", icon: Users, label: "Clients" },
-  { to: "/crm/articles", icon: Package, label: "Articles" },
+  { to: "/crm/articles", icon: Package, label: "Stock articles" },
+  { to: "/crm/caisse", icon: ShoppingCart, label: "Caisse boutique" },
+  { to: "/crm/ateliers", icon: Wrench, label: "Atelier valorisation" },
+  { to: "/crm/tournees", icon: CalendarDays, label: "Tournées collecte" },
   { to: "/crm/equipe", icon: UserCog, label: "Équipe" },
 ];
 
@@ -75,6 +83,7 @@ export function CrmLayout() {
             <Outlet />
           </div>
         </div>
+        <GlobalScanner />
       </SignedIn>
       <SignedOut>
         <SignInScreen />

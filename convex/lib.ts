@@ -1,11 +1,11 @@
-import { QueryCtx, MutationCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 
 /**
  * Vérifie qu'une session Clerk valide est présente.
  * Pour l'instant le CRM est accessible à tout compte connecté ; un filtre par
  * email/rôle pourra être ajouté ici plus tard.
  */
-export async function requireStaff(ctx: QueryCtx | MutationCtx) {
+export async function requireStaff(ctx: QueryCtx | MutationCtx | ActionCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
     throw new Error("Non authentifié — accès réservé au personnel.");

@@ -457,7 +457,7 @@ export const publishLot = mutation({
     await Promise.all(
       articles.map((article) =>
         ctx.db.patch(article._id, {
-          status: "attente",
+          status: "lot",
           bundleKey,
           bundleReason: `Inclus dans le lot "${args.title}".`,
         }),

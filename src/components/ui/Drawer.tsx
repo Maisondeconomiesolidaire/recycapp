@@ -16,6 +16,8 @@ export function Drawer({
   headerClassName,
   headerStyle,
   closeButtonClassName,
+  panelClassName,
+  footerClassName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,6 +30,8 @@ export function Drawer({
   headerClassName?: string;
   headerStyle?: CSSProperties;
   closeButtonClassName?: string;
+  panelClassName?: string;
+  footerClassName?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -45,18 +49,19 @@ export function Drawer({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] animate-fade-in"
+        className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-[2px] animate-fade-in"
         onClick={onClose}
       />
       <div
         className={cn(
-          "z-50 flex flex-col bg-[var(--crm-surface)] shadow-2xl",
+          "z-[201] flex flex-col bg-[var(--crm-surface)] shadow-2xl",
           variant === "side" &&
             "fixed inset-y-0 right-0 w-full max-w-2xl border-l border-[var(--crm-border)] animate-slide-in-right",
           variant === "left" &&
             "fixed inset-y-0 left-0 w-full max-w-sm border-r border-[var(--crm-border)] animate-slide-in-left",
           variant === "modal" &&
             "fixed inset-3 overflow-hidden rounded-[30px] border border-[var(--crm-border)] animate-fade-in sm:inset-5 lg:inset-7",
+          panelClassName,
         )}
       >
         <div
@@ -81,7 +86,7 @@ export function Drawer({
           {children}
         </div>
         {footer && (
-          <div className="border-t border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+          <div className={cn("border-t border-[var(--crm-border)] bg-[var(--crm-surface)] p-4", footerClassName)}>
             {footer}
           </div>
         )}

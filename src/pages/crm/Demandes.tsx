@@ -88,7 +88,7 @@ export function Demandes() {
       </div>
 
       {/* Filtres – défilement horizontal sur mobile */}
-      <div className="relative z-[80] border-b border-zinc-800 px-4 sm:px-6">
+      <div className="relative z-10 border-b border-zinc-800 px-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-2 overflow-visible py-3">
           <SortFilter value={sortOrder} onChange={setSortOrder} />
           <div className="h-4 w-px shrink-0 bg-zinc-800" />

@@ -8,6 +8,8 @@ const messages: Record<string, string> = {
     "Votre demande de collecte a bien été enregistrée. Nous vous recontactons pour fixer une date.",
   article:
     "Votre réservation est enregistrée ! Nous vous contactons pour organiser le retrait.",
+  article_payment:
+    "Votre paiement Stripe test a bien été validé. La commande a été enregistrée côté boutique.",
   velo:
     "Votre demande à l'atelier Cycle en Bray est bien reçue. Nous revenons vers vous rapidement.",
 };

@@ -9,6 +9,7 @@ export function Modal({
   title,
   children,
   className,
+  headerClassName,
   dark: _dark,
 }: {
   open: boolean;
@@ -16,6 +17,7 @@ export function Modal({
   title?: string;
   children: ReactNode;
   className?: string;
+  headerClassName?: string;
   /** @deprecated theme is now inherited from document.body class */
   dark?: boolean;
 }) {
@@ -46,7 +48,7 @@ export function Modal({
           )}
         >
           {title && (
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-6 py-4">
+            <div className={cn("sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-6 py-4", headerClassName)}>
               <h2 className="text-lg font-semibold text-[var(--foreground)]">
                 {title}
               </h2>

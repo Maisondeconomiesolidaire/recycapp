@@ -89,8 +89,9 @@ export function RequestDrawer({
       open={open}
       onClose={onClose}
       variant="modal"
+      panelClassName="border-0 shadow-[0_28px_90px_rgba(0,0,0,0.18)]"
       bodyClassName="p-6 sm:p-7"
-      headerClassName={request ? "border-b border-white/12" : undefined}
+      headerClassName={request ? "border-b-0" : "border-b-0"}
       headerStyle={
         request ? { backgroundColor: TYPE_COLORS[request.type] } : undefined
       }
@@ -136,7 +137,7 @@ export function RequestDrawer({
                 }
                 label="Complète"
                 variant="inline"
-                className="border-white/28 bg-white/10 px-3 py-1.5 text-white hover:border-white/40"
+                className="px-3 py-1.5"
               />
 
               {request.outcome === "perdue" ? (
@@ -203,7 +204,8 @@ export function RequestDrawer({
           open={cancelOpen}
           onClose={() => setCancelOpen(false)}
           title="Annuler la demande"
-          className="max-w-md"
+          className="max-w-md border-0 shadow-[0_28px_90px_rgba(0,0,0,0.18)]"
+          headerClassName="border-b-0"
         >
           <div className="space-y-4">
             <Field label="Motif" required error={cancelError || undefined}>
@@ -332,7 +334,7 @@ function DemandeTab({ request }: { request: RequestDoc }) {
 
   if (request.type === "article") {
     return (
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.72fr)]">
         <RequestDetails request={request} />
         <div className="space-y-6">{meta}</div>
       </div>
@@ -1143,12 +1145,27 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Row({ label, value }: { label: string; value?: string }) {
+function Row({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value?: string;
+  mono?: boolean;
+}) {
   if (!value) return null;
   return (
     <div className="flex justify-between gap-4 py-1.5 border-b border-zinc-800/60 last:border-0">
       <span className="text-zinc-500">{label}</span>
-      <span className="text-zinc-200 text-right">{value}</span>
+      <span
+        className={cn(
+          "text-zinc-200 text-right",
+          mono && "max-w-[60%] break-all font-mono text-xs",
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -1267,11 +1284,60 @@ function RequestDetails({ request }: { request: RequestDoc }) {
           ? [request.article]
           : [];
     return (
-      <ArticleRequestTabs articles={articles} />
+      <div className="space-y-6">
+        <ArticlePaymentSection request={request} />
+        <ArticleRequestTabs articles={articles} />
+      </div>
     );
   }
 
   return null;
+}
+
+function ArticlePaymentSection({ request }: { request: RequestDoc }) {
+  const payment = request.payment;
+  if (!payment) return null;
+
+  const methodLabel =
+    payment.method === "cb" ? "Carte bancaire" : "Espèces";
+  const statusLabel = payment.validated ? "Validé" : "En attente";
+  const capturedLabel =
+    payment.method === "cb"
+      ? payment.captured
+        ? "Oui"
+        : "Non"
+      : "À encaisser en boutique";
+
+  return (
+    <section>
+      <SectionTitle>Paiement</SectionTitle>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="space-y-2 text-sm">
+          <Row label="Type de paiement" value={methodLabel} />
+          <Row label="Paiement validé" value={statusLabel} />
+          {payment.method === "cb" && (
+            <>
+              <Row label="Paiement prélevé" value={capturedLabel} />
+              <Row
+                label="Prestataire"
+                value={payment.provider === "stripe" ? "Stripe" : undefined}
+              />
+              <Row
+                label="Date d'encaissement"
+                value={payment.paidAt ? formatDateTime(payment.paidAt) : undefined}
+              />
+              <Row label="Session Stripe" value={payment.stripeSessionId} mono />
+              <Row
+                label="Payment Intent"
+                value={payment.stripePaymentIntentId}
+                mono
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ArticleRequestTabs({
@@ -1295,16 +1361,28 @@ function ArticleRequestTabs({
   return (
     <section>
       <SectionTitle>Articles réservés</SectionTitle>
-      <UnderlineTabs
-        size="sm"
-        items={articles.map((_, i) => ({
-          key: String(i),
-          label: `Article ${i + 1}`,
-        }))}
-        value={selected}
-        onChange={setSelected}
-        className="mb-4"
-      />
+      <div className="mb-4 flex flex-wrap gap-x-3 gap-y-2 border-b border-[var(--crm-border)] pb-3">
+        {articles.map((article, i) => {
+          const key = String(i);
+          const active = selected === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSelected(key)}
+              className={cn(
+                "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                active
+                  ? "bg-brand-500 text-white shadow-sm"
+                  : "bg-[var(--crm-surface-2)] text-zinc-500 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200",
+              )}
+              title={article.articleTitle ?? `Article ${i + 1}`}
+            >
+              Article {i + 1}
+            </button>
+          );
+        })}
+      </div>
       <ArticleRequestPreview
         articleId={current.articleId}
         fallbackTitle={current.articleTitle}
@@ -1350,7 +1428,7 @@ function ArticleRequestPreview({
     article.originalPrice > article.price;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900/60">
+    <div className="overflow-hidden rounded-2xl bg-[var(--crm-surface)] shadow-[0_14px_34px_rgba(0,0,0,0.10)] ring-1 ring-[var(--crm-border)]">
       {article.imageUrls[0] ? (
         <button
           type="button"
@@ -1373,6 +1451,18 @@ function ArticleRequestPreview({
         <p className="text-sm font-semibold leading-5 text-zinc-100">
           {article.title}
         </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {article.internalReference && (
+            <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+              Réf. interne {article.internalReference}
+            </span>
+          )}
+          {article.gdrReference && (
+            <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+              GDR {article.gdrReference}
+            </span>
+          )}
+        </div>
         <div className="mt-2 flex items-center gap-2">
           {hasDiscount ? (
             <>

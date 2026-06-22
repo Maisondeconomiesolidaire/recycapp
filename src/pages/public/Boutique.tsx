@@ -126,7 +126,7 @@ function ArticleCard({
     <>
     <Link
       to={`/boutique/${article._id}`}
-      className={`group relative overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.08)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_56px_rgba(24,24,27,0.14)] ${
+      className={`group relative overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.08)] transition-shadow duration-300 hover:shadow-[0_24px_56px_rgba(24,24,27,0.16)] ${
         article.isLot ? "ring-2 ring-brand-500/20" : ""
       }`}
     >
@@ -140,7 +140,7 @@ function ArticleCard({
           <img
             src={article.imageUrls[0]}
             alt={article.title}
-            className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04] ${
+            className={`h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] group-hover:scale-[1.1] ${
               reserved ? "opacity-45 grayscale-[0.15]" : ""
             }`}
           />

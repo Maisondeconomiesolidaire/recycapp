@@ -114,6 +114,17 @@ const reservedArticleDetails = v.object({
   articleTitle: v.string(),
 });
 
+const requestPayment = v.object({
+  method: v.union(v.literal("cb"), v.literal("especes")),
+  status: v.union(v.literal("pending"), v.literal("paid")),
+  validated: v.boolean(),
+  captured: v.boolean(),
+  provider: v.optional(v.literal("stripe")),
+  stripeSessionId: v.optional(v.string()),
+  stripePaymentIntentId: v.optional(v.string()),
+  paidAt: v.optional(v.number()),
+});
+
 const veloDetails = v.object({
   bikeType: v.optional(v.string()),
   service: v.optional(v.string()),
@@ -149,7 +160,10 @@ export default defineSchema({
     bundleKey: v.optional(v.string()),
     bundleReason: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_status", ["status"])
+    .index("by_internalReference", ["internalReference"])
+    .index("by_gdrReference", ["gdrReference"]),
 
   requests: defineTable({
     type: requestType,
@@ -186,6 +200,7 @@ export default defineSchema({
     collecte: v.optional(collecteDetails),
     article: v.optional(articleDetails),
     articles: v.optional(v.array(reservedArticleDetails)),
+    payment: v.optional(requestPayment),
     velo: v.optional(veloDetails),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -227,4 +242,204 @@ export default defineSchema({
     ),
     error: v.optional(v.string()),
   }),
+
+  /** Sessions d'arrivage (GDR Collecte). */
+  arrivages: defineTable({
+    date: v.number(),
+    origin: v.union(
+      v.literal("decheterie"),
+      v.literal("domicile"),
+      v.literal("apport"),
+      v.literal("tournee"),
+    ),
+    commune: v.optional(v.string()),
+    status: v.union(v.literal("open"), v.literal("closed")),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_date", ["date"]),
+
+  /** Dépôts scellés en attente d'éclatement. */
+  depots: defineTable({
+    depotNumber: v.number(),
+    date: v.number(),
+    origin: v.union(
+      v.literal("decheterie"),
+      v.literal("domicile"),
+      v.literal("apport"),
+      v.literal("tournee"),
+    ),
+    commune: v.optional(v.string()),
+    weightKg: v.optional(v.number()),
+    defaultCategory: v.optional(v.string()),
+    defaultSubcategory: v.optional(v.string()),
+    defaultFlux: v.optional(v.string()),
+    defaultOrientation: v.optional(v.string()),
+    note: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("partial"),
+      v.literal("closed"),
+    ),
+    closedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_date", ["date"]),
+
+  /** Articles enregistrés lors d'un arrivage ou d'un éclatement de dépôt. */
+  arrivageItems: defineTable({
+    arrivageId: v.optional(v.id("arrivages")),
+    depotId: v.optional(v.id("depots")),
+    date: v.number(),
+    origin: v.union(
+      v.literal("decheterie"),
+      v.literal("domicile"),
+      v.literal("apport"),
+      v.literal("tournee"),
+    ),
+    commune: v.optional(v.string()),
+    category: v.string(),
+    subcategory: v.optional(v.string()),
+    flux: v.optional(v.string()),
+    orientation: v.string(),
+    weightKg: v.optional(v.number()),
+    tare: v.optional(v.number()),
+    quantity: v.number(),
+    price: v.optional(v.number()),
+    condition: v.optional(v.string()),
+    labelInfo: v.optional(v.string()),
+    reference: v.string(),
+    articleId: v.optional(v.id("articles")),
+    createdAt: v.number(),
+  })
+    .index("by_arrivage", ["arrivageId"])
+    .index("by_depot", ["depotId"])
+    .index("by_date", ["date"]),
+
+  /** GDR Ateliers — suivi de valorisation article par article. */
+  atelierSessions: defineTable({
+    articleId: v.id("articles"),
+    articleReference: v.string(),
+    date: v.number(),
+    durationMinutes: v.optional(v.number()),
+    technicianId: v.optional(v.id("teamMembers")),
+    type: v.string(), // nettoyage | reparation | test | reconditionnement | autre
+    notes: v.optional(v.string()),
+    status: v.union(v.literal("en_cours"), v.literal("termine")),
+    createdAt: v.number(),
+  })
+    .index("by_article", ["articleId"])
+    .index("by_status", ["status"])
+    .index("by_date", ["date"]),
+
+  /** GDR Magasin — ventes enregistrées à la caisse. */
+  ventes: defineTable({
+    date: v.number(),
+    receiptNumber: v.string(),
+    items: v.array(v.object({
+      articleId: v.id("articles"),
+      title: v.string(),
+      price: v.number(),
+    })),
+    subtotal: v.number(),
+    discountAmount: v.optional(v.number()),
+    total: v.number(),
+    paymentMethod: v.union(
+      v.literal("especes"),
+      v.literal("cb"),
+      v.literal("cheque"),
+      v.literal("cheque_cadeau"),
+      v.literal("virement"),
+    ),
+    amountTendered: v.optional(v.number()),
+    change: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_date", ["date"]),
+
+  stripeCheckoutDrafts: defineTable({
+    items: v.array(v.object({
+      articleId: v.id("articles"),
+      title: v.string(),
+      price: v.number(),
+    })),
+    discountAmount: v.optional(v.number()),
+    total: v.number(),
+    createdBy: v.string(),
+    stripeSessionId: v.optional(v.string()),
+    stripePaymentIntentId: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("completed")),
+    venteId: v.optional(v.id("ventes")),
+    receiptNumber: v.optional(v.string()),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_stripeSessionId", ["stripeSessionId"]),
+
+  publicStripeCheckoutDrafts: defineTable({
+    articleIds: v.array(v.id("articles")),
+    customer: customer,
+    comment: v.optional(v.string()),
+    total: v.number(),
+    stripeSessionId: v.optional(v.string()),
+    stripePaymentIntentId: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("completed")),
+    requestId: v.optional(v.id("requests")),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_stripeSessionId", ["stripeSessionId"]),
+
+  /** GDR Sorties hors magasin — ventes en dehors de la boutique physique. */
+  sortiesHorsMagasin: defineTable({
+    date: v.number(),
+    articleId: v.optional(v.id("articles")),
+    articleTitle: v.string(),
+    articleReference: v.optional(v.string()),
+    price: v.number(),
+    channel: v.union(
+      v.literal("leboncoin"),
+      v.literal("ebay"),
+      v.literal("vinted"),
+      v.literal("instagram"),
+      v.literal("facebook"),
+      v.literal("depot_vente"),
+      v.literal("commande"),
+      v.literal("autre"),
+    ),
+    buyerName: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_date", ["date"]),
+
+  /** GDR Sorties matières — flux de matières non réemployables. */
+  sortiesMatieres: defineTable({
+    date: v.number(),
+    materialType: v.string(),
+    weightKg: v.number(),
+    destination: v.string(),
+    documentNumber: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    origin: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_date", ["date"]),
+
+  /** GDR Tournées — planification des collectes. */
+  tournees: defineTable({
+    date: v.number(),
+    label: v.string(),
+    vehicleId: v.optional(v.id("teamMembers")),
+    driverId: v.optional(v.id("teamMembers")),
+    stops: v.array(v.object({
+      requestId: v.optional(v.id("requests")),
+      address: v.string(),
+      contactName: v.optional(v.string()),
+      contactPhone: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      status: v.union(v.literal("prevu"), v.literal("effectue"), v.literal("annule")),
+      order: v.number(),
+    })),
+    status: v.union(v.literal("planifiee"), v.literal("en_cours"), v.literal("terminee"), v.literal("annulee")),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_date", ["date"]),
 });

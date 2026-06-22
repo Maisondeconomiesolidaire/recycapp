@@ -234,10 +234,7 @@ function fallbackLotAnalysis(
             "Regroupement automatique par thème précis et mots-clés proches. À valider avant mise en ligne.",
           suggestedPrice: discountedBundlePrice(total),
           articleIds: sorted.map((article) => article._id),
-          merchandisingNote:
-            sorted.some((article) => article.status === "attente")
-              ? "Priorité aux articles déjà en attente afin de créer une offre vendable."
-              : "Lot intéressant si la sélection raconte le même usage client.",
+          merchandisingNote: "Lot intéressant si la sélection raconte le même usage client.",
         };
       })
       .filter((group) => group.articleIds.length >= 2)
@@ -254,6 +251,27 @@ function normalizeKeyword(value: string) {
     .trim();
 }
 
+const THEME_PATTERNS: Array<{ words: string[]; key: string }> = [
+  { words: ["mario", "kart", "luigi", "toad", "bowser", "yoshi", "peach", "nintendo"], key: "mario" },
+  { words: ["batman", "gotham", "joker", "bruce wayne"], key: "batman" },
+  { words: ["superman", "wonder woman", "aquaman", "flash", "dc comics", "justice league"], key: "dc-super-heros" },
+  { words: ["ironman", "iron", "avengers", "thor", "hulk", "captain", "america", "marvel", "wakanda", "black panther", "hawkeye", "falcon", "antman", "ant man"], key: "marvel" },
+  { words: ["spiderman", "spider"], key: "spider-man" },
+  { words: ["buzz", "lightyear", "woody", "jessie", "slinky", "toy story", "lotso", "hamm", "rex"], key: "toy-story" },
+  { words: ["playmobil"], key: "playmobil" },
+  { words: ["pirate", "pirates", "bateau", "corsaire"], key: "pirates" },
+  { words: ["lego"], key: "lego" },
+  { words: ["pokemon", "pikachu", "charizard", "bulbasaur", "squirtle", "eevee", "mewtwo"], key: "pokemon" },
+  { words: ["barbie", "ken"], key: "barbie" },
+  { words: ["star wars", "starwars", "jedi", "sith", "yoda", "darth", "vader", "stormtrooper", "mandalorian", "lightsaber"], key: "star-wars" },
+  { words: ["harry potter", "hogwarts", "hermione", "dumbledore", "voldemort", "poudlard", "weasley"], key: "harry-potter" },
+  { words: ["minions", "gru", "despicable"], key: "minions" },
+  { words: ["frozen", "elsa", "anna", "olaf", "reine des neiges"], key: "frozen" },
+  { words: ["cars", "mcqueen", "lightning", "radiator springs"], key: "cars-pixar" },
+  { words: ["dinosaure", "dinosaures", "dino", "jurassic"], key: "dinosaures" },
+  { words: ["foot", "football", "ballon"], key: "football" },
+];
+
 function fallbackThemeKey(article: {
   title: string;
   description?: string;
@@ -263,14 +281,15 @@ function fallbackThemeKey(article: {
     `${article.title} ${article.description ?? ""} ${(article.keywords ?? []).join(" ")}`,
   );
   const words = new Set(text.split(/\s+/).filter(Boolean));
-  if (["mario", "kart", "nintendo", "toad", "todd", "luigi", "bowser"].some((w) => words.has(w))) {
-    return "mario";
+  const fullText = text;
+
+  for (const pattern of THEME_PATTERNS) {
+    const matched = pattern.words.some((w) => {
+      if (w.includes(" ")) return fullText.includes(w);
+      return words.has(w);
+    });
+    if (matched) return pattern.key;
   }
-  if (["playmobil", "pirate", "pirates", "bateau", "corsaire"].some((w) => words.has(w))) {
-    return "playmobil-pirates";
-  }
-  if (words.has("lego")) return "lego";
-  if (words.has("pokemon") || words.has("pikachu")) return "pokemon";
   return "";
 }
 
@@ -340,53 +359,54 @@ export const analyzePotentialLots = action({
     try {
       const result = await callOpenAI<LotAnalysisResult>(apiKey, {
         model: "gpt-4o",
-        temperature: 0.2,
-        max_tokens: 1200,
+        temperature: 0.1,
+        max_tokens: 2000,
         messages: [
           {
             role: "system",
             content:
-              "Tu es responsable merchandising d'une recyclerie française. Analyse une liste d'articles et propose uniquement des lots commercialement très cohérents. La catégorie ou sous-catégorie ne suffit JAMAIS. Il faut le même univers, licence, thème, type d'objet ou usage précis. Mario Kart + Toad/Mario = oui. Mario Kart + bateau pirate Playmobil = non. Retourne uniquement du JSON valide.",
+              "Tu es responsable merchandising d'une recyclerie française. Ton objectif est de MAXIMISER le nombre de lots proposés. Regroupe les articles par univers, personnage, licence ou franchise. Sois LARGE dans tes regroupements : tous les superhéros Marvel ensemble, tous les personnages Toy Story ensemble, tous les articles Batman ensemble, etc. Un même personnage en plusieurs tailles = lot parfait. Une même franchise = lot. Retourne uniquement du JSON valide, sans commentaires.",
           },
           {
             role: "user",
-            content: `Articles disponibles pour analyse :
+            content: `Articles disponibles pour analyse de lots :
 ${JSON.stringify(
-  articles.map((article) => ({
+  articles.map((article: (typeof articles)[number]) => ({
     id: article._id,
     title: article.title,
-    description: article.description.slice(0, 220),
+    description: article.description.slice(0, 180),
     price: article.price,
-    category: article.category,
     subcategory: article.subcategory,
-    condition: article.condition,
-    status: article.status,
-    keywords: article.keywords,
+    keywords: article.keywords?.slice(0, 8),
     themeKey: article.themeKey,
   })),
+  null,
+  0,
 )}
 
-Retourne ce format exact :
+Retourne ce format JSON exact :
 {
   "groups": [
     {
-      "title": "Titre court du lot",
+      "title": "Titre vendeur du lot",
       "reason": "Pourquoi ces articles vont bien ensemble",
       "suggestedPrice": 25,
       "articleIds": ["id1", "id2"],
-      "merchandisingNote": "Note courte pour aider l'équipe à décider"
+      "merchandisingNote": "Conseil court pour l'équipe"
     }
   ]
 }
 
-Règles :
-- 2 à 8 articles par lot.
-- Ne propose pas de lot si les articles ne partagent qu'une catégorie large comme "Jeux et Jouets".
-- Il faut un thème précis partagé : licence, marque/univers, type exact d'objet, usage très proche.
-- Trouve un nom vendeur et précis, ex : "Lot univers Mario Kart", "Lot pirates Playmobil".
-- Priorise les articles status "attente" et les articles sous 10 €.
-- Le prix suggéré doit être au moins 10 €, mais avec une remise de lot de 15 à 20 % versus la somme des articles.
-- Utilise uniquement les IDs fournis.`,
+Règles IMPÉRATIVES :
+- Minimum 2 articles, maximum 8 par lot.
+- Groupe par univers/franchise/personnage : Batman x2 = lot Batman, Iron Man + Spider-Man = lot Marvel, Buzz Lightyear + Slinky = lot Toy Story.
+- Un même personnage en différentes tailles = lot idéal.
+- Des personnages de la même franchise (Marvel, DC, Toy Story, Star Wars, Nintendo...) = lot valide.
+- NE PAS rejeter un lot parce que les articles sont en statut "disponible". Analyser tous les statuts.
+- Nom du lot : court et vendeur ("Lot Batman DC", "Lot super-héros Marvel", "Lot Toy Story Pixar", "Lot univers Mario").
+- Prix suggéré : somme des prix × 0.82, minimum 8 €.
+- Utilise UNIQUEMENT les IDs fournis dans la liste.
+- Si tu ne trouves pas au moins 2 groupes cohérents, force quand même les meilleures combinaisons possibles.`,
           },
         ],
       });

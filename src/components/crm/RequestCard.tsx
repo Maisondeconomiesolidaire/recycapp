@@ -66,7 +66,7 @@ export function RequestCard({
             {formatDate(request.createdAt)}
           </span>
           {!request.complete && (
-            <span className="rounded bg-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-950">
+            <span className="rounded bg-white/88 px-2 py-0.5 text-[10px] font-bold text-zinc-950 shadow-[0_1px_0_rgba(255,255,255,0.18)]">
               Incomplète
             </span>
           )}

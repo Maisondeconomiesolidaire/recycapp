@@ -106,7 +106,7 @@ export function Calendrier() {
             (t) => (
               <span
                 key={t}
-                className="inline-flex items-center gap-1.5 text-xs text-zinc-400"
+                className="inline-flex items-center gap-1.5 text-xs text-zinc-500"
               >
                 <span
                   className="h-2.5 w-2.5 rounded-full"
@@ -118,9 +118,9 @@ export function Calendrier() {
           )}
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
           <div className="min-w-[720px]">
-          <div className="grid grid-cols-7 border-b border-zinc-800">
+          <div className="grid grid-cols-7 border-b border-[var(--crm-border)]">
             {WEEKDAYS.map((d) => (
               <div
                 key={d}
@@ -142,11 +142,11 @@ export function Calendrier() {
                   key={key}
                   onClick={() => setSelectedDay(day)}
                   className={cn(
-                    "min-h-[104px] cursor-pointer border-b border-r border-zinc-800 p-1.5 last:border-r-0 transition-colors",
-                    !inMonth && "bg-zinc-950/40",
+                    "min-h-[104px] cursor-pointer border-b border-r border-[var(--crm-border)] p-1.5 last:border-r-0 transition-colors",
+                    !inMonth && "bg-[var(--crm-surface-2)]",
                     isSelected
                       ? "bg-brand-500/8 ring-1 ring-inset ring-brand-500/30"
-                      : "hover:bg-zinc-800/40",
+                      : "hover:bg-[var(--crm-surface-2)]",
                   )}
                 >
                   <div
@@ -158,7 +158,7 @@ export function Calendrier() {
                           ? "bg-brand-500/20 text-brand-300 font-semibold"
                           : inMonth
                             ? "text-zinc-300"
-                            : "text-zinc-600",
+                            : "text-zinc-500",
                     )}
                   >
                     {format(day, "d")}
@@ -237,7 +237,7 @@ function DayPanel({
           key={r._id}
           type="button"
           onClick={() => onOpenRequest(r._id)}
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
+          className="w-full rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 text-left transition-colors hover:border-[var(--crm-border-strong)] hover:bg-[var(--crm-surface-2)]"
         >
           <div className="mb-2 flex items-center gap-2">
             <span

@@ -9,7 +9,9 @@
  */
 
 import type * as ai from "../ai.js";
+import type * as arrivages from "../arrivages.js";
 import type * as articles from "../articles.js";
+import type * as ateliers from "../ateliers.js";
 import type * as clients from "../clients.js";
 import type * as dashboard from "../dashboard.js";
 import type * as files from "../files.js";
@@ -17,7 +19,10 @@ import type * as lib from "../lib.js";
 import type * as notifications from "../notifications.js";
 import type * as processes from "../processes.js";
 import type * as requests from "../requests.js";
+import type * as sorties from "../sorties.js";
+import type * as stripe from "../stripe.js";
 import type * as team from "../team.js";
+import type * as ventes from "../ventes.js";
 
 import type {
   ApiFromModules,
@@ -27,7 +32,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
+  arrivages: typeof arrivages;
   articles: typeof articles;
+  ateliers: typeof ateliers;
   clients: typeof clients;
   dashboard: typeof dashboard;
   files: typeof files;
@@ -35,7 +42,10 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   processes: typeof processes;
   requests: typeof requests;
+  sorties: typeof sorties;
+  stripe: typeof stripe;
   team: typeof team;
+  ventes: typeof ventes;
 }>;
 
 /**

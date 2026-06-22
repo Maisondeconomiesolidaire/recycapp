@@ -1,12 +1,13 @@
 import { Link, Navigate } from "react-router-dom";
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   ArrowLeft,
   ArrowRight,
+  CreditCard,
   Lock,
   PackageOpen,
   ShoppingBag,
@@ -14,7 +15,6 @@ import {
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { Button } from "../../components/ui/Button";
 import { Field, Input, Textarea } from "../../components/ui/Field";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { formatPrice } from "../../lib/format";
@@ -39,13 +39,20 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+const PUBLIC_CART_DRAFT_KEY = "public-cart-checkout-draft";
+
 export function CartPage() {
   const cart = useCart();
   const [submitted, setSubmitted] = useState(false);
+  const [paidSubmitted, setPaidSubmitted] = useState(false);
+  const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
   const reserve = useMutation(api.requests.submitArticleCartReservation);
+  const startPublicCartCheckout = useAction(api.stripe.startPublicCartCheckout);
+  const confirmPublicCartCheckout = useAction(api.stripe.confirmPublicCartCheckout);
   const articles = useQuery(api.articles.getManyPublic, {
     ids: cart.ids as Id<"articles">[],
   });
+  const checkoutHandledRef = useRef<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -54,6 +61,70 @@ export function CartPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
+  useEffect(() => {
+    const raw = window.localStorage.getItem(PUBLIC_CART_DRAFT_KEY);
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw) as FormData;
+      setValue("customer.firstName", draft.customer.firstName, { shouldDirty: false });
+      setValue("customer.lastName", draft.customer.lastName, { shouldDirty: false });
+      setValue("customer.email", draft.customer.email, { shouldDirty: false });
+      setValue("customer.phone", draft.customer.phone, { shouldDirty: false });
+      setValue("customer.address", draft.customer.address, { shouldDirty: false });
+      setValue("customer.postalCode", draft.customer.postalCode, { shouldDirty: false });
+      setValue("customer.city", draft.customer.city, { shouldDirty: false });
+      setValue("comment", draft.comment ?? "", { shouldDirty: false });
+    } catch {
+      window.localStorage.removeItem(PUBLIC_CART_DRAFT_KEY);
+    }
+  }, [setValue]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeStatus = params.get("stripe_status");
+    const sessionId = params.get("session_id");
+    const draftId = params.get("draft_id");
+
+    if (stripeStatus === "cancelled") {
+      setCheckoutMessage("Paiement Stripe test annulé. Votre panier et vos coordonnées ont été conservés.");
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+
+    if (
+      stripeStatus !== "success" ||
+      !sessionId ||
+      !draftId ||
+      checkoutHandledRef.current === sessionId
+    ) {
+      return;
+    }
+
+    checkoutHandledRef.current = sessionId;
+    setCheckoutMessage("Validation du paiement Stripe test…");
+
+    void confirmPublicCartCheckout({
+      draftId: draftId as Id<"publicStripeCheckoutDrafts">,
+      sessionId,
+    })
+      .then(() => {
+        cart.clear();
+        window.localStorage.removeItem(PUBLIC_CART_DRAFT_KEY);
+        setPaidSubmitted(true);
+      })
+      .catch((error: unknown) => {
+        setCheckoutMessage(
+          error instanceof Error
+            ? error.message
+            : "Le paiement Stripe test n'a pas pu être validé.",
+        );
+      })
+      .finally(() => {
+        window.history.replaceState({}, "", window.location.pathname);
+      });
+  }, [cart, confirmPublicCartCheckout]);
+
+  if (paidSubmitted) return <Navigate to="/merci?type=article_payment" replace />;
   if (submitted) return <Navigate to="/merci" replace />;
 
   if (cart.count === 0) {
@@ -94,6 +165,19 @@ export function CartPage() {
     });
     cart.clear();
     setSubmitted(true);
+  }
+
+  async function onPayOnline(data: FormData) {
+    if (availableArticles.length === 0) return;
+    setCheckoutMessage(null);
+    window.localStorage.setItem(PUBLIC_CART_DRAFT_KEY, JSON.stringify(data));
+    const result = await startPublicCartCheckout({
+      articleIds: availableArticles.map((article) => article._id),
+      customer: data.customer,
+      comment: data.comment || undefined,
+      returnUrl: window.location.href,
+    });
+    window.location.assign(result.checkoutUrl);
   }
 
   return (
@@ -242,6 +326,12 @@ export function CartPage() {
               <Textarea {...register("comment")} placeholder="Une précision sur votre réservation ?" />
             </Field>
 
+            {checkoutMessage && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {checkoutMessage}
+              </div>
+            )}
+
             {/* Trust badges */}
             <div className="grid grid-cols-2 gap-2 rounded-2xl bg-zinc-50 p-3">
               {[
@@ -255,15 +345,27 @@ export function CartPage() {
               ))}
             </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting || availableArticles.length === 0}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-[0_8px_28px_rgba(241,16,79,0.32)] transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
-              style={{ backgroundColor: BRAND }}
-            >
-              {isSubmitting ? "Envoi en cours…" : "Réserver mon panier"}
-              {!isSubmitting && <ArrowRight className="h-4 w-4" />}
-            </button>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleSubmit(onPayOnline)}
+                disabled={isSubmitting || availableArticles.length === 0}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-[0_8px_28px_rgba(241,16,79,0.32)] transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
+                style={{ backgroundColor: BRAND }}
+              >
+                {isSubmitting ? "Redirection…" : `Payer par carte bancaire ${formatPrice(total)}`}
+                {!isSubmitting && <CreditCard className="h-4 w-4" />}
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSubmitting || availableArticles.length === 0}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white py-4 text-sm font-bold text-zinc-900 transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
+              >
+                {isSubmitting ? "Envoi en cours…" : "Réserver pour un paiement en espèce"}
+                {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+              </button>
+            </div>
           </form>
         </div>
       </div>

@@ -240,6 +240,14 @@ body {
   animation: slide-in-left 0.2s ease-out;
 }
 
+@keyframes scan-line {
+  0%, 100% { transform: translateY(-80px); opacity: 0.6; }
+  50% { transform: translateY(80px); opacity: 1; }
+}
+.animate-scan-line {
+  animation: scan-line 1.6s ease-in-out infinite;
+}
+
 @theme inline {
   --font-heading: "Inter Variable", var(--font-sans);
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",

@@ -1,4 +1,4 @@
-import { mutation, query, MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, query, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import {
   requireStaff,
@@ -231,6 +231,12 @@ export const submitArticleReservation = mutation({
       photos: [],
       article: { articleId, articleTitle: article.title },
       articles: [{ articleId, articleTitle: article.title }],
+      payment: {
+        method: "especes",
+        status: "pending",
+        validated: false,
+        captured: false,
+      },
       createdAt: now,
       updatedAt: now,
       reference,
@@ -284,6 +290,12 @@ export const submitArticleCartReservation = mutation({
       photos: [],
       article: articles[0],
       articles,
+      payment: {
+        method: "especes",
+        status: "pending",
+        validated: false,
+        captured: false,
+      },
       createdAt: now,
       updatedAt: now,
       reference,
@@ -294,6 +306,135 @@ export const submitArticleCartReservation = mutation({
       customerName: `${customer.firstName} ${customer.lastName}`.trim(),
     });
     return requestId;
+  },
+});
+
+export const createPublicStripeCheckoutDraft = internalMutation({
+  args: {
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    articleIds: v.array(v.id("articles")),
+  },
+  handler: async (ctx, { customer, comment, articleIds }) => {
+    const uniqueArticleIds = Array.from(new Set(articleIds));
+    if (uniqueArticleIds.length === 0) {
+      throw new Error("Ajoutez au moins un article au panier.");
+    }
+
+    let total = 0;
+    for (const articleId of uniqueArticleIds) {
+      const article = await ctx.db.get(articleId);
+      if (!article) throw new Error("Un article du panier est introuvable.");
+      if (article.status !== "disponible") {
+        throw new Error(`"${article.title}" n'est plus disponible.`);
+      }
+      total += article.price;
+    }
+
+    const draftId = await ctx.db.insert("publicStripeCheckoutDrafts", {
+      articleIds: uniqueArticleIds,
+      customer,
+      comment,
+      total,
+      status: "pending",
+      createdAt: Date.now(),
+    });
+    return { draftId, total };
+  },
+});
+
+export const attachStripeSessionToPublicDraft = internalMutation({
+  args: {
+    draftId: v.id("publicStripeCheckoutDrafts"),
+    stripeSessionId: v.string(),
+  },
+  handler: async (ctx, { draftId, stripeSessionId }) => {
+    await ctx.db.patch(draftId, { stripeSessionId });
+    return null;
+  },
+});
+
+export const finalizePublicStripeCheckout = internalMutation({
+  args: {
+    draftId: v.id("publicStripeCheckoutDrafts"),
+    stripeSessionId: v.string(),
+    stripePaymentIntentId: v.optional(v.string()),
+  },
+  handler: async (ctx, { draftId, stripeSessionId, stripePaymentIntentId }) => {
+    const draft = await ctx.db.get(draftId);
+    if (!draft) throw new Error("Paiement en ligne introuvable.");
+
+    if (draft.status === "completed" && draft.requestId) {
+      return { requestId: draft.requestId };
+    }
+
+    if (draft.stripeSessionId && draft.stripeSessionId !== stripeSessionId) {
+      throw new Error("Cette session Stripe ne correspond pas au panier en cours.");
+    }
+
+    const articles = [];
+    for (const articleId of draft.articleIds) {
+      const article = await ctx.db.get(articleId);
+      if (!article) throw new Error("Un article payé est introuvable.");
+      if (article.status !== "disponible") {
+        throw new Error(`"${article.title}" n'est plus disponible.`);
+      }
+      articles.push({ articleId, articleTitle: article.title });
+    }
+
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    for (const articleId of draft.articleIds) {
+      await ctx.db.patch(articleId, { status: "vendu" });
+    }
+
+    const steps = resolveProcess("article");
+    const requestId = await ctx.db.insert("requests", {
+      type: "article",
+      stage: "nouveau",
+      outcome: "gagnee",
+      requestOrigin: "external",
+      complete: isArticleComplete(draft.customer),
+      processSteps: steps,
+      completedSteps: steps.length,
+      customer: draft.customer,
+      comment:
+        [draft.comment, "Paiement Stripe test valide depuis la boutique en ligne."]
+          .filter(Boolean)
+          .join("\n\n") || undefined,
+      photos: [],
+      article: articles[0],
+      articles,
+      payment: {
+        method: "cb",
+        status: "paid",
+        validated: true,
+        captured: true,
+        provider: "stripe",
+        stripeSessionId,
+        stripePaymentIntentId,
+        paidAt: now,
+      },
+      createdAt: now,
+      updatedAt: now,
+      reference,
+    });
+
+    await createNewRequestNotification(ctx, {
+      requestId,
+      requestType: "article",
+      customerName: `${draft.customer.firstName} ${draft.customer.lastName}`.trim(),
+    });
+
+    await ctx.db.patch(draftId, {
+      stripeSessionId,
+      stripePaymentIntentId,
+      status: "completed",
+      requestId,
+      completedAt: Date.now(),
+    });
+
+    return { requestId };
   },
 });
 

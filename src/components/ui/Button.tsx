@@ -13,11 +13,11 @@ const variants: Record<Variant, string> = {
   primary:
     "bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500 shadow-sm",
   secondary:
-    "bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-[var(--crm-surface-2)] dark:text-zinc-100 dark:hover:bg-[var(--crm-surface-3)] focus-visible:ring-zinc-400",
+    "border border-[var(--crm-border)] bg-[var(--crm-surface)] text-[var(--foreground)] hover:bg-[var(--crm-surface-2)] focus-visible:ring-zinc-400 shadow-sm",
   outline:
-    "border border-zinc-300 text-zinc-700 hover:bg-zinc-50 dark:border-[var(--crm-border-strong)] dark:text-zinc-200 dark:hover:bg-[var(--crm-surface-2)] focus-visible:ring-zinc-400",
+    "border border-[var(--crm-border-strong)] bg-transparent text-[var(--foreground)] hover:bg-[var(--crm-surface-2)] focus-visible:ring-zinc-400 shadow-sm",
   ghost:
-    "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-[var(--crm-surface-2)] focus-visible:ring-zinc-400",
+    "text-[var(--foreground)]/80 hover:bg-[var(--crm-surface-2)] focus-visible:ring-zinc-400",
   danger:
     "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500 shadow-sm",
 };

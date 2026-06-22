@@ -351,8 +351,8 @@ export function Checkbox({
         variant === "card" &&
           "has-[:checked]:border-brand-500 has-[:checked]:bg-brand-500/10",
         variant === "inline" &&
-          "inline-flex items-center gap-3 rounded-full border border-border bg-card/90 px-3 py-2 hover:border-primary/35",
-        variant === "inline" && checked && "border-primary/60 bg-primary/10",
+          "inline-flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--card)]/95 px-3 py-2 text-[var(--foreground)] shadow-sm hover:border-primary/35 hover:bg-[var(--accent)]",
+        variant === "inline" && checked && "border-primary/40 bg-primary/12",
         className,
       )}
     >

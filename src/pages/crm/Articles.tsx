@@ -16,6 +16,8 @@ import {
   Sparkles,
   Loader2,
   Check,
+  Printer,
+  X,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
@@ -31,6 +33,7 @@ import { Input } from "../../components/ui/Field";
 import { MultiSelectChips } from "../../components/ui/MultiSelectChips";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
+import { PrintLabels } from "../../components/crm/PrintLabels";
 
 type ArticleDoc = Doc<"articles"> & { imageUrls: string[] };
 type Tab = "stock" | "lots" | "dashboard";
@@ -143,6 +146,7 @@ export function Articles() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const articles = useQuery(api.articles.listAll, {});
   const remove = useMutation(api.articles.remove);
+  const patchStatus = useMutation(api.articles.patchStatus);
   const publishLot = useMutation(api.articles.publishLot);
   const analyzePotentialLots = useAction(api.ai.analyzePotentialLots);
   const [editing, setEditing] = useState<ArticleDoc | null>(null);
@@ -151,6 +155,8 @@ export function Articles() {
   const [aiGroups, setAiGroups] = useState<AiLotGroup[] | null>(null);
   const [analyzingLots, setAnalyzingLots] = useState(false);
   const [lotAnalysisError, setLotAnalysisError] = useState("");
+  const [printArticles, setPrintArticles] = useState<ArticleDoc[] | null>(null);
+  // Note: barcode scanner (external device) is handled globally by GlobalScanner in CrmLayout
 
   const filteredArticles = useMemo(() => {
     if (!articles) return articles;
@@ -220,6 +226,15 @@ export function Articles() {
         title="Articles de la boutique"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => filteredArticles && filteredArticles.length > 0 && setPrintArticles(filteredArticles)}
+              disabled={!filteredArticles?.length}
+              title="Imprimer les étiquettes des articles visibles"
+            >
+              <Printer className="h-4 w-4" />
+              Étiquettes
+            </Button>
             <Button
               variant="outline"
               onClick={handleAnalyzeLots}
@@ -395,6 +410,13 @@ export function Articles() {
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
+                              onClick={() => setPrintArticles([a])}
+                              className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                              title="Imprimer l'étiquette"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </button>
+                            <button
                               onClick={() => openEdit(a)}
                               className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                             >
@@ -444,6 +466,16 @@ export function Articles() {
         }
         confirmLabel="Supprimer"
       />
+
+      {/* Print labels modal */}
+      {printArticles && (
+        <PrintLabels
+          articles={printArticles}
+          onClose={() => setPrintArticles(null)}
+        />
+      )}
+
+      {/* Barcode scanner modal is handled globally by GlobalScanner in CrmLayout */}
     </div>
   );
 }
@@ -489,26 +521,56 @@ function keywordsForArticle(article: ArticleDoc) {
   );
 }
 
+const THEME_PATTERNS_FRONTEND: Array<{ words: string[]; key: string }> = [
+  { words: ["mario", "kart", "luigi", "toad", "bowser", "yoshi", "peach", "nintendo"], key: "mario" },
+  { words: ["batman", "gotham", "joker", "bruce", "wayne"], key: "batman" },
+  { words: ["superman", "wonderwoman", "wonder", "aquaman", "flash", "dc"], key: "dc-super-heros" },
+  { words: ["ironman", "iron", "avengers", "thor", "hulk", "captain", "america", "marvel", "wakanda", "black", "panther", "hawkeye", "falcon", "antman"], key: "marvel" },
+  { words: ["spiderman", "spider"], key: "spider-man" },
+  { words: ["buzz", "lightyear", "woody", "jessie", "slinky", "lotso", "hamm", "rex"], key: "toy-story" },
+  { words: ["playmobil"], key: "playmobil" },
+  { words: ["pirate", "pirates", "bateau", "corsaire"], key: "pirates" },
+  { words: ["lego"], key: "lego" },
+  { words: ["pokemon", "pikachu", "charizard", "bulbasaur", "squirtle", "eevee", "mewtwo"], key: "pokemon" },
+  { words: ["barbie", "ken"], key: "barbie" },
+  { words: ["wars", "jedi", "sith", "yoda", "darth", "vader", "stormtrooper", "mandalorian"], key: "star-wars" },
+  { words: ["harry", "potter", "hogwarts", "hermione", "dumbledore", "voldemort"], key: "harry-potter" },
+  { words: ["minions", "gru", "despicable"], key: "minions" },
+  { words: ["frozen", "elsa", "anna", "olaf"], key: "frozen" },
+  { words: ["cars", "mcqueen", "lightning"], key: "cars-pixar" },
+  { words: ["dinosaure", "dinosaures", "dino", "jurassic"], key: "dinosaures" },
+];
+
 function deriveThemeKey(article: ArticleDoc) {
   const text = normalizeLotKeyword(
     `${article.title} ${article.description} ${(article.keywords ?? []).join(" ")}`,
   );
   const words = new Set(text.split(/\s+/).filter(Boolean));
-  if (["mario", "kart", "nintendo", "toad", "todd", "luigi", "bowser"].some((word) => words.has(word))) {
-    return "mario";
+  for (const pattern of THEME_PATTERNS_FRONTEND) {
+    if (pattern.words.some((w) => words.has(w))) return pattern.key;
   }
-  if (["playmobil", "pirate", "pirates", "bateau", "corsaire"].some((word) => words.has(word))) {
-    return "playmobil-pirates";
-  }
-  if (words.has("lego")) return "lego";
-  if (words.has("pokemon") || words.has("pikachu")) return "pokemon";
   return "";
+}
+
+const THEME_SUPERGROUPS: Record<string, string> = {
+  "marvel": "super-heros",
+  "spider-man": "super-heros",
+  "batman": "super-heros",
+  "dc-super-heros": "super-heros",
+};
+
+function themeSupergroup(key: string) {
+  return THEME_SUPERGROUPS[key] ?? key;
 }
 
 function compatibleForFallback(a: ArticleDoc, b: ArticleDoc) {
   const aTheme = lotKey(a);
   const bTheme = lotKey(b);
-  if (aTheme && bTheme) return aTheme === bTheme;
+  if (aTheme && bTheme) {
+    if (aTheme === bTheme) return true;
+    if (themeSupergroup(aTheme) === themeSupergroup(bTheme)) return true;
+    return false;
+  }
   if (a.subcategory !== b.subcategory) return false;
   const bKeywords = new Set(keywordsForArticle(b));
   return keywordsForArticle(a).filter((keyword) => bKeywords.has(keyword)).length >= 2;
@@ -518,9 +580,31 @@ function discountedBundlePrice(total: number) {
   return Math.max(10, Math.round(total * (total >= 40 ? 0.82 : 0.85)));
 }
 
+const THEME_KEY_LABELS: Record<string, string> = {
+  "mario": "Lot Mario Nintendo",
+  "batman": "Lot Batman DC",
+  "dc-super-heros": "Lot super-héros DC",
+  "marvel": "Lot super-héros Marvel",
+  "spider-man": "Lot Spider-Man Marvel",
+  "super-heros": "Lot super-héros",
+  "toy-story": "Lot Toy Story Pixar",
+  "playmobil": "Lot Playmobil",
+  "pirates": "Lot pirates",
+  "lego": "Lot Lego",
+  "pokemon": "Lot Pokémon",
+  "barbie": "Lot Barbie",
+  "star-wars": "Lot Star Wars",
+  "harry-potter": "Lot Harry Potter",
+  "minions": "Lot Minions",
+  "frozen": "Lot La Reine des Neiges",
+  "cars-pixar": "Lot Cars Pixar",
+  "dinosaures": "Lot dinosaures",
+};
+
 function titleForLotKey(key: string, items: ArticleDoc[]) {
+  if (key && THEME_KEY_LABELS[key]) return THEME_KEY_LABELS[key];
   if (key) {
-    return `Lot univers ${key
+    return `Lot ${key
       .split("-")
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
