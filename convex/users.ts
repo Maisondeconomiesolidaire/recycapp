@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { requireUser } from "./lib";
+import { normalizeCustomer, requireUser, titleCaseName } from "./lib";
 import { STEP } from "./processes";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -60,8 +60,8 @@ export const syncProfile = mutation({
       const profileId = await ctx.db.insert("users", {
         clerkId,
         email,
-        firstName: identity.givenName ?? undefined,
-        lastName: identity.familyName ?? undefined,
+        firstName: identity.givenName ? titleCaseName(identity.givenName) : undefined,
+        lastName: identity.familyName ? titleCaseName(identity.familyName) : undefined,
         createdAt: now,
         updatedAt: now,
       });
@@ -89,7 +89,13 @@ export const getMyProfile = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
-    return await getProfileByClerkId(ctx, identity.subject);
+    const profile = await getProfileByClerkId(ctx, identity.subject);
+    if (!profile) return null;
+    return {
+      ...profile,
+      firstName: profile.firstName ? titleCaseName(profile.firstName) : profile.firstName,
+      lastName: profile.lastName ? titleCaseName(profile.lastName) : profile.lastName,
+    };
   },
 });
 
@@ -106,7 +112,13 @@ export const updateMyProfile = mutation({
     const identity = await requireUser(ctx);
     const profile = await getProfileByClerkId(ctx, identity.subject);
     if (!profile) throw new Error("Profil introuvable.");
-    await ctx.db.patch(profile._id, { ...args, updatedAt: Date.now() });
+    const patch = {
+      ...args,
+      ...(args.firstName !== undefined ? { firstName: titleCaseName(args.firstName) } : {}),
+      ...(args.lastName !== undefined ? { lastName: titleCaseName(args.lastName) } : {}),
+      updatedAt: Date.now(),
+    };
+    await ctx.db.patch(profile._id, patch);
   },
 });
 
@@ -213,7 +225,24 @@ export const getMyRequest = query({
     const tracking =
       request.type === "collecte" ? await findTrackingTokenForRequest(ctx, requestId) : null;
 
+    // Articles réservés (boutique) avec leur photo de couverture, pour le récap.
+    let articles: Array<{ title: string; imageUrl: string | null }> = [];
+    if (request.type === "article") {
+      const list = request.articles ?? (request.article ? [request.article] : []);
+      articles = await Promise.all(
+        list.map(async (a) => {
+          const art = await ctx.db.get(a.articleId);
+          const cover = art?.images?.[0];
+          return {
+            title: a.articleTitle,
+            imageUrl: cover ? await ctx.storage.getUrl(cover) : null,
+          };
+        }),
+      );
+    }
+
     return {
+      articles,
       _id: request._id,
       type: request.type,
       reference: request.reference ?? null,
@@ -229,7 +258,7 @@ export const getMyRequest = query({
       quoteDetails: request.quoteDetails ?? null,
       collecteType: request.collecteType ?? null,
       comment: request.comment ?? null,
-      customer: request.customer,
+      customer: normalizeCustomer(request.customer),
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
       tracking,

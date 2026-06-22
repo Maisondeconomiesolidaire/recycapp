@@ -11,7 +11,6 @@ import {
   LogOut,
   MessageSquare,
   Package,
-  Radio,
   Save,
   Settings,
   ShieldCheck,
@@ -24,6 +23,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { MessageThread } from "../../components/MessageThread";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
+import { LiveDeliveryTracking } from "../../components/public/LiveDeliveryTracking";
 
 const CONTAINER = "mx-auto w-full max-w-5xl px-5 py-8 sm:px-7 lg:px-8";
 
@@ -424,109 +424,138 @@ export function AccountOrderDetail() {
         Mes commandes
       </Link>
 
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_1fr]">
-        {/* Left: status + info */}
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                  {TYPE_LABELS[request.type]}
-                </p>
-                <h2 className="mt-0.5 text-lg font-bold text-zinc-950">
-                  Demande {request.reference ? `#${request.reference}` : ""}
-                </h2>
-              </div>
-            </div>
+      {/* Header + horizontal status tracker (Amazon-style) */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+              {TYPE_LABELS[request.type]}
+            </p>
+            <h2 className="mt-0.5 text-xl font-bold text-zinc-950">
+              Demande {request.reference ? `#${request.reference}` : ""}
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-400">Créée le {formatDate(request.createdAt)}</p>
+          </div>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-bold ${
+              status.cancelled ? "bg-zinc-100 text-zinc-500" : "bg-brand-500/10 text-brand-600"
+            }`}
+          >
+            {status.cancelled ? "Annulée" : status.label}
+          </span>
+        </div>
 
-            {/* Stage timeline */}
-            {status.cancelled ? (
-              <div className="mt-5 flex items-center gap-3 rounded-xl bg-zinc-100 p-4">
-                <XCircle className="h-5 w-5 text-zinc-400" />
-                <span className="text-sm font-semibold text-zinc-600">Demande annulée</span>
-              </div>
-            ) : (
-              <div className="mt-5 space-y-3">
-                {STATUS_FLOW.map((s, i) => {
-                  const reached = i <= status.index;
-                  const current = i === status.index && status.index < STATUS_FLOW.length - 1;
-                  return (
-                    <div key={s.key} className="flex items-center gap-3">
-                      <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                          reached ? "bg-brand-500 text-white" : "bg-zinc-100 text-zinc-400"
-                        }`}
-                      >
-                        {reached ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : (
-                          <Clock className="h-4 w-4" />
-                        )}
-                      </div>
-                      <span
-                        className={`text-sm ${current ? "font-bold text-zinc-900" : reached ? "font-medium text-zinc-700" : "text-zinc-400"}`}
-                      >
-                        {s.label}
-                        {current && " — en cours"}
-                      </span>
+        {status.cancelled ? (
+          <div className="mt-5 flex items-center gap-3 rounded-xl bg-zinc-100 p-4">
+            <XCircle className="h-5 w-5 text-zinc-400" />
+            <span className="text-sm font-semibold text-zinc-600">
+              Cette demande a été annulée.
+            </span>
+          </div>
+        ) : (
+          <div className="mt-6 flex items-start">
+            {STATUS_FLOW.map((s, i) => {
+              const reached = i <= status.index;
+              const current = i === status.index;
+              return (
+                <div key={s.key} className="flex flex-1 flex-col items-center">
+                  <div className="flex w-full items-center justify-center">
+                    <div
+                      className={`h-0.5 flex-1 ${
+                        i === 0 ? "invisible" : i <= status.index ? "bg-brand-500" : "bg-zinc-200"
+                      }`}
+                    />
+                    <div
+                      className={`mx-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition ${
+                        reached ? "bg-brand-500 text-white" : "bg-zinc-100 text-zinc-400"
+                      } ${current ? "ring-4 ring-brand-500/15" : ""}`}
+                    >
+                      {reached ? <CheckCircle2 className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {request.processSteps.length > 0 && (
-              <div className="mt-5">
-                <div className="mb-1 flex items-center justify-between text-xs text-zinc-500">
-                  <span>Avancement du traitement</span>
-                  <span>
-                    {request.completedSteps}/{request.processSteps.length}
+                    <div
+                      className={`h-0.5 flex-1 ${
+                        i === STATUS_FLOW.length - 1
+                          ? "invisible"
+                          : i < status.index
+                            ? "bg-brand-500"
+                            : "bg-zinc-200"
+                      }`}
+                    />
+                  </div>
+                  <span
+                    className={`mt-2 text-center text-[11px] sm:text-xs ${
+                      current
+                        ? "font-bold text-zinc-900"
+                        : reached
+                          ? "font-medium text-zinc-600"
+                          : "text-zinc-400"
+                    }`}
+                  >
+                    {s.label}
                   </span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100">
-                  <div
-                    className="h-full rounded-full bg-brand-500 transition-all"
-                    style={{
-                      width: `${(request.completedSteps / Math.max(1, request.processSteps.length)) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+              );
+            })}
+          </div>
+        )}
 
+        {!status.cancelled && (request.scheduledDate || request.quoteAmount != null) && (
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 border-t border-zinc-100 pt-4 text-sm text-zinc-600">
             {request.scheduledDate && (
-              <p className="mt-4 text-sm text-zinc-600">
-                <span className="font-semibold">Date planifiée :</span> {formatDate(request.scheduledDate)}
+              <p>
+                <span className="font-semibold">Date planifiée :</span>{" "}
+                {formatDate(request.scheduledDate)}
               </p>
             )}
             {request.quoteAmount != null && (
-              <p className="mt-1 text-sm text-zinc-600">
+              <p>
                 <span className="font-semibold">Devis :</span> {request.quoteAmount.toFixed(2)} €
               </p>
             )}
           </div>
+        )}
+      </div>
 
-          {/* Live delivery tracking for collecte */}
-          {request.type === "collecte" && (
+      {/* Live delivery tracking — auto-embedded once a collecte tour is active */}
+      {request.type === "collecte" &&
+        (liveTrackable ? (
+          <LiveDeliveryTracking token={request.tracking!.shareToken} />
+        ) : (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+            <div className="flex items-center gap-2 text-zinc-900">
+              <Truck className="h-4 w-4" />
+              <p className="text-sm font-semibold">Suivi de la collecte</p>
+            </div>
+            <p className="mt-2 text-sm text-zinc-500">
+              Le suivi en temps réel s'affichera ici automatiquement dès que votre collecte sera
+              planifiée dans une tournée.
+            </p>
+          </div>
+        ))}
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        {/* Recap */}
+        <div className="space-y-5">
+          {request.articles.length > 0 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-              <div className="flex items-center gap-2 text-zinc-900">
-                <Truck className="h-4 w-4" />
-                <p className="text-sm font-semibold">Suivi de la collecte</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Article{request.articles.length > 1 ? "s" : ""} réservé
+                {request.articles.length > 1 ? "s" : ""}
+              </p>
+              <div className="mt-3 space-y-3">
+                {request.articles.map((a, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    {a.imageUrl ? (
+                      <img src={a.imageUrl} alt="" className="h-14 w-14 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-100">
+                        <Package className="h-5 w-5 text-zinc-400" />
+                      </div>
+                    )}
+                    <p className="text-sm font-medium text-zinc-800">{a.title}</p>
+                  </div>
+                ))}
               </div>
-              {liveTrackable ? (
-                <Link
-                  to={`/suivi/${request.tracking!.shareToken}`}
-                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
-                >
-                  <Radio className="h-4 w-4" />
-                  Suivre la livraison en temps réel
-                </Link>
-              ) : (
-                <p className="mt-2 text-sm text-zinc-500">
-                  Le suivi en temps réel sera disponible ici dès que votre collecte sera planifiée
-                  dans une tournée.
-                </p>
-              )}
             </div>
           )}
 
@@ -540,7 +569,7 @@ export function AccountOrderDetail() {
           )}
         </div>
 
-        {/* Right: messaging */}
+        {/* Messaging */}
         <div className="flex h-[560px] flex-col">
           <div className="mb-2 flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-zinc-500" />

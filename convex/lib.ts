@@ -1,6 +1,43 @@
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import type { UserIdentity } from "convex/server";
 
+/**
+ * Met en forme un nom/prénom : première lettre de chaque mot en majuscule,
+ * le reste en minuscules. Gère les composés ("jean-pierre" → "Jean-Pierre",
+ * "marie dupont" → "Marie Dupont", "DE LA TOUR" → "De La Tour").
+ */
+export function titleCaseName(value: string): string {
+  return value
+    .trim()
+    .toLocaleLowerCase("fr-FR")
+    .replace(/(^|[\s'-])(\p{L})/gu, (_m, sep: string, ch: string) =>
+      sep + ch.toLocaleUpperCase("fr-FR"),
+    );
+}
+
+/** Normalise les prénom/nom d'un objet client. */
+export function normalizeCustomer<T extends { firstName: string; lastName: string }>(
+  customer: T,
+): T {
+  return {
+    ...customer,
+    firstName: titleCaseName(customer.firstName),
+    lastName: titleCaseName(customer.lastName),
+  };
+}
+
+/** Formate un nom complet client de manière homogène. */
+export function customerFullName(customer: {
+  firstName?: string;
+  lastName?: string;
+}): string {
+  return [customer.firstName, customer.lastName]
+    .filter(Boolean)
+    .map((part) => titleCaseName(part!))
+    .join(" ")
+    .trim();
+}
+
 /** Toute identité Clerk authentifiée (client ou staff). */
 export async function requireUser(ctx: QueryCtx | MutationCtx | ActionCtx) {
   const identity = await ctx.auth.getUserIdentity();

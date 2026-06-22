@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { isStaffIdentity, requireStaff, requireUser } from "./lib";
+import { customerFullName, isStaffIdentity, requireStaff, requireUser, titleCaseName } from "./lib";
 import type { Doc, Id } from "./_generated/dataModel";
 
 async function loadRequestForParticipant(
@@ -21,7 +21,10 @@ function serializeMessage(message: Doc<"messages">) {
   return {
     _id: message._id,
     senderRole: message.senderRole,
-    senderName: message.senderName,
+    senderName:
+      message.senderRole === "client"
+        ? titleCaseName(message.senderName)
+        : message.senderName,
     body: message.body,
     createdAt: message.createdAt,
     readByClientAt: message.readByClientAt ?? null,
@@ -64,7 +67,7 @@ export const sendMessage = mutation({
       senderName =
         [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim() ||
         identity.name ||
-        `${request.customer.firstName} ${request.customer.lastName}`.trim() ||
+        customerFullName(request.customer) ||
         "Client";
     }
 
@@ -88,7 +91,7 @@ export const sendMessage = mutation({
         title: "Nouveau message client",
         requestId,
         requestType: request.type,
-        customerName: `${request.customer.firstName} ${request.customer.lastName}`.trim(),
+        customerName: customerFullName(request.customer),
         read: false,
         createdAt: now,
       });
@@ -191,7 +194,7 @@ export const listConversations = query({
           requestType: request.type,
           reference: request.reference ?? null,
           imageUrl,
-          customerName: `${request.customer.firstName} ${request.customer.lastName}`.trim(),
+          customerName: customerFullName(request.customer),
           lastBody: info.last.body,
           lastSenderRole: info.last.senderRole,
           lastAt: info.last.createdAt,
@@ -237,7 +240,7 @@ export const getConversationContext = query({
       quoteAmount: request.quoteAmount ?? null,
       comment: request.comment ?? null,
       createdAt: request.createdAt,
-      customerName: `${c.firstName} ${c.lastName}`.trim(),
+      customerName: customerFullName(c),
       customerEmail: c.email,
       customerPhone: c.phone,
       customerAddress:

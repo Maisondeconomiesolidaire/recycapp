@@ -1,11 +1,14 @@
 import { internalMutation, mutation, query, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import {
+  customerFullName,
   requireStaff,
   isAerogommageComplete,
   isCollecteComplete,
   isArticleComplete,
   isVeloComplete,
+  normalizeCustomer,
+  titleCaseName,
 } from "./lib";
 import {
   aerogommageItem,
@@ -75,6 +78,7 @@ export const submitAerogommage = mutation({
     items: v.array(aerogommageItem),
   },
   handler: async (ctx, { customer, comment, photos, items }) => {
+    customer = normalizeCustomer(customer);
     const now = Date.now();
     const reference = await generateReference(ctx);
     const requestId = await ctx.db.insert("requests", {
@@ -98,7 +102,7 @@ export const submitAerogommage = mutation({
     await createNewRequestNotification(ctx, {
       requestId,
       requestType: "aerogommage",
-      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+      customerName: customerFullName(customer),
     });
     return requestId;
   },
@@ -133,6 +137,7 @@ export const submitCollecte = mutation({
     }),
   },
   handler: async (ctx, { customer, comment, photos, details }) => {
+    customer = normalizeCustomer(customer);
     const now = Date.now();
     const reference = await generateReference(ctx);
     const requestId = await ctx.db.insert("requests", {
@@ -157,7 +162,7 @@ export const submitCollecte = mutation({
     await createNewRequestNotification(ctx, {
       requestId,
       requestType: "collecte",
-      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+      customerName: customerFullName(customer),
     });
     return requestId;
   },
@@ -177,6 +182,7 @@ export const submitVelo = mutation({
     }),
   },
   handler: async (ctx, { customer, comment, photos, details }) => {
+    customer = normalizeCustomer(customer);
     const now = Date.now();
     const reference = await generateReference(ctx);
     const requestId = await ctx.db.insert("requests", {
@@ -199,7 +205,7 @@ export const submitVelo = mutation({
     await createNewRequestNotification(ctx, {
       requestId,
       requestType: "velo",
-      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+      customerName: customerFullName(customer),
     });
     return requestId;
   },
@@ -212,6 +218,7 @@ export const submitArticleReservation = mutation({
     articleId: v.id("articles"),
   },
   handler: async (ctx, { customer, comment, articleId }) => {
+    customer = normalizeCustomer(customer);
     const article = await ctx.db.get(articleId);
     if (!article) throw new Error("Article introuvable.");
     if (article.status !== "disponible") {
@@ -248,7 +255,7 @@ export const submitArticleReservation = mutation({
     await createNewRequestNotification(ctx, {
       requestId,
       requestType: "article",
-      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+      customerName: customerFullName(customer),
     });
     return requestId;
   },
@@ -261,6 +268,7 @@ export const submitArticleCartReservation = mutation({
     articleIds: v.array(v.id("articles")),
   },
   handler: async (ctx, { customer, comment, articleIds }) => {
+    customer = normalizeCustomer(customer);
     const uniqueArticleIds = Array.from(new Set(articleIds));
     if (uniqueArticleIds.length === 0) {
       throw new Error("Ajoutez au moins un article au panier.");
@@ -308,7 +316,7 @@ export const submitArticleCartReservation = mutation({
     await createNewRequestNotification(ctx, {
       requestId,
       requestType: "article",
-      customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+      customerName: customerFullName(customer),
     });
     return requestId;
   },
@@ -321,6 +329,7 @@ export const createPublicStripeCheckoutDraft = internalMutation({
     articleIds: v.array(v.id("articles")),
   },
   handler: async (ctx, { customer, comment, articleIds }) => {
+    customer = normalizeCustomer(customer);
     const uniqueArticleIds = Array.from(new Set(articleIds));
     if (uniqueArticleIds.length === 0) {
       throw new Error("Ajoutez au moins un article au panier.");
@@ -428,7 +437,7 @@ export const finalizePublicStripeCheckout = internalMutation({
     await createNewRequestNotification(ctx, {
       requestId,
       requestType: "article",
-      customerName: `${draft.customer.firstName} ${draft.customer.lastName}`.trim(),
+      customerName: customerFullName(draft.customer),
     });
 
     await ctx.db.patch(draftId, {
@@ -460,7 +469,7 @@ export const list = query({
           .order("desc")
           .collect()
       : await ctx.db.query("requests").order("desc").collect();
-    return all;
+    return all.map((r) => ({ ...r, customer: normalizeCustomer(r.customer) }));
   },
 });
 
@@ -502,6 +511,7 @@ export const get = query({
     );
     return {
       ...request,
+      customer: normalizeCustomer(request.customer),
       photoUrls: photoUrls.filter((u): u is string => u !== null),
       beforePhotoUrls: beforePhotoUrls.filter((u): u is string => u !== null),
       afterPhotoUrls: afterPhotoUrls.filter((u): u is string => u !== null),
@@ -571,6 +581,77 @@ export const backfillRequestOrigins = mutation({
     }
 
     return { updated };
+  },
+});
+
+/**
+ * Harmonise les noms/prénoms historiques dans tout l'écosystème client/CRM.
+ * Couvre : demandes, profils clients, notifications et noms d'expéditeur client.
+ */
+export const backfillCustomerNameFormatting = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireStaff(ctx);
+
+    let requestsUpdated = 0;
+    let usersUpdated = 0;
+    let notificationsUpdated = 0;
+    let messagesUpdated = 0;
+
+    const requests = await ctx.db.query("requests").collect();
+    for (const request of requests) {
+      const customer = normalizeCustomer(request.customer);
+      if (
+        customer.firstName !== request.customer.firstName ||
+        customer.lastName !== request.customer.lastName
+      ) {
+        await ctx.db.patch(request._id, {
+          customer,
+          updatedAt: Date.now(),
+        });
+        requestsUpdated += 1;
+      }
+    }
+
+    const users = await ctx.db.query("users").collect();
+    for (const user of users) {
+      const firstName = user.firstName ? titleCaseName(user.firstName) : user.firstName;
+      const lastName = user.lastName ? titleCaseName(user.lastName) : user.lastName;
+      if (firstName !== user.firstName || lastName !== user.lastName) {
+        await ctx.db.patch(user._id, {
+          firstName,
+          lastName,
+          updatedAt: Date.now(),
+        });
+        usersUpdated += 1;
+      }
+    }
+
+    const notifications = await ctx.db.query("notifications").collect();
+    for (const notification of notifications) {
+      const customerName = titleCaseName(notification.customerName);
+      if (customerName !== notification.customerName) {
+        await ctx.db.patch(notification._id, { customerName });
+        notificationsUpdated += 1;
+      }
+    }
+
+    const messages = await ctx.db.query("messages").collect();
+    for (const message of messages) {
+      if (message.senderRole !== "client") continue;
+      const senderName = titleCaseName(message.senderName);
+      if (senderName !== message.senderName) {
+        await ctx.db.patch(message._id, { senderName });
+        messagesUpdated += 1;
+      }
+    }
+
+    return {
+      requestsUpdated,
+      usersUpdated,
+      notificationsUpdated,
+      messagesUpdated,
+    };
   },
 });
 
@@ -739,7 +820,7 @@ export const updateCustomer = mutation({
   args: { id: v.id("requests"), customer: customerArg },
   handler: async (ctx, { id, customer }) => {
     await requireStaff(ctx);
-    await ctx.db.patch(id, { customer, updatedAt: Date.now() });
+    await ctx.db.patch(id, { customer: normalizeCustomer(customer), updatedAt: Date.now() });
   },
 });
 
@@ -784,9 +865,10 @@ export const createInternal = mutation({
   },
   handler: async (ctx, args) => {
     await requireStaff(ctx);
+    args = { ...args, customer: normalizeCustomer(args.customer) };
     const now = Date.now();
     const reference = await generateReference(ctx);
-    const name = `${args.customer.firstName} ${args.customer.lastName}`.trim();
+    const name = customerFullName(args.customer);
 
     if (args.type === "aerogommage") {
       const items = args.items ?? [];
@@ -872,11 +954,15 @@ export const scheduled = query({
   args: { from: v.number(), to: v.number() },
   handler: async (ctx, { from, to }) => {
     await requireStaff(ctx);
-    return await ctx.db
+    const requests = await ctx.db
       .query("requests")
       .withIndex("by_scheduledDate", (q) =>
         q.gte("scheduledDate", from).lte("scheduledDate", to),
       )
       .collect();
+    return requests.map((request) => ({
+      ...request,
+      customer: normalizeCustomer(request.customer),
+    }));
   },
 });

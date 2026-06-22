@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { requireStaff } from "./lib";
+import { titleCaseName, requireStaff } from "./lib";
 import type { Doc } from "./_generated/dataModel";
 
 function currentProcessStep(request: Doc<"requests">) {
@@ -106,10 +106,11 @@ export const list = query({
       notifications.map(async (notification) => {
         const request = await ctx.db.get(notification.requestId);
         if (!request) {
-          return {
-            ...notification,
-            requestPreview: "Demande introuvable",
-            requestSecondaryPreview: undefined,
+        return {
+          ...notification,
+          customerName: titleCaseName(notification.customerName),
+          requestPreview: "Demande introuvable",
+          requestSecondaryPreview: undefined,
             requestReference: undefined,
             requestOrigin: undefined,
             requestComplete: undefined,
@@ -126,6 +127,7 @@ export const list = query({
         const preview = requestPreview(request);
         return {
           ...notification,
+          customerName: titleCaseName(notification.customerName),
           requestPreview: preview.preview,
           requestSecondaryPreview: preview.secondaryPreview,
           requestReference: request.reference,

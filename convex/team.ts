@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireStaff } from "./lib";
+import { customerFullName, requireStaff } from "./lib";
 
 export const list = query({
   args: {},
@@ -61,7 +61,7 @@ export const get = query({
         collecteType: request.collecteType,
         outcome: request.outcome,
         createdAt: request.createdAt,
-        customerName: `${request.customer.firstName} ${request.customer.lastName}`.trim(),
+        customerName: customerFullName(request.customer),
       })),
     };
   },

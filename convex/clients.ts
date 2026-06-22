@@ -1,6 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireStaff } from "./lib";
+import { requireStaff, normalizeCustomer, titleCaseName } from "./lib";
 import { RequestType } from "./processes";
 
 type ClientRow = {
@@ -44,8 +44,8 @@ export const list = query({
       } else {
         map.set(email, {
           email: r.customer.email,
-          firstName: r.customer.firstName,
-          lastName: r.customer.lastName,
+          firstName: titleCaseName(r.customer.firstName),
+          lastName: titleCaseName(r.customer.lastName),
           phone: r.customer.phone,
           address: r.customer.address,
           postalCode: r.customer.postalCode,
@@ -72,6 +72,9 @@ export const get = query({
       (r) => r.customer.email.trim().toLowerCase() === target,
     );
     if (requests.length === 0) return null;
-    return { customer: requests[0].customer, requests };
+    return {
+      customer: normalizeCustomer(requests[0].customer),
+      requests: requests.map((r) => ({ ...r, customer: normalizeCustomer(r.customer) })),
+    };
   },
 });
