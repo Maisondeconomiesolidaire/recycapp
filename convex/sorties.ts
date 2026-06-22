@@ -13,6 +13,7 @@ import { requireStaff } from "./lib";
 import type { Id } from "./_generated/dataModel";
 
 const TOURNEE_DEPOT_ADDRESS = "4 rue de la prairie 60650 Lachapelle-aux-Pots";
+const MAX_STORED_ROUTE_COORDINATES = 8_000;
 
 const tourneeStopValidator = v.object({
   requestId: v.optional(v.id("requests")),
@@ -303,6 +304,27 @@ type OptimizableStop = {
   latitude: number;
 };
 
+function limitRouteCoordinates(
+  coordinates: number[][],
+  maxPoints = MAX_STORED_ROUTE_COORDINATES,
+) {
+  const validCoordinates = coordinates.filter(
+    (coordinate) =>
+      coordinate.length >= 2 &&
+      Number.isFinite(coordinate[0]) &&
+      Number.isFinite(coordinate[1]),
+  );
+  if (validCoordinates.length <= maxPoints) return validCoordinates;
+  if (maxPoints <= 1) return validCoordinates.slice(0, maxPoints);
+
+  const lastIndex = validCoordinates.length - 1;
+  return Array.from({ length: maxPoints }, (_, index) => {
+    const sourceIndex = Math.round((index * lastIndex) / (maxPoints - 1));
+    const coordinate = validCoordinates[sourceIndex];
+    return [coordinate[0], coordinate[1]];
+  });
+}
+
 export const optimizeTournee = action({
   args: { tourneeId: v.id("tournees") },
   handler: async (ctx, { tourneeId }) => {
@@ -351,7 +373,7 @@ export const optimizeTournee = action({
     optimizationUrl.searchParams.set("source", "first");
     optimizationUrl.searchParams.set("destination", "any");
     optimizationUrl.searchParams.set("roundtrip", "true");
-    optimizationUrl.searchParams.set("overview", "full");
+    optimizationUrl.searchParams.set("overview", "simplified");
     optimizationUrl.searchParams.set("geometries", "geojson");
 
     const response = await fetch(optimizationUrl.toString());
@@ -390,7 +412,9 @@ export const optimizeTournee = action({
 
     const distanceMeters = Math.round(payload.trips?.[0]?.distance ?? 0);
     const durationSeconds = Math.round(payload.trips?.[0]?.duration ?? 0);
-    const routeCoordinates = payload.trips?.[0]?.geometry?.coordinates ?? [];
+    const routeCoordinates = limitRouteCoordinates(
+      payload.trips?.[0]?.geometry?.coordinates ?? [],
+    );
 
     await ctx.runMutation(internal.sorties.applyTourneeOptimization, {
       tourneeId,
