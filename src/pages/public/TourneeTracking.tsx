@@ -149,7 +149,6 @@ export function TourneeTracking() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const truckMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
-  const userInteractedRef = useRef(false);
   const [, setNowTick] = useState(0);
 
   const depotCoordinates = useMemo(
@@ -236,14 +235,6 @@ export function TourneeTracking() {
 
     const map = mapRef.current;
 
-    // Stop auto-following as soon as the user pans/zooms/rotates the map.
-    const markIfUser = (event: { originalEvent?: unknown }) => {
-      if (event.originalEvent) userInteractedRef.current = true;
-    };
-    map.on("dragstart", (event) => markIfUser(event));
-    map.on("zoomstart", (event) => markIfUser(event as { originalEvent?: unknown }));
-    map.on("rotatestart", (event) => markIfUser(event as { originalEvent?: unknown }));
-
     map.on("load", () => {
       map.addSource("route", {
         type: "geojson",
@@ -268,12 +259,16 @@ export function TourneeTracking() {
       }
       truckMarkerRef.current = truckMarker;
 
-      const bounds = buildContextBounds(
-        [depotCoordinates, recipientCoordinates, truckCoordinates, ...stopCoordinates],
-        tracking.tournee.routeCoordinates,
-      );
-      if (bounds) {
-        map.fitBounds(bounds, { padding: 64, maxZoom: 14 });
+      if (truckCoordinates) {
+        map.jumpTo({ center: truckCoordinates, zoom: 15 });
+      } else {
+        const bounds = buildContextBounds(
+          [depotCoordinates, recipientCoordinates, ...stopCoordinates],
+          tracking.tournee.routeCoordinates,
+        );
+        if (bounds) {
+          map.fitBounds(bounds, { padding: 64, maxZoom: 14 });
+        }
       }
     });
 
@@ -349,10 +344,12 @@ export function TourneeTracking() {
       );
     }
 
-    if (!userInteractedRef.current) {
+    if (truckCoordinates) {
+      map.easeTo({ center: truckCoordinates, zoom: 15, duration: 900 });
+    } else {
       const bounds = buildContextBounds(
-        [recipientCoordinates, truckCoordinates, ...stopCoordinates],
-        truckCoordinates ? [] : tracking.tournee.routeCoordinates,
+        [recipientCoordinates, ...stopCoordinates],
+        tracking.tournee.routeCoordinates,
       );
       if (bounds) {
         map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 1200 });

@@ -71,7 +71,6 @@ export function LiveDeliveryTracking({ token }: { token: string }) {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const truckMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
-  const userInteractedRef = useRef(false);
   const [, setTick] = useState(0);
 
   const depot = useMemo(
@@ -141,12 +140,6 @@ export function LiveDeliveryTracking({ token }: { token: string }) {
     });
     const map = mapRef.current;
 
-    const markIfUser = (e: { originalEvent?: unknown }) => {
-      if (e.originalEvent) userInteractedRef.current = true;
-    };
-    map.on("dragstart", (e) => markIfUser(e));
-    map.on("zoomstart", (e) => markIfUser(e as { originalEvent?: unknown }));
-
     map.on("load", () => {
       map.addSource("route", { type: "geojson", data: buildRouteGeoJson(tracking.tournee.routeCoordinates, depot, recipient) });
       map.addLayer({
@@ -161,8 +154,12 @@ export function LiveDeliveryTracking({ token }: { token: string }) {
       if (truck) marker.setLngLat(truck).addTo(map);
       truckMarkerRef.current = marker;
 
-      const bounds = buildBounds([depot, recipient, truck, ...stopCoords], tracking.tournee.routeCoordinates);
-      if (bounds) map.fitBounds(bounds, { padding: 56, maxZoom: 14 });
+      if (truck) {
+        map.jumpTo({ center: truck, zoom: 15 });
+      } else {
+        const bounds = buildBounds([depot, recipient, ...stopCoords], tracking.tournee.routeCoordinates);
+        if (bounds) map.fitBounds(bounds, { padding: 56, maxZoom: 14 });
+      }
     });
 
     return () => {
@@ -226,8 +223,10 @@ export function LiveDeliveryTracking({ token }: { token: string }) {
       );
     }
 
-    if (!userInteractedRef.current) {
-      const bounds = buildBounds([recipient, truck, ...stopCoords], truck ? [] : tracking.tournee.routeCoordinates);
+    if (truck) {
+      map.easeTo({ center: truck, zoom: 15, duration: 900 });
+    } else {
+      const bounds = buildBounds([recipient, ...stopCoords], tracking.tournee.routeCoordinates);
       if (bounds) map.fitBounds(bounds, { padding: 56, maxZoom: 14, duration: 1200 });
     }
   }, [depot, recipient, truck, stops, stopCoords, tracking]);

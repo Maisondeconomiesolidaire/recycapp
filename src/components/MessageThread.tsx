@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Check, CheckCheck, Loader2, Send } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -96,8 +96,6 @@ export function MessageThread({
             const day = formatDay(m.createdAt);
             const showDay = day !== lastDay;
             lastDay = day;
-            const readByOther =
-              m.senderRole === "client" ? m.readByStaffAt : m.readByClientAt;
             return (
               <div key={m._id}>
                 {showDay && (
@@ -127,15 +125,6 @@ export function MessageThread({
                       } ${dark ? "text-zinc-500" : "text-zinc-400"}`}
                     >
                       <span>{formatTime(m.createdAt)}</span>
-                      {mine &&
-                        (readByOther ? (
-                          <span className="inline-flex items-center gap-0.5 text-emerald-500">
-                            <CheckCheck className="h-3 w-3" />
-                            Lu à {formatTime(readByOther)}
-                          </span>
-                        ) : (
-                          <Check className="h-3 w-3" />
-                        ))}
                     </div>
                   </div>
                 </div>
