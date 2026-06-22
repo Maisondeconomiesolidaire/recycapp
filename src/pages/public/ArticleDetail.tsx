@@ -38,6 +38,13 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+function createViewSessionId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `view_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+}
+
 export function ArticleDetail() {
   const { id } = useParams<{ id: string }>();
   const article = useQuery(api.articles.getPublic, {
@@ -77,7 +84,7 @@ export function ArticleDetail() {
     const storageKey = "recycapp_article_view_session";
     let sessionId = window.sessionStorage.getItem(storageKey);
     if (!sessionId) {
-      sessionId = crypto.randomUUID();
+      sessionId = createViewSessionId();
       window.sessionStorage.setItem(storageKey, sessionId);
     }
 
@@ -93,8 +100,22 @@ export function ArticleDetail() {
       void pulse();
     }, 15_000);
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void pulse();
+      }
+    };
+    const onPageShow = () => {
+      void pulse();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pageshow", onPageShow);
+
     return () => {
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pageshow", onPageShow);
       void leaveView({ articleId, sessionId }).catch(() => null);
     };
   }, [heartbeatView, id, leaveView]);

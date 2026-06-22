@@ -8,7 +8,7 @@ import {
   useSearchParams,
   useNavigate,
 } from "react-router-dom";
-import { ArrowRight, Search, ShoppingCart, Trash2, X } from "lucide-react";
+import { ArrowRight, Menu, Search, ShoppingCart, Trash2, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import {
   ARTICLE_CATEGORIES,
@@ -83,6 +83,7 @@ function Header() {
   const [query, setQuery] = useState(params.get("q") ?? "");
   const [searchOpen, setSearchOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
   const cartRef = useRef<HTMLDivElement | null>(null);
 
@@ -104,6 +105,11 @@ function Header() {
   // Close mini-cart when navigating to the cart page
   useEffect(() => {
     if (location.pathname === "/boutique/panier") setCartOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+    setSearchOpen(false);
   }, [location.pathname]);
 
   const suggestions = useMemo(() => {
@@ -163,9 +169,25 @@ function Header() {
 
       <div className={`${PUBLIC_CONTAINER} py-4`}>
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+          <div className="flex items-center justify-between gap-4 sm:hidden">
             <Link to="/boutique" className="shrink-0">
-              <img src="/recyclerie-logo.png" alt="Recyclerie" className="h-12 w-auto object-contain sm:h-14" />
+              <img src="/recyclerie-logo.png" alt="Recyclerie" className="h-12 w-auto object-contain" />
+            </Link>
+            {isBoutiqueArea ? (
+              <button
+                type="button"
+                onClick={() => setMenuOpen((value) => !value)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/55 bg-white/85 text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur"
+                aria-label={menuOpen ? "Fermer le menu boutique" : "Ouvrir le menu boutique"}
+              >
+                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            ) : null}
+          </div>
+
+          <div className="hidden sm:flex sm:flex-row sm:items-center sm:gap-5">
+            <Link to="/boutique" className="shrink-0">
+              <img src="/recyclerie-logo.png" alt="Recyclerie" className="h-14 w-auto object-contain" />
             </Link>
 
             {isBoutiqueArea ? (
@@ -208,9 +230,7 @@ function Header() {
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="flex-1" />
-            )}
+            ) : <div className="flex-1" />}
 
             {isBoutiqueArea && (
               <div ref={cartRef} className="relative shrink-0">
@@ -333,8 +353,97 @@ function Header() {
             )}
           </div>
 
+          {isBoutiqueArea && menuOpen && (
+            <div className="sm:hidden">
+              <div className="rounded-[28px] border border-white/60 bg-white/92 p-4 shadow-[0_24px_60px_rgba(24,24,27,0.14)] backdrop-blur-xl">
+                <div ref={searchRef} className="relative">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                  <Input
+                    value={query}
+                    onChange={(event) => updateQuery(event.target.value)}
+                    onFocus={() => setSearchOpen(true)}
+                    placeholder="Rechercher un article"
+                    className="h-12 rounded-full border-white/55 bg-white pl-11 text-sm shadow-[0_12px_30px_rgba(24,24,27,0.08)]"
+                  />
+                  {searchOpen && query.trim() && (
+                    <div className="absolute left-0 right-0 top-full z-40 mt-3 overflow-hidden rounded-[24px] border border-white/60 bg-white shadow-[0_24px_60px_rgba(24,24,27,0.14)]">
+                      {suggestions.length > 0 ? (
+                        <div className="max-h-[340px] overflow-y-auto p-2">
+                          {suggestions.map((article) => (
+                            <Link
+                              key={article._id}
+                              to={`/boutique/${article._id}`}
+                              onClick={() => {
+                                setSearchOpen(false);
+                                setMenuOpen(false);
+                              }}
+                              className="flex items-center gap-3 rounded-[20px] px-3 py-3 transition hover:bg-zinc-50"
+                            >
+                              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-[#f2eee7]">
+                                {article.imageUrls[0] ? (
+                                  <img src={article.imageUrls[0]} alt={article.title} className="h-full w-full object-cover" />
+                                ) : null}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-zinc-950">{article.title}</p>
+                                <p className="mt-1 truncate text-xs text-zinc-500">{article.category}</p>
+                              </div>
+                              <div className="shrink-0 text-sm font-bold text-zinc-950">{formatPrice(article.price)}</div>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-4 py-5 text-sm text-zinc-500">Aucun article ne correspond.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate("/boutique/panier");
+                  }}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(241,16,79,0.28)]"
+                  style={{ backgroundColor: BRAND }}
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Panier
+                  {cart.count > 0 ? ` (${cart.count})` : ""}
+                </button>
+
+                <div className="mt-5">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Catégories
+                  </p>
+                  <nav className="flex flex-col gap-2">
+                    <NavLink
+                      to="/boutique"
+                      end
+                      onClick={() => setMenuOpen(false)}
+                      className={link}
+                    >
+                      Tout
+                    </NavLink>
+                    {ARTICLE_CATEGORIES.map((category) => (
+                      <NavLink
+                        key={category}
+                        to={`/boutique/categorie/${ARTICLE_CATEGORY_SLUGS[category]}`}
+                        onClick={() => setMenuOpen(false)}
+                        className={link}
+                      >
+                        {category}
+                      </NavLink>
+                    ))}
+                  </nav>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isBoutiqueArea && (
-            <nav className="-mx-5 flex gap-2 overflow-x-auto px-5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+            <nav className="hidden gap-2 overflow-x-auto px-5 sm:mx-0 sm:flex sm:flex-wrap sm:overflow-visible sm:px-0">
               <NavLink to="/boutique" end className={link}>Tout</NavLink>
               {ARTICLE_CATEGORIES.map((category) => (
                 <NavLink key={category} to={`/boutique/categorie/${ARTICLE_CATEGORY_SLUGS[category]}`} className={link}>
