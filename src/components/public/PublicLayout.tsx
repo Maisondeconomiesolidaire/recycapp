@@ -19,6 +19,7 @@ import { cn } from "../../lib/cn";
 import { Input } from "../ui/Field";
 import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
+import { AccountMenu } from "./AccountMenu";
 
 const PUBLIC_CONTAINER = "mx-auto w-full max-w-[92rem] px-5 sm:px-7 lg:px-8";
 const BRAND = "#f1104f";
@@ -173,16 +174,19 @@ function Header() {
             <Link to="/boutique" className="shrink-0">
               <img src="/recyclerie-logo.png" alt="Recyclerie" className="h-12 w-auto object-contain" />
             </Link>
-            {isBoutiqueArea ? (
-              <button
-                type="button"
-                onClick={() => setMenuOpen((value) => !value)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/55 bg-white/85 text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur"
-                aria-label={menuOpen ? "Fermer le menu boutique" : "Ouvrir le menu boutique"}
-              >
-                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <AccountMenu />
+              {isBoutiqueArea ? (
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((value) => !value)}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/55 bg-white/85 text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur"
+                  aria-label={menuOpen ? "Fermer le menu boutique" : "Ouvrir le menu boutique"}
+                >
+                  {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="hidden sm:flex sm:flex-row sm:items-center sm:gap-5">
@@ -351,6 +355,8 @@ function Header() {
                 )}
               </div>
             )}
+
+            <AccountMenu />
           </div>
 
           {isBoutiqueArea && menuOpen && (

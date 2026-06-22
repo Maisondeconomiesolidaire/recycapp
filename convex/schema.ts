@@ -203,6 +203,9 @@ export default defineSchema({
     quoteDetails: v.optional(v.string()),
     scheduledDate: v.optional(v.number()),
     customer,
+    // Compte client Clerk rattaché (subject = clerkId), si la demande a été
+    // créée par un utilisateur connecté ou liée a posteriori via son email.
+    userId: v.optional(v.string()),
     comment: v.optional(v.string()),
     photos: v.array(v.id("_storage")),
     beforePhotos: v.optional(v.array(v.id("_storage"))),
@@ -220,10 +223,42 @@ export default defineSchema({
   })
     .index("by_type", ["type"])
     .index("by_outcome", ["outcome"])
+    .index("by_userId", ["userId"])
     .index("by_scheduledDate", ["scheduledDate"]),
 
+  /** Comptes clients (boutique). Le clerkId est le `subject` de l'identité Clerk. */
+  users: defineTable({
+    clerkId: v.string(),
+    email: v.string(),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    city: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_clerkId", ["clerkId"])
+    .index("by_email", ["email"]),
+
+  /** Messagerie client ⇄ administrateurs, rattachée à une demande. */
+  messages: defineTable({
+    requestId: v.id("requests"),
+    senderRole: v.union(v.literal("client"), v.literal("staff")),
+    senderName: v.string(),
+    senderClerkId: v.optional(v.string()),
+    body: v.string(),
+    createdAt: v.number(),
+    // Accusés de lecture ("Lu à HH:MM").
+    readByClientAt: v.optional(v.number()),
+    readByStaffAt: v.optional(v.number()),
+  })
+    .index("by_requestId", ["requestId"])
+    .index("by_createdAt", ["createdAt"]),
+
   notifications: defineTable({
-    kind: v.literal("new_request"),
+    kind: v.union(v.literal("new_request"), v.literal("new_message")),
     title: v.string(),
     requestId: v.id("requests"),
     requestType,
@@ -484,6 +519,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tourneeId", ["tourneeId"])
+    .index("by_requestId", ["requestId"])
     .index("by_shareToken", ["shareToken"]),
 
   tourneeVehicleLocations: defineTable({

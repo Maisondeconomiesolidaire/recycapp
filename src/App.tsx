@@ -8,6 +8,14 @@ import { AerogommageForm } from "./pages/public/AerogommageForm";
 import { CollecteForm } from "./pages/public/CollecteForm";
 import { VeloForm } from "./pages/public/VeloForm";
 import { Merci } from "./pages/public/Merci";
+import {
+  AccountLayout,
+  AccountInfo,
+  AccountOrders,
+  AccountOrderDetail,
+  AccountMessages,
+  AccountSettings,
+} from "./pages/public/Account";
 import { CrmLayout } from "./components/crm/CrmLayout";
 import { Dashboard } from "./pages/crm/Dashboard";
 import { Demandes } from "./pages/crm/Demandes";
@@ -22,6 +30,7 @@ import { Ateliers } from "./pages/crm/Ateliers";
 import { Sorties } from "./pages/crm/Sorties";
 import { Tournees } from "./pages/crm/Tournees";
 import { TourneeConduite } from "./pages/crm/TourneeConduite";
+import { Messages } from "./pages/crm/Messages";
 
 export default function App() {
   return (
@@ -38,12 +47,22 @@ export default function App() {
         <Route path="/collecte" element={<CollecteForm />} />
         <Route path="/velo" element={<VeloForm />} />
         <Route path="/merci" element={<Merci />} />
+
+        {/* Espace client */}
+        <Route path="/compte" element={<AccountLayout />}>
+          <Route index element={<AccountInfo />} />
+          <Route path="commandes" element={<AccountOrders />} />
+          <Route path="commandes/:id" element={<AccountOrderDetail />} />
+          <Route path="messagerie" element={<AccountMessages />} />
+          <Route path="parametres" element={<AccountSettings />} />
+        </Route>
       </Route>
 
       {/* CRM (dark mode, protégé Clerk) */}
       <Route path="/crm" element={<CrmLayout />}>
         <Route index element={<Dashboard />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="messages" element={<Messages />} />
         <Route path="demandes" element={<Demandes />} />
         <Route path="calendrier" element={<Calendrier />} />
         <Route path="clients" element={<Clients />} />

@@ -11,6 +11,7 @@ import {
 import {
   LayoutDashboard,
   Bell,
+  MessageSquare,
   KanbanSquare,
   CalendarDays,
   Package,
@@ -30,6 +31,7 @@ import { GlobalScanner } from "./GlobalScanner";
 const nav = [
   { to: "/crm", end: true, icon: LayoutDashboard, label: "Tableau de bord" },
   { to: "/crm/notifications", icon: Bell, label: "Notifications" },
+  { to: "/crm/messages", icon: MessageSquare, label: "Messages" },
   { to: "/crm/demandes", icon: KanbanSquare, label: "Demandes" },
   { to: "/crm/calendrier", icon: CalendarDays, label: "Calendrier" },
   { to: "/crm/clients", icon: Users, label: "Clients" },

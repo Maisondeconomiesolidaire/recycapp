@@ -1,14 +1,43 @@
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
+import type { UserIdentity } from "convex/server";
 
-/**
- * Vérifie qu'une session Clerk valide est présente.
- * Pour l'instant le CRM est accessible à tout compte connecté ; un filtre par
- * email/rôle pourra être ajouté ici plus tard.
- */
-export async function requireStaff(ctx: QueryCtx | MutationCtx | ActionCtx) {
+/** Toute identité Clerk authentifiée (client ou staff). */
+export async function requireUser(ctx: QueryCtx | MutationCtx | ActionCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
-    throw new Error("Non authentifié — accès réservé au personnel.");
+    throw new Error("Non authentifié.");
+  }
+  return identity;
+}
+
+/**
+ * Détermine si une identité Clerk correspond à un membre du staff.
+ *
+ * Mécanisme principal : le rôle exposé par Clerk (`publicMetadata.role`),
+ * disponible dans le token Convex si le template JWT « convex » inclut
+ *   "role": "{{user.public_metadata.role}}".
+ *
+ * Filet de sécurité (« break-glass ») : la variable d'environnement Convex
+ * STAFF_EMAILS (emails séparés par des virgules) évite que le staff soit
+ * verrouillé hors du CRM tant que le claim de rôle n'est pas configuré.
+ */
+export function isStaffIdentity(identity: UserIdentity): boolean {
+  const role = (identity as { role?: unknown }).role;
+  if (role === "staff" || role === "admin") return true;
+
+  const allow = (process.env.STAFF_EMAILS ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  const email = identity.email?.toLowerCase();
+  return Boolean(email && allow.includes(email));
+}
+
+/** Vérifie qu'une session Clerk *staff* est présente (CRM). */
+export async function requireStaff(ctx: QueryCtx | MutationCtx | ActionCtx) {
+  const identity = await requireUser(ctx);
+  if (!isStaffIdentity(identity)) {
+    throw new Error("Accès réservé au personnel.");
   }
   return identity;
 }

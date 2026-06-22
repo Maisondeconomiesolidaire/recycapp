@@ -16,12 +16,14 @@ import type * as clients from "../clients.js";
 import type * as dashboard from "../dashboard.js";
 import type * as files from "../files.js";
 import type * as lib from "../lib.js";
+import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as processes from "../processes.js";
 import type * as requests from "../requests.js";
 import type * as sorties from "../sorties.js";
 import type * as stripe from "../stripe.js";
 import type * as team from "../team.js";
+import type * as users from "../users.js";
 import type * as ventes from "../ventes.js";
 
 import type {
@@ -39,12 +41,14 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   files: typeof files;
   lib: typeof lib;
+  messages: typeof messages;
   notifications: typeof notifications;
   processes: typeof processes;
   requests: typeof requests;
   sorties: typeof sorties;
   stripe: typeof stripe;
   team: typeof team;
+  users: typeof users;
   ventes: typeof ventes;
 }>;
 
