@@ -674,6 +674,41 @@ export const retreatProcess = mutation({
   },
 });
 
+export const addProcessNote = mutation({
+  args: {
+    id: v.id("requests"),
+    step: v.number(),
+    body: v.string(),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, step, body, by }) => {
+    await requireStaff(ctx);
+    const request = await ctx.db.get(id);
+    if (!request) throw new Error("Demande introuvable.");
+    if (step < 0 || step >= request.processSteps.length) {
+      throw new Error("Étape de process invalide.");
+    }
+
+    const trimmed = body.trim();
+    if (!trimmed) {
+      throw new Error("Le commentaire ne peut pas être vide.");
+    }
+
+    await ctx.db.patch(id, {
+      processNotes: [
+        ...(request.processNotes ?? []),
+        {
+          step,
+          by: by?.trim() || "Inconnu",
+          at: Date.now(),
+          body: trimmed,
+        },
+      ],
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 /** Définit le sous-type d'une collecte (C1/C2/C3) → recalcule le process. */
 export const setCollecteType = mutation({
   args: { id: v.id("requests"), collecteType },
@@ -687,6 +722,7 @@ export const setCollecteType = mutation({
       processSteps: resolveProcess("collecte", ct),
       completedSteps: 0,
       processLog: [],
+      processNotes: [],
       outcome: "open",
       updatedAt: Date.now(),
     });

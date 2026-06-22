@@ -102,9 +102,6 @@ function NotificationCard({
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-brand-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
-            Nouvelle demande
-          </span>
           <TypeBadge type={notification.requestType} size="sm" solid />
           <RequestOriginBadge origin={notification.requestOrigin} />
           {notification.requestReference && (

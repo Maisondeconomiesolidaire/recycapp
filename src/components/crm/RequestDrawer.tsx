@@ -13,6 +13,7 @@ import {
   Check,
   ImagePlus,
   Loader2,
+  MessageSquareText,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -545,6 +546,7 @@ function GestionTab({
   const { user } = useUser();
   const advance = useMutation(api.requests.advanceProcess);
   const retreat = useMutation(api.requests.retreatProcess);
+  const addProcessNote = useMutation(api.requests.addProcessNote);
   const setCollecteType = useMutation(api.requests.setCollecteType);
   const schedule = useMutation(api.requests.schedule);
   const patch = useMutation(api.requests.patchManagement);
@@ -637,11 +639,16 @@ function GestionTab({
           steps={request.processSteps}
           completed={request.completedSteps}
           log={request.processLog ?? []}
+          notes={request.processNotes ?? []}
           locked={request.outcome === "perdue" || collecteUndefined}
           outcome={request.outcome}
+          currentUser={currentUser}
           stepBlockers={stepBlockers}
           onAdvance={() => advance({ id: request._id, by: currentUser })}
           onRetreat={() => retreat({ id: request._id })}
+          onAddNote={(step, body) =>
+            addProcessNote({ id: request._id, step, body, by: currentUser })
+          }
         />
       </section>
 
@@ -920,23 +927,33 @@ function ProcessChecklist({
   steps,
   completed,
   log,
+  notes,
   locked,
   outcome,
+  currentUser,
   stepBlockers = {},
   onAdvance,
   onRetreat,
+  onAddNote,
 }: {
   steps: string[];
   completed: number;
   log: { step: number; by: string; at: number }[];
+  notes: { step: number; by: string; at: number; body: string }[];
   locked: boolean;
   outcome: string;
+  currentUser?: string;
   stepBlockers?: Record<string, string>;
   onAdvance: () => void;
   onRetreat: () => void;
+  onAddNote: (step: number, body: string) => Promise<unknown>;
 }) {
   const [confirm, setConfirm] = useState<"advance" | "retreat" | null>(null);
   const [blockerMsg, setBlockerMsg] = useState<string | null>(null);
+  const [commentsStep, setCommentsStep] = useState<number | null>(null);
+  const [noteBody, setNoteBody] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   if (steps.length === 0) {
     return (
@@ -949,6 +966,13 @@ function ProcessChecklist({
   const completionPercent = Math.round((completed / steps.length) * 100);
   const nextStepLabel = steps[completed];
   const nextIsBlocked = !!stepBlockers[nextStepLabel];
+  const activeStep =
+    commentsStep !== null && commentsStep >= 0 && commentsStep < steps.length
+      ? commentsStep
+      : Math.min(completed, steps.length - 1);
+  const stepNotes = notes
+    .filter((note) => note.step === activeStep)
+    .sort((a, b) => b.at - a.at);
 
   function handleStepClick(isNext: boolean) {
     if (isNext) {
@@ -971,6 +995,31 @@ function ProcessChecklist({
         onRetreat();
       }
     }
+  }
+
+  async function handleAddNote() {
+    const trimmed = noteBody.trim();
+    if (!trimmed) {
+      setNoteError("Ajoutez un commentaire avant d'enregistrer.");
+      return;
+    }
+
+    setSavingNote(true);
+    setNoteError(null);
+    try {
+      await onAddNote(activeStep, trimmed);
+      setNoteBody("");
+    } catch (error) {
+      setNoteError(error instanceof Error ? error.message : "Impossible d'ajouter la note.");
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  function openComments(step: number) {
+    setCommentsStep(step);
+    setNoteBody("");
+    setNoteError(null);
   }
 
   return (
@@ -999,15 +1048,13 @@ function ProcessChecklist({
             const isLastDone = i === completed - 1;
             const actionable = !locked && (isNext || isLastDone);
             const entry = log.find((e) => e.step === i);
+            const noteCount = notes.filter((note) => note.step === i).length;
 
             return (
               <li key={label}>
-                <button
-                  type="button"
-                  disabled={!actionable}
-                  onClick={() => handleStepClick(isNext)}
+                <div
                   className={cn(
-                    "flex min-h-[118px] w-full flex-col items-center justify-between rounded-[24px] border px-3 py-3 text-center text-sm transition-all",
+                    "flex min-h-[152px] w-full flex-col rounded-[24px] border text-center text-sm transition-all",
                     isDone
                       ? "border-brand-500/35 bg-[linear-gradient(180deg,rgba(255,119,0,0.16),rgba(255,119,0,0.06))] text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                       : isNext && !locked && nextIsBlocked
@@ -1015,46 +1062,70 @@ function ProcessChecklist({
                         : isNext && !locked
                           ? "border-zinc-700 bg-[linear-gradient(180deg,var(--crm-surface-2),var(--crm-surface-3))] text-zinc-200 shadow-[0_12px_24px_rgba(0,0,0,0.12)] hover:border-brand-500"
                           : "border-zinc-800 bg-zinc-900/50 text-zinc-500",
-                    actionable ? "cursor-pointer" : "cursor-not-allowed",
                   )}
                 >
-                  <div className="flex w-full items-center justify-center">
-                    <span
-                      className={cn(
-                        "mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
-                        isDone
-                          ? "border-brand-400 bg-brand-500 text-white shadow-[0_10px_24px_rgba(255,119,0,0.28)]"
-                          : isNext && !locked
-                            ? "border-brand-400 bg-brand-500/12 text-brand-300"
-                            : "border-zinc-700 bg-zinc-950/70 text-transparent",
-                      )}
-                    >
-                      {isDone && (
-                        <Check className="h-4 w-4 text-white" strokeWidth={3} />
+                  <button
+                    type="button"
+                    disabled={!actionable}
+                    onClick={() => handleStepClick(isNext)}
+                    className={cn(
+                      "flex flex-1 flex-col items-center justify-between px-3 py-3",
+                      actionable ? "cursor-pointer" : "cursor-not-allowed",
+                    )}
+                  >
+                    <div className="flex w-full items-center justify-center">
+                      <span
+                        className={cn(
+                          "mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
+                          isDone
+                            ? "border-brand-400 bg-brand-500 text-white shadow-[0_10px_24px_rgba(255,119,0,0.28)]"
+                            : isNext && !locked
+                              ? "border-brand-400 bg-brand-500/12 text-brand-300"
+                              : "border-zinc-700 bg-zinc-950/70 text-transparent",
+                        )}
+                      >
+                        {isDone && (
+                          <Check className="h-4 w-4 text-white" strokeWidth={3} />
+                        )}
+                      </span>
+                    </div>
+                    <span className="flex flex-1 flex-col items-center justify-center">
+                      <span className="block text-sm font-semibold leading-5">{label}</span>
+                      {isDone && entry && (
+                        <span className="mt-2 flex flex-col items-center text-[11px] font-normal text-zinc-400">
+                          <span className="max-w-full truncate">par {entry.by}</span>
+                          <span>{formatDateTime(entry.at)}</span>
+                        </span>
                       )}
                     </span>
-                  </div>
-                  <span className="flex flex-1 flex-col items-center justify-center">
-                    <span className="block text-sm font-semibold leading-5">{label}</span>
-                    {isDone && entry && (
-                      <span className="mt-2 flex flex-col items-center text-[11px] font-normal text-zinc-400">
-                        <span className="max-w-full truncate">par {entry.by}</span>
-                        <span>{formatDateTime(entry.at)}</span>
-                      </span>
+                    {isNext && !locked && (
+                      nextIsBlocked ? (
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-400">
+                          Infos requises
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-300">
+                          Prochaine étape
+                        </span>
+                      )
                     )}
-                  </span>
-                  {isNext && !locked && (
-                    nextIsBlocked ? (
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-400">
-                        Infos requises
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-300">
-                        Prochaine étape
-                      </span>
-                    )
-                  )}
-                </button>
+                  </button>
+                  <div className="mt-auto border-t border-white/6 px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => openComments(i)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-300 transition hover:bg-black/20 hover:text-white"
+                    >
+                      <MessageSquareText className="h-3.5 w-3.5" />
+                      Voir les commentaires
+                      {noteCount > 0 && (
+                        <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-200">
+                          {noteCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </li>
             );
           })}
@@ -1099,6 +1170,79 @@ function ProcessChecklist({
         <p className="text-sm text-zinc-300">{blockerMsg}</p>
         <div className="mt-5 flex justify-end">
           <Button onClick={() => setBlockerMsg(null)}>Compris</Button>
+        </div>
+      </Modal>
+
+      <Modal
+        dark
+        open={commentsStep !== null}
+        onClose={() => {
+          setCommentsStep(null);
+          setNoteBody("");
+          setNoteError(null);
+        }}
+        title={commentsStep !== null ? `Commentaires · ${steps[activeStep]}` : "Commentaires"}
+        className="max-w-5xl border-0 shadow-[0_28px_90px_rgba(0,0,0,0.24)]"
+        headerClassName="border-b-0"
+      >
+        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              Nouvelle note
+            </p>
+            <p className="mt-2 text-sm font-semibold text-zinc-100">
+              {steps[activeStep]}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {currentUser
+                ? `Ajoutée en tant que ${currentUser}`
+                : "Votre nom sera enregistré automatiquement si disponible."}
+            </p>
+            <Textarea
+              value={noteBody}
+              onChange={(e) => {
+                setNoteBody(e.target.value);
+                if (noteError) setNoteError(null);
+              }}
+              placeholder="Ex. Devis envoyé par e-mail, le client doit maintenant le signer."
+              className="mt-4 min-h-[180px]"
+            />
+            {noteError && (
+              <p className="mt-2 text-xs text-rose-400">{noteError}</p>
+            )}
+            <div className="mt-4 flex justify-end">
+              <Button
+                type="button"
+                onClick={handleAddNote}
+                disabled={savingNote}
+              >
+                {savingNote ? "Enregistrement…" : "Ajouter la note"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {stepNotes.length > 0 ? (
+              stepNotes.map((note, index) => (
+                <div
+                  key={`${note.at}-${index}`}
+                  className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4"
+                >
+                  <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                    <span className="truncate">{note.by}</span>
+                    <span>{formatDateTime(note.at)}</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-zinc-200">
+                    {note.body}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/35 p-4 text-sm text-zinc-500">
+                Aucune note pour cette étape pour le moment.
+              </div>
+            )}
+          </div>
         </div>
       </Modal>
     </>

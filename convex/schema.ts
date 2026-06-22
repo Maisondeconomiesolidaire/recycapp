@@ -182,6 +182,16 @@ export default defineSchema({
         v.object({ step: v.number(), by: v.string(), at: v.number() }),
       ),
     ),
+    processNotes: v.optional(
+      v.array(
+        v.object({
+          step: v.number(),
+          by: v.string(),
+          at: v.number(),
+          body: v.string(),
+        }),
+      ),
+    ),
     collecteType: v.optional(collecteType),
     // --- Gestion interne (onglet Gestion du CRM) ---
     site: v.optional(v.union(v.literal("60"), v.literal("76"))),
