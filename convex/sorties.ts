@@ -42,7 +42,28 @@ type TourneeStop = {
 function buildStopTrackingKey(
   stop: Pick<TourneeStop, "requestId" | "address" | "contactName">,
 ) {
-  return stop.requestId ?? `${stop.address.trim().toLowerCase()}::${(stop.contactName ?? "").trim().toLowerCase()}`;
+  return stop.requestId ?? `${normalizeTrackingText(stop.address)}::${normalizeTrackingText(stop.contactName)}`;
+}
+
+function normalizeTrackingText(value?: string) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function findStopForTrackingLink(
+  stops: TourneeStop[],
+  link: Pick<TourneeStop, "requestId" | "address" | "contactName" | "order">,
+) {
+  return (
+    (link.requestId
+      ? stops.find((stop) => stop.requestId === link.requestId)
+      : undefined) ??
+    stops.find(
+      (stop) =>
+        normalizeTrackingText(stop.address) === normalizeTrackingText(link.address) &&
+        normalizeTrackingText(stop.contactName) === normalizeTrackingText(link.contactName),
+    ) ??
+    stops.find((stop) => stop.order === link.order)
+  );
 }
 
 async function syncTrackingLinks(
@@ -450,6 +471,7 @@ export const updateTourneeStop = mutation({
       s.order === stopOrder ? { ...s, status } : s,
     );
     await ctx.db.patch(tourneeId, { stops });
+    await syncTrackingLinks(ctx, tourneeId, stops);
   },
 });
 
@@ -544,26 +566,31 @@ export const getPublicTrackingByToken = query({
       .withIndex("by_tourneeId", (q) => q.eq("tourneeId", link.tourneeId))
       .unique();
 
-    const stops = tournee.stops ?? [];
+    const stops = (tournee.stops ?? []).slice().sort((a, b) => a.order - b.order);
+    const recipientStop = findStopForTrackingLink(stops, {
+      requestId: link.requestId,
+      address: link.address,
+      contactName: link.contactName,
+      order: link.stopOrder,
+    });
+    const recipientOrder = recipientStop?.order ?? link.stopOrder;
     const totalStops = stops.length;
     const stopsAhead = stops.filter(
-      (s) => s.order < link.stopOrder && s.status !== "effectue",
+      (s) => s.order < recipientOrder && s.status !== "effectue",
     ).length;
-    const thisStopStatus =
-      stops.find((s) => s.order === link.stopOrder)?.status ?? "prevu";
+    const thisStopStatus = recipientStop?.status ?? "prevu";
 
     // The recipient's own stop + every stop before it, numbered, so the public
     // map can show "stops ahead of you" like Amazon. Coordinates only — no
     // names/addresses of other people are exposed.
     const precedingStops = stops
-      .filter((s) => s.order <= link.stopOrder)
-      .sort((a, b) => a.order - b.order)
+      .filter((s) => s.order <= recipientOrder)
       .map((s) => ({
         order: s.order,
         latitude: s.latitude ?? null,
         longitude: s.longitude ?? null,
         done: s.status === "effectue",
-        isRecipient: s.order === link.stopOrder,
+        isRecipient: s.order === recipientOrder,
       }));
 
     return {
@@ -581,11 +608,11 @@ export const getPublicTrackingByToken = query({
         estimatedDurationSeconds: tournee.estimatedDurationSeconds ?? null,
       },
       recipient: {
-        stopOrder: link.stopOrder,
-        contactName: link.contactName ?? null,
-        address: link.address,
-        latitude: link.latitude ?? null,
-        longitude: link.longitude ?? null,
+        stopOrder: recipientOrder,
+        contactName: recipientStop?.contactName ?? link.contactName ?? null,
+        address: recipientStop?.address ?? link.address,
+        latitude: recipientStop?.latitude ?? link.latitude ?? null,
+        longitude: recipientStop?.longitude ?? link.longitude ?? null,
         totalStops,
         stopsAhead,
         stopStatus: thisStopStatus,

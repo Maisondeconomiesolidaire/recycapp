@@ -62,6 +62,21 @@ function buildTrackingShareUrl(token: string) {
   return `${window.location.origin}/suivi/${token}`;
 }
 
+function normalizeTrackingText(value?: string) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function stopTrackingKey(stop: {
+  requestId?: string;
+  address: string;
+  contactName?: string;
+}) {
+  return (
+    stop.requestId ??
+    `${normalizeTrackingText(stop.address)}::${normalizeTrackingText(stop.contactName)}`
+  );
+}
+
 function buildTourneeMapPreviewUrl(
   stops: Array<{ address: string; longitude?: number; latitude?: number; order: number }>,
 ) {
@@ -202,6 +217,7 @@ function PlanificationTab() {
           _id: string;
           shareToken: string;
           stopOrder: number;
+          requestId?: string;
           contactName?: string;
           address: string;
         }>
@@ -254,6 +270,9 @@ function PlanificationTab() {
             const totalStops = t.stops.length;
             const mapPreviewUrl = buildTourneeMapPreviewUrl(t.stops);
             const trackingLinks = trackingLinksByTourId[t._id] ?? [];
+            const tokenByStopKey = new Map(
+              trackingLinks.map((link) => [stopTrackingKey(link), link.shareToken]),
+            );
             const tokenByOrder = new Map(
               trackingLinks.map((link) => [link.stopOrder, link.shareToken]),
             );
@@ -516,11 +535,15 @@ function PlanificationTab() {
                         {t.stops
                           .slice()
                           .sort((a, b) => a.order - b.order)
-                          .map((stop) => (
-                            <div
-                              key={stop.order}
-                              className="flex items-start gap-3 border-t border-[var(--crm-border)] px-4 py-3 sm:gap-4 sm:px-5 sm:py-4"
-                            >
+                          .map((stop) => {
+                            const trackingToken =
+                              tokenByStopKey.get(stopTrackingKey(stop)) ??
+                              tokenByOrder.get(stop.order);
+                            return (
+                              <div
+                                key={stop.order}
+                                className="flex items-start gap-3 border-t border-[var(--crm-border)] px-4 py-3 sm:gap-4 sm:px-5 sm:py-4"
+                              >
                               <div
                                 className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                                   stop.status === "effectue"
@@ -564,10 +587,10 @@ function PlanificationTab() {
                                 )}
                               </div>
                               <div className="flex shrink-0 items-center gap-1.5">
-                                {tokenByOrder.get(stop.order) && (
+                                {trackingToken && (
                                   <>
                                     <a
-                                      href={buildTrackingShareUrl(tokenByOrder.get(stop.order)!)}
+                                      href={buildTrackingShareUrl(trackingToken)}
                                       target="_blank"
                                       rel="noreferrer"
                                       title="Ouvrir le suivi public"
@@ -577,11 +600,11 @@ function PlanificationTab() {
                                     </a>
                                     <button
                                       type="button"
-                                      onClick={() => copyShareLink(tokenByOrder.get(stop.order)!)}
+                                      onClick={() => copyShareLink(trackingToken)}
                                       title="Copier le lien de suivi"
                                       className="rounded-lg border border-[var(--crm-border)] p-1.5 text-zinc-400 transition hover:bg-white/5 hover:text-zinc-200"
                                     >
-                                      {copiedToken === tokenByOrder.get(stop.order) ? (
+                                      {copiedToken === trackingToken ? (
                                         <Check className="h-3.5 w-3.5 text-emerald-400" />
                                       ) : (
                                         <Copy className="h-3.5 w-3.5" />
@@ -625,8 +648,9 @@ function PlanificationTab() {
                                     </button>
                                   )}
                               </div>
-                            </div>
-                          ))}
+                              </div>
+                            );
+                          })}
                       </>
                     )}
                   </div>
