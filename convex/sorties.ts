@@ -543,6 +543,28 @@ export const updateTourneeStatus = mutation({
   },
 });
 
+export const deleteTournee = mutation({
+  args: { tourneeId: v.id("tournees") },
+  handler: async (ctx, { tourneeId }) => {
+    await requireStaff(ctx);
+    const tournee = await ctx.db.get(tourneeId);
+    if (!tournee) return;
+
+    const links = await ctx.db
+      .query("tourneeTrackingLinks")
+      .withIndex("by_tourneeId", (q) => q.eq("tourneeId", tourneeId))
+      .collect();
+    const vehicleLocation = await ctx.db
+      .query("tourneeVehicleLocations")
+      .withIndex("by_tourneeId", (q) => q.eq("tourneeId", tourneeId))
+      .unique();
+
+    await Promise.all(links.map((link) => ctx.db.delete(link._id)));
+    if (vehicleLocation) await ctx.db.delete(vehicleLocation._id);
+    await ctx.db.delete(tourneeId);
+  },
+});
+
 export const updateTourneeVehicleLocation = mutation({
   args: {
     tourneeId: v.id("tournees"),

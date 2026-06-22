@@ -4,7 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Truck, Plus, Check, MapPin, User,
   ChevronDown, ChevronRight, Printer, Loader2,
-  Calendar, X, AlertCircle, Route, Copy, Navigation,
+  Calendar, X, AlertCircle, Route, Copy, Navigation, Trash2,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -193,9 +193,11 @@ function PlanificationTab() {
   const teamMembers = useQuery(api.team.list, {});
   const updateStatus = useMutation(api.sorties.updateTourneeStatus);
   const updateStop = useMutation(api.sorties.updateTourneeStop);
+  const deleteTournee = useMutation(api.sorties.deleteTournee);
   const optimizeTournee = useAction(api.sorties.optimizeTournee);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [optimizingId, setOptimizingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [optimizeErrorById, setOptimizeErrorById] = useState<Record<string, string>>({});
   const [optimizeSuccessById, setOptimizeSuccessById] = useState<Record<string, OptimizeFeedback>>({});
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -229,6 +231,20 @@ function PlanificationTab() {
     await navigator.clipboard.writeText(buildTrackingShareUrl(token));
     setCopiedToken(token);
     window.setTimeout(() => setCopiedToken((c) => (c === token ? null : c)), 2000);
+  }
+
+  async function handleDeleteTournee(tourneeId: Id<"tournees">, label: string) {
+    const confirmed = window.confirm(
+      `Supprimer définitivement "${label}" ? Les liens de suivi et la position live associés seront aussi supprimés.`,
+    );
+    if (!confirmed) return;
+    setDeletingId(tourneeId);
+    try {
+      await deleteTournee({ tourneeId });
+      setExpanded((current) => (current === tourneeId ? null : current));
+    } finally {
+      setDeletingId((current) => (current === tourneeId ? null : current));
+    }
   }
 
   return (
@@ -427,6 +443,19 @@ function PlanificationTab() {
                       >
                         <Printer className="h-3.5 w-3.5" />
                         Feuille de route
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deletingId === t._id}
+                        onClick={() => handleDeleteTournee(t._id as Id<"tournees">, t.label)}
+                        className="flex items-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingId === t._id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        Supprimer
                       </button>
                     </div>
                     {optimizeSuccessById[t._id] && (
