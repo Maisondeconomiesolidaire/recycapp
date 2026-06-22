@@ -137,7 +137,7 @@ export function RequestDrawer({
                 }
                 label="Complète"
                 variant="inline"
-                className="px-3 py-1.5"
+                className="border-white/24 bg-white/10 px-3 py-1.5 text-white hover:border-white/40 hover:bg-white/14 [&_.min-w-0>span]:text-white [&_.text-transparent]:border-white/45"
               />
 
               {request.outcome === "perdue" ? (
