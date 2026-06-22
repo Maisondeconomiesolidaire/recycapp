@@ -120,6 +120,8 @@ export const createTournee = mutation({
     stops: v.array(v.object({
       requestId: v.optional(v.id("requests")),
       address: v.string(),
+      latitude: v.optional(v.number()),
+      longitude: v.optional(v.number()),
       contactName: v.optional(v.string()),
       contactPhone: v.optional(v.string()),
       notes: v.optional(v.string()),
@@ -151,15 +153,34 @@ export const applyTourneeOptimization = internalMutation({
     orderedStops: v.array(v.object({
       requestId: v.optional(v.id("requests")),
       address: v.string(),
+      latitude: v.optional(v.number()),
+      longitude: v.optional(v.number()),
       contactName: v.optional(v.string()),
       contactPhone: v.optional(v.string()),
       notes: v.optional(v.string()),
       status: v.union(v.literal("prevu"), v.literal("effectue"), v.literal("annule")),
       order: v.number(),
     })),
+    optimizedAt: v.number(),
+    estimatedDistanceMeters: v.number(),
+    estimatedDurationSeconds: v.number(),
   },
-  handler: async (ctx, { tourneeId, orderedStops }) => {
-    await ctx.db.patch(tourneeId, { stops: orderedStops });
+  handler: async (
+    ctx,
+    {
+      tourneeId,
+      orderedStops,
+      optimizedAt,
+      estimatedDistanceMeters,
+      estimatedDurationSeconds,
+    },
+  ) => {
+    await ctx.db.patch(tourneeId, {
+      stops: orderedStops,
+      optimizedAt,
+      estimatedDistanceMeters,
+      estimatedDurationSeconds,
+    });
   },
 });
 
@@ -194,6 +215,8 @@ type OptimizableStop = {
   stop: {
     requestId?: Id<"requests">;
     address: string;
+    latitude?: number;
+    longitude?: number;
     contactName?: string;
     contactPhone?: string;
     notes?: string;
@@ -269,22 +292,32 @@ export const optimizeTournee = action({
       .map((waypoint, inputIndex) => ({
         stop: geocodedStops[inputIndex].stop,
         waypointIndex: waypoint.waypoint_index ?? Number.MAX_SAFE_INTEGER,
+        longitude: geocodedStops[inputIndex].longitude,
+        latitude: geocodedStops[inputIndex].latitude,
       }))
       .sort((a, b) => a.waypointIndex - b.waypointIndex)
-      .map(({ stop }, index) => ({
+      .map(({ stop, longitude, latitude }, index) => ({
         ...stop,
+        longitude,
+        latitude,
         order: index + 1,
       }));
+
+    const distanceMeters = Math.round(payload.trips?.[0]?.distance ?? 0);
+    const durationSeconds = Math.round(payload.trips?.[0]?.duration ?? 0);
 
     await ctx.runMutation(internal.sorties.applyTourneeOptimization, {
       tourneeId,
       orderedStops,
+      optimizedAt: Date.now(),
+      estimatedDistanceMeters: distanceMeters,
+      estimatedDurationSeconds: durationSeconds,
     });
 
     return {
       stopCount: orderedStops.length,
-      distanceMeters: Math.round(payload.trips?.[0]?.distance ?? 0),
-      durationSeconds: Math.round(payload.trips?.[0]?.duration ?? 0),
+      distanceMeters,
+      durationSeconds,
     };
   },
 });

@@ -452,6 +452,8 @@ export default defineSchema({
     stops: v.array(v.object({
       requestId: v.optional(v.id("requests")),
       address: v.string(),
+      latitude: v.optional(v.number()),
+      longitude: v.optional(v.number()),
       contactName: v.optional(v.string()),
       contactPhone: v.optional(v.string()),
       notes: v.optional(v.string()),
@@ -460,6 +462,9 @@ export default defineSchema({
     })),
     status: v.union(v.literal("planifiee"), v.literal("en_cours"), v.literal("terminee"), v.literal("annulee")),
     notes: v.optional(v.string()),
+    optimizedAt: v.optional(v.number()),
+    estimatedDistanceMeters: v.optional(v.number()),
+    estimatedDurationSeconds: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_date", ["date"]),
 });

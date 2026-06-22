@@ -9,6 +9,11 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 type Tab = "planification" | "historique";
+type OptimizeFeedback = {
+  stopCount: number;
+  distanceMeters: number;
+  durationSeconds: number;
+};
 
 const STATUS_STYLE: Record<string, string> = {
   planifiee: "bg-sky-500/15 text-sky-300",
@@ -22,6 +27,93 @@ const STATUS_LABELS: Record<string, string> = {
   terminee: "Terminée",
   annulee: "Annulée",
 };
+
+const MAPBOX_PUBLIC_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+
+function formatTourneeLabel(dateInput: string) {
+  const date = new Date(`${dateInput}T12:00:00`);
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+  return `Tournée ${formatter.format(date)}`;
+}
+
+function formatDistance(distanceMeters?: number) {
+  if (!distanceMeters) return null;
+  return `${(distanceMeters / 1000).toFixed(1).replace(".", ",")} km`;
+}
+
+function formatDuration(durationSeconds?: number) {
+  if (!durationSeconds) return null;
+  const totalMinutes = Math.max(1, Math.round(durationSeconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${totalMinutes} min`;
+  if (minutes === 0) return `${hours} h`;
+  return `${hours} h ${minutes.toString().padStart(2, "0")}`;
+}
+
+function buildTourneeMapPreviewUrl(
+  stops: Array<{ address: string; longitude?: number; latitude?: number; order: number }>,
+) {
+  if (!MAPBOX_PUBLIC_TOKEN) return null;
+
+  const coordinates = stops
+    .filter((stop) => typeof stop.longitude === "number" && typeof stop.latitude === "number")
+    .sort((a, b) => a.order - b.order);
+
+  if (coordinates.length < 2) return null;
+
+  const features = coordinates.flatMap((stop, index) => {
+    const point = {
+      type: "Feature",
+      properties: {
+        "marker-color": index === 0 ? "#f97316" : index === coordinates.length - 1 ? "#0f766e" : "#f1104f",
+        "marker-size": "small",
+        "marker-symbol": `${Math.min(index + 1, 99)}`,
+      },
+      geometry: {
+        type: "Point",
+        coordinates: [stop.longitude, stop.latitude],
+      },
+    };
+
+    if (index === 0) {
+      return [point];
+    }
+
+    const previous = coordinates[index - 1];
+    return [
+      {
+        type: "Feature",
+        properties: {
+          stroke: "#f1104f",
+          "stroke-width": 4,
+          "stroke-opacity": 0.8,
+        },
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [previous.longitude, previous.latitude],
+            [stop.longitude, stop.latitude],
+          ],
+        },
+      },
+      point,
+    ];
+  });
+
+  const geojson = encodeURIComponent(
+    JSON.stringify({
+      type: "FeatureCollection",
+      features,
+    }),
+  );
+
+  return `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/geojson(${geojson})/auto/980x420?padding=48&access_token=${MAPBOX_PUBLIC_TOKEN}`;
+}
 
 export function Tournees() {
   const [tab, setTab] = useState<Tab>("planification");
@@ -82,6 +174,7 @@ function PlanificationTab() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [optimizingId, setOptimizingId] = useState<string | null>(null);
   const [optimizeErrorById, setOptimizeErrorById] = useState<Record<string, string>>({});
+  const [optimizeSuccessById, setOptimizeSuccessById] = useState<Record<string, OptimizeFeedback>>({});
 
   const active = tournees?.filter((t) => t.status !== "terminee" && t.status !== "annulee") ?? [];
 
@@ -122,6 +215,7 @@ function PlanificationTab() {
             const isOpen = expanded === t._id;
             const doneStops = t.stops.filter((s) => s.status === "effectue").length;
             const totalStops = t.stops.length;
+            const mapPreviewUrl = buildTourneeMapPreviewUrl(t.stops);
             return (
               <div
                 key={t._id}
@@ -182,9 +276,13 @@ function PlanificationTab() {
                             return next;
                           });
                           try {
-                            await optimizeTournee({
+                            const result = await optimizeTournee({
                               tourneeId: t._id as Id<"tournees">,
                             });
+                            setOptimizeSuccessById((current) => ({
+                              ...current,
+                              [t._id]: result,
+                            }));
                           } catch (error) {
                             setOptimizeErrorById((current) => ({
                               ...current,
@@ -247,10 +345,86 @@ function PlanificationTab() {
                         Feuille de route
                       </button>
                     </div>
+                    {optimizeSuccessById[t._id] && (
+                      <div className="mx-5 mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 shrink-0" />
+                          <span>
+                            Tournée optimisée avec {optimizeSuccessById[t._id].stopCount} arrêts
+                          </span>
+                        </div>
+                        <span className="text-emerald-200/80">
+                          {formatDistance(optimizeSuccessById[t._id].distanceMeters)} ·{" "}
+                          {formatDuration(optimizeSuccessById[t._id].durationSeconds)}
+                        </span>
+                      </div>
+                    )}
                     {optimizeErrorById[t._id] && (
                       <div className="mx-5 mt-3 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                         <AlertCircle className="h-4 w-4 shrink-0" />
                         {optimizeErrorById[t._id]}
+                      </div>
+                    )}
+                    {(t.optimizedAt || optimizeSuccessById[t._id]) && (
+                      <div className="mx-5 mt-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                              Carte Mapbox
+                            </p>
+                            <p className="mt-1 text-sm text-zinc-300">
+                              Visualisez l’ordre optimisé de la tournée sur la carte.
+                            </p>
+                            {t.optimizedAt ? (
+                              <p className="mt-1 text-xs text-zinc-500">
+                                Optimisée le{" "}
+                                {new Date(t.optimizedAt).toLocaleDateString("fr-FR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                                {t.estimatedDistanceMeters
+                                  ? ` · ${formatDistance(t.estimatedDistanceMeters)}`
+                                  : ""}
+                                {t.estimatedDurationSeconds
+                                  ? ` · ${formatDuration(t.estimatedDurationSeconds)}`
+                                  : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                          {mapPreviewUrl ? (
+                            <a
+                              href={mapPreviewUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                            >
+                              <MapPin className="h-3.5 w-3.5" />
+                              Ouvrir la carte
+                            </a>
+                          ) : (
+                            <span className="text-xs text-zinc-500">
+                              Ajoutez `VITE_MAPBOX_ACCESS_TOKEN` pour afficher la carte.
+                            </span>
+                          )}
+                        </div>
+                        {mapPreviewUrl ? (
+                          <a
+                            href={mapPreviewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-4 block overflow-hidden rounded-xl border border-[var(--crm-border)]"
+                          >
+                            <img
+                              src={mapPreviewUrl}
+                              alt={`Aperçu de la ${t.label}`}
+                              className="h-52 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </a>
+                        ) : null}
                       </div>
                     )}
 
@@ -346,8 +520,10 @@ function TourneeForm({
   teamMembers: Array<{ _id: Id<"teamMembers">; name: string }>;
   onClose: () => void;
 }) {
-  const [label, setLabel] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const initialDate = new Date().toISOString().split("T")[0];
+  const [date, setDate] = useState(initialDate);
+  const [label, setLabel] = useState(() => formatTourneeLabel(initialDate));
+  const [labelTouched, setLabelTouched] = useState(false);
   const [driverId, setDriverId] = useState("");
   const [stops, setStops] = useState<StopDraft[]>([]);
   const [saving, setSaving] = useState(false);
@@ -436,8 +612,11 @@ function TourneeForm({
           <input
             type="text"
             value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Ex. : Tournée nord – secteur Beauvais"
+            onChange={(e) => {
+              setLabel(e.target.value);
+              setLabelTouched(true);
+            }}
+            placeholder="Ex. : Tournée 22/06/26"
             className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </div>
@@ -447,7 +626,13 @@ function TourneeForm({
             <input
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                const nextDate = e.target.value;
+                setDate(nextDate);
+                if (!labelTouched) {
+                  setLabel(formatTourneeLabel(nextDate));
+                }
+              }}
               className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
