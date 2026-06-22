@@ -462,9 +462,37 @@ export default defineSchema({
     })),
     status: v.union(v.literal("planifiee"), v.literal("en_cours"), v.literal("terminee"), v.literal("annulee")),
     notes: v.optional(v.string()),
+    depotAddress: v.optional(v.string()),
+    depotLatitude: v.optional(v.number()),
+    depotLongitude: v.optional(v.number()),
     optimizedAt: v.optional(v.number()),
     estimatedDistanceMeters: v.optional(v.number()),
     estimatedDurationSeconds: v.optional(v.number()),
+    routeCoordinates: v.optional(v.array(v.array(v.number()))),
     createdAt: v.number(),
   }).index("by_date", ["date"]),
+
+  tourneeTrackingLinks: defineTable({
+    tourneeId: v.id("tournees"),
+    shareToken: v.string(),
+    stopOrder: v.number(),
+    requestId: v.optional(v.id("requests")),
+    contactName: v.optional(v.string()),
+    address: v.string(),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_tourneeId", ["tourneeId"])
+    .index("by_shareToken", ["shareToken"]),
+
+  tourneeVehicleLocations: defineTable({
+    tourneeId: v.id("tournees"),
+    latitude: v.number(),
+    longitude: v.number(),
+    heading: v.optional(v.number()),
+    accuracy: v.optional(v.number()),
+    speedKmh: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_tourneeId", ["tourneeId"]),
 });

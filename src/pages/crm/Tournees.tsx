@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Truck, Plus, Check, MapPin, User,
   ChevronDown, ChevronRight, Printer, Loader2,
-  Calendar, X, AlertCircle, Route,
+  Calendar, X, AlertCircle, Route, Copy, LocateFixed, Radio,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -29,6 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const MAPBOX_PUBLIC_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+const TOURNEE_DEPOT_ADDRESS = "4 rue de la prairie 60650 Lachapelle-aux-Pots";
 
 function formatTourneeLabel(dateInput: string) {
   const date = new Date(`${dateInput}T12:00:00`);
@@ -53,6 +54,21 @@ function formatDuration(durationSeconds?: number) {
   if (hours === 0) return `${totalMinutes} min`;
   if (minutes === 0) return `${hours} h`;
   return `${hours} h ${minutes.toString().padStart(2, "0")}`;
+}
+
+function formatTrackingAge(updatedAt?: number | null) {
+  if (!updatedAt) return "Aucune position reçue";
+  const diffSeconds = Math.max(0, Math.round((Date.now() - updatedAt) / 1000));
+  if (diffSeconds < 60) return "Position mise à jour à l’instant";
+  const minutes = Math.round(diffSeconds / 60);
+  if (minutes < 60) return `Dernière position il y a ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return `Dernière position il y a ${hours} h`;
+}
+
+function buildTrackingShareUrl(token: string) {
+  if (typeof window === "undefined") return `/suivi/${token}`;
+  return `${window.location.origin}/suivi/${token}`;
 }
 
 function buildTourneeMapPreviewUrl(
@@ -170,13 +186,118 @@ function PlanificationTab() {
   const teamMembers = useQuery(api.team.list, {});
   const updateStatus = useMutation(api.sorties.updateTourneeStatus);
   const updateStop = useMutation(api.sorties.updateTourneeStop);
+  const updateVehicleLocation = useMutation(api.sorties.updateTourneeVehicleLocation);
   const optimizeTournee = useAction(api.sorties.optimizeTournee);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [optimizingId, setOptimizingId] = useState<string | null>(null);
   const [optimizeErrorById, setOptimizeErrorById] = useState<Record<string, string>>({});
   const [optimizeSuccessById, setOptimizeSuccessById] = useState<Record<string, OptimizeFeedback>>({});
+  const [trackingErrorById, setTrackingErrorById] = useState<Record<string, string>>({});
+  const [trackingActiveById, setTrackingActiveById] = useState<Record<string, boolean>>({});
+  const watchIdsRef = useRef<Record<string, number>>({});
 
   const active = tournees?.filter((t) => t.status !== "terminee" && t.status !== "annulee") ?? [];
+  const trackingLinksGroups = useQuery(
+    api.sorties.listTrackingLinksByTournees,
+    active.length > 0
+      ? { tourneeIds: active.map((tournee) => tournee._id as Id<"tournees">) }
+      : "skip",
+  );
+  const trackingLinksByTourId = useMemo(
+    () =>
+      Object.fromEntries(
+        (trackingLinksGroups ?? []).map((group) => [group.tourneeId, group.links]),
+      ) as Record<
+        string,
+        Array<{
+          _id: string;
+          shareToken: string;
+          stopOrder: number;
+          contactName?: string;
+          address: string;
+        }>
+      >,
+    [trackingLinksGroups],
+  );
+
+  useEffect(() => {
+    return () => {
+      Object.values(watchIdsRef.current).forEach((watchId) => {
+        navigator.geolocation.clearWatch(watchId);
+      });
+      watchIdsRef.current = {};
+    };
+  }, []);
+
+  function stopLiveTracking(tourneeId: string) {
+    const watchId = watchIdsRef.current[tourneeId];
+    if (watchId !== undefined) {
+      navigator.geolocation.clearWatch(watchId);
+      delete watchIdsRef.current[tourneeId];
+    }
+    setTrackingActiveById((current) => ({ ...current, [tourneeId]: false }));
+  }
+
+  function startLiveTracking(tourneeId: string) {
+    if (!("geolocation" in navigator)) {
+      setTrackingErrorById((current) => ({
+        ...current,
+        [tourneeId]: "La géolocalisation n'est pas disponible sur cet appareil.",
+      }));
+      return;
+    }
+
+    setTrackingErrorById((current) => {
+      const next = { ...current };
+      delete next[tourneeId];
+      return next;
+    });
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setTrackingActiveById((current) => ({ ...current, [tourneeId]: true }));
+        void updateVehicleLocation({
+          tourneeId: tourneeId as Id<"tournees">,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          heading:
+            typeof position.coords.heading === "number" && !Number.isNaN(position.coords.heading)
+              ? position.coords.heading
+              : undefined,
+          accuracy:
+            typeof position.coords.accuracy === "number" && !Number.isNaN(position.coords.accuracy)
+              ? position.coords.accuracy
+              : undefined,
+          speedKmh:
+            typeof position.coords.speed === "number" && !Number.isNaN(position.coords.speed)
+              ? Math.max(0, Math.round(position.coords.speed * 3.6))
+              : undefined,
+        }).catch((error) => {
+          setTrackingErrorById((current) => ({
+            ...current,
+            [tourneeId]: error instanceof Error ? error.message : "Impossible d'envoyer la position.",
+          }));
+        });
+      },
+      (error) => {
+        setTrackingActiveById((current) => ({ ...current, [tourneeId]: false }));
+        setTrackingErrorById((current) => ({
+          ...current,
+          [tourneeId]:
+            error.code === error.PERMISSION_DENIED
+              ? "Autorisez la localisation pour partager le suivi du camion."
+              : "Impossible de récupérer la position du camion.",
+        }));
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10_000,
+        timeout: 15_000,
+      },
+    );
+
+    watchIdsRef.current[tourneeId] = watchId;
+  }
 
   return (
     <div className="space-y-5">
@@ -216,6 +337,7 @@ function PlanificationTab() {
             const doneStops = t.stops.filter((s) => s.status === "effectue").length;
             const totalStops = t.stops.length;
             const mapPreviewUrl = buildTourneeMapPreviewUrl(t.stops);
+            const trackingLinks = trackingLinksByTourId[t._id] ?? [];
             return (
               <div
                 key={t._id}
@@ -336,6 +458,26 @@ function PlanificationTab() {
                           Terminer
                         </button>
                       )}
+                      {t.status === "en_cours" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            trackingActiveById[t._id]
+                              ? stopLiveTracking(t._id)
+                              : startLiveTracking(t._id)
+                          }
+                          className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                            trackingActiveById[t._id]
+                              ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                              : "bg-fuchsia-500/15 text-fuchsia-300 hover:bg-fuchsia-500/25"
+                          }`}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <Radio className="h-3.5 w-3.5" />
+                            {trackingActiveById[t._id] ? "Suivi en direct actif" : "Activer le suivi en direct"}
+                          </span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => window.print()}
@@ -345,6 +487,12 @@ function PlanificationTab() {
                         Feuille de route
                       </button>
                     </div>
+                    {trackingErrorById[t._id] && (
+                      <div className="mx-5 mt-3 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        {trackingErrorById[t._id]}
+                      </div>
+                    )}
                     {optimizeSuccessById[t._id] && (
                       <div className="mx-5 mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
                         <div className="flex items-center gap-2">
@@ -374,6 +522,9 @@ function PlanificationTab() {
                             </p>
                             <p className="mt-1 text-sm text-zinc-300">
                               Visualisez l’ordre optimisé de la tournée sur la carte.
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              Départ pris en compte : {TOURNEE_DEPOT_ADDRESS}
                             </p>
                             {t.optimizedAt ? (
                               <p className="mt-1 text-xs text-zinc-500">
@@ -427,6 +578,72 @@ function PlanificationTab() {
                         ) : null}
                       </div>
                     )}
+                    <div className="mx-5 mt-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                            Suivi partagé
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-300">
+                            Un lien public est disponible pour chaque passage de la tournée.
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            {formatTrackingAge(t.vehicleLocation?.updatedAt ?? null)}
+                          </p>
+                        </div>
+                        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--crm-border)] px-3 py-1.5 text-xs text-zinc-400">
+                          <LocateFixed className="h-3.5 w-3.5" />
+                          {t.vehicleLocation
+                            ? `${t.vehicleLocation.latitude.toFixed(5)}, ${t.vehicleLocation.longitude.toFixed(5)}`
+                            : "Camion non localisé"}
+                        </div>
+                      </div>
+
+                      {trackingLinks.length > 0 ? (
+                        <div className="mt-4 grid gap-2">
+                          {trackingLinks.map((link) => (
+                            <div
+                              key={link._id}
+                              className="flex flex-col gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3 md:flex-row md:items-center md:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-zinc-100">
+                                  {link.contactName || `Passage ${link.stopOrder}`}
+                                </p>
+                                <p className="mt-1 text-xs text-zinc-500">{link.address}</p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <a
+                                  href={buildTrackingShareUrl(link.shareToken)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-2 rounded-xl border border-[var(--crm-border)] px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/5"
+                                >
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  Ouvrir
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await navigator.clipboard.writeText(
+                                      buildTrackingShareUrl(link.shareToken),
+                                    );
+                                  }}
+                                  className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                  Copier le lien
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-4 text-sm text-zinc-500">
+                          Les liens de suivi seront générés automatiquement dès qu’une tournée contient des passages.
+                        </p>
+                      )}
+                    </div>
 
                     {/* Stops */}
                     {t.stops.length === 0 ? (
