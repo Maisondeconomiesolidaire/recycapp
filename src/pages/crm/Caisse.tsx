@@ -9,8 +9,45 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
 import { Barcode } from "../../components/ui/Barcode";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { lazy, Suspense } from "react";
 const CameraScanner = lazy(() => import("../../components/ui/CameraScanner").then((m) => ({ default: m.CameraScanner })));
+
+function ScannerLoading() {
+  return (
+    <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-3 bg-black">
+      <Loader2 className="h-8 w-8 animate-spin text-zinc-300" />
+      <p className="text-sm text-zinc-300">Ouverture du scanner…</p>
+    </div>
+  );
+}
+
+function ScannerError({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-4 bg-black p-8 text-center">
+      <Camera className="h-9 w-9 text-zinc-500" />
+      <p className="max-w-xs text-sm text-zinc-200">
+        Le scanner n'a pas pu démarrer. Rechargez la page puis réessayez.
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+        >
+          Recharger
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800"
+        >
+          Fermer
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -322,12 +359,14 @@ function CaissePanel() {
   return (
     <>
       {cameraOpen && (
-        <Suspense fallback={null}>
-          <CameraScanner
-            onDetected={handleCameraDetected}
-            onClose={() => setCameraOpen(false)}
-          />
-        </Suspense>
+        <ErrorBoundary fallback={() => <ScannerError onClose={() => setCameraOpen(false)} />}>
+          <Suspense fallback={<ScannerLoading />}>
+            <CameraScanner
+              onDetected={handleCameraDetected}
+              onClose={() => setCameraOpen(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
     <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
       {/* Left: article search */}

@@ -82,32 +82,48 @@ function buildRouteGeoJson(
   };
 }
 
+type TrackingStop = {
+  order: number;
+  latitude: number | null;
+  longitude: number | null;
+  done: boolean;
+  isRecipient: boolean;
+};
+
 function buildPinsGeoJson({
   depot,
-  recipient,
+  stops,
 }: {
   depot?: [number, number] | null;
-  recipient?: [number, number] | null;
+  stops: TrackingStop[];
 }) {
-  return {
-    type: "FeatureCollection" as const,
-    features: [
-      depot
-        ? {
-            type: "Feature" as const,
-            geometry: { type: "Point" as const, coordinates: depot },
-            properties: { kind: "depot", label: "Départ recyclerie" },
-          }
-        : null,
-      recipient
-        ? {
-            type: "Feature" as const,
-            geometry: { type: "Point" as const, coordinates: recipient },
-            properties: { kind: "recipient", label: "Votre adresse" },
-          }
-        : null,
-    ].filter(Boolean),
-  };
+  const features: Array<{
+    type: "Feature";
+    geometry: { type: "Point"; coordinates: [number, number] };
+    properties: { kind: string; label: string };
+  }> = [];
+
+  if (depot) {
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: depot },
+      properties: { kind: "depot", label: "" },
+    });
+  }
+
+  for (const stop of stops) {
+    if (stop.latitude == null || stop.longitude == null) continue;
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [stop.longitude, stop.latitude] },
+      properties: {
+        kind: stop.isRecipient ? "recipient" : stop.done ? "done" : "pending",
+        label: String(stop.order),
+      },
+    });
+  }
+
+  return { type: "FeatureCollection" as const, features };
 }
 
 function createTruckMarkerElement() {
@@ -195,6 +211,14 @@ export function TourneeTracking() {
         : null,
     [tracking],
   );
+  const stops: TrackingStop[] = useMemo(() => tracking?.stops ?? [], [tracking]);
+  const stopCoordinates = useMemo(
+    () =>
+      stops
+        .filter((s) => s.latitude != null && s.longitude != null)
+        .map((s) => [s.longitude as number, s.latitude as number] as [number, number]),
+    [stops],
+  );
 
   // Refresh relative time labels / live status every 20s.
   useEffect(() => {
@@ -242,14 +266,14 @@ export function TourneeTracking() {
 
       map.addSource("pins", {
         type: "geojson",
-        data: buildPinsGeoJson({ depot: depotCoordinates, recipient: recipientCoordinates }),
+        data: buildPinsGeoJson({ depot: depotCoordinates, stops }),
       });
       map.addLayer({
         id: "pins-circles",
         type: "circle",
         source: "pins",
         paint: {
-          "circle-radius": ["match", ["get", "kind"], "recipient", 9, 6],
+          "circle-radius": ["match", ["get", "kind"], "recipient", 15, "depot", 7, 13],
           "circle-color": [
             "match",
             ["get", "kind"],
@@ -257,11 +281,27 @@ export function TourneeTracking() {
             "#0f766e",
             "recipient",
             "#ef4444",
-            "#52525b",
+            "done",
+            "#16a34a",
+            "#71717a",
           ],
           "circle-stroke-width": 3,
           "circle-stroke-color": "#ffffff",
         },
+      });
+      // Numbered stop labels (Amazon-style ordered stops).
+      map.addLayer({
+        id: "pins-numbers",
+        type: "symbol",
+        source: "pins",
+        filter: ["!=", ["get", "kind"], "depot"],
+        layout: {
+          "text-field": ["get", "label"],
+          "text-size": 12,
+          "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
+          "text-allow-overlap": true,
+        },
+        paint: { "text-color": "#ffffff" },
       });
 
       // Blue truck marker (Mapbox On-Demand Logistics style).
@@ -272,7 +312,7 @@ export function TourneeTracking() {
       truckMarkerRef.current = truckMarker;
 
       const bounds = buildContextBounds(
-        [depotCoordinates, recipientCoordinates, truckCoordinates],
+        [depotCoordinates, recipientCoordinates, truckCoordinates, ...stopCoordinates],
         tracking.tournee.routeCoordinates,
       );
       if (bounds) {
@@ -302,7 +342,7 @@ export function TourneeTracking() {
       ),
     );
     (map.getSource("pins") as mapboxgl.GeoJSONSource | undefined)?.setData(
-      buildPinsGeoJson({ depot: depotCoordinates, recipient: recipientCoordinates }),
+      buildPinsGeoJson({ depot: depotCoordinates, stops }),
     );
 
     if (truckMarkerRef.current) {
@@ -315,14 +355,14 @@ export function TourneeTracking() {
 
     if (!userInteractedRef.current) {
       const bounds = buildContextBounds(
-        [recipientCoordinates, truckCoordinates],
+        [recipientCoordinates, truckCoordinates, ...stopCoordinates],
         truckCoordinates ? [] : tracking.tournee.routeCoordinates,
       );
       if (bounds) {
         map.fitBounds(bounds, { padding: 64, maxZoom: 14, duration: 1200 });
       }
     }
-  }, [depotCoordinates, recipientCoordinates, truckCoordinates, tracking]);
+  }, [depotCoordinates, recipientCoordinates, truckCoordinates, stops, stopCoordinates, tracking]);
 
   if (tracking === undefined) {
     return <FullSpinner label="Chargement du suivi…" />;
@@ -389,6 +429,21 @@ export function TourneeTracking() {
               <p className="text-xs mt-0.5 opacity-80">{statusConfig.description}</p>
             </div>
           </div>
+
+          {/* "You're next" highlight — Amazon-style heads up */}
+          {isTourActive && !isCompleted && stopsAhead === 0 && (
+            <div className="overflow-hidden rounded-2xl border border-brand-500/30 bg-gradient-to-br from-brand-500/10 to-amber-500/5 p-4">
+              <div className="flex items-center gap-2 text-brand-700">
+                <Truck className="h-5 w-5 shrink-0" />
+                <p className="text-base font-bold">Vous êtes le prochain arrêt&nbsp;!</p>
+              </div>
+              <p className="mt-1.5 text-sm text-zinc-600">
+                Notre véhicule se dirige vers vous. Merci de préparer les objets à collecter,
+                de faciliter l'accès (portail, stationnement) et de tenir vos animaux à l'écart
+                pour que tout se passe au mieux.
+              </p>
+            </div>
+          )}
 
           {/* Stop position */}
           {totalStops > 0 && (

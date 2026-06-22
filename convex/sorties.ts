@@ -528,6 +528,20 @@ export const getPublicTrackingByToken = query({
     const thisStopStatus =
       stops.find((s) => s.order === link.stopOrder)?.status ?? "prevu";
 
+    // The recipient's own stop + every stop before it, numbered, so the public
+    // map can show "stops ahead of you" like Amazon. Coordinates only — no
+    // names/addresses of other people are exposed.
+    const precedingStops = stops
+      .filter((s) => s.order <= link.stopOrder)
+      .sort((a, b) => a.order - b.order)
+      .map((s) => ({
+        order: s.order,
+        latitude: s.latitude ?? null,
+        longitude: s.longitude ?? null,
+        done: s.status === "effectue",
+        isRecipient: s.order === link.stopOrder,
+      }));
+
     return {
       token,
       tournee: {
@@ -552,6 +566,7 @@ export const getPublicTrackingByToken = query({
         stopsAhead,
         stopStatus: thisStopStatus,
       },
+      stops: precedingStops,
       vehicleLocation: vehicleLocation
         ? {
             latitude: vehicleLocation.latitude,

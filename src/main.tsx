@@ -7,6 +7,7 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import App from "./App";
 import { MissingConfig } from "./components/MissingConfig";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL;
@@ -32,13 +33,15 @@ if (missing.length > 0) {
   const convex = new ConvexReactClient(convexUrl);
   root.render(
     <StrictMode>
-      <ClerkProvider publishableKey={clerkKey} localization={frFR}>
-        <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        </ConvexProviderWithClerk>
-      </ClerkProvider>
+      <ErrorBoundary>
+        <ClerkProvider publishableKey={clerkKey} localization={frFR}>
+          <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </ConvexProviderWithClerk>
+        </ClerkProvider>
+      </ErrorBoundary>
     </StrictMode>,
   );
 }

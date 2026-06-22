@@ -5,6 +5,7 @@ import {
   Package, Loader2, ArrowRight, Tag, X, BarChart3, Camera,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 const CameraScanner = lazy(() => import("../../components/ui/CameraScanner").then((m) => ({ default: m.CameraScanner })));
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -125,17 +126,51 @@ function SaisieAtelier() {
   return (
     <div className="max-w-2xl space-y-5">
       {cameraOpen && (
-        <Suspense fallback={null}>
-          <CameraScanner
-            onDetected={(code) => {
-              setScanInput(code);
-              setLookupRef(code);
-              setPrevLookupRef(null);
-              setCameraOpen(false);
-            }}
-            onClose={() => setCameraOpen(false)}
-          />
-        </Suspense>
+        <ErrorBoundary
+          fallback={() => (
+            <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-4 bg-black p-8 text-center">
+              <Camera className="h-9 w-9 text-zinc-500" />
+              <p className="max-w-xs text-sm text-zinc-200">
+                Le scanner n'a pas pu démarrer. Rechargez la page puis réessayez.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+                >
+                  Recharger
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCameraOpen(false)}
+                  className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          )}
+        >
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-3 bg-black">
+                <Loader2 className="h-8 w-8 animate-spin text-zinc-300" />
+                <p className="text-sm text-zinc-300">Ouverture du scanner…</p>
+              </div>
+            }
+          >
+            <CameraScanner
+              onDetected={(code) => {
+                setScanInput(code);
+                setLookupRef(code);
+                setPrevLookupRef(null);
+                setCameraOpen(false);
+              }}
+              onClose={() => setCameraOpen(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {success && (
