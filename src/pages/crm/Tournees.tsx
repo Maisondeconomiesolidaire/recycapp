@@ -582,6 +582,11 @@ function PlanificationTab() {
                                     </p>
                                   </div>
                                 )}
+                                {stop.requestReference && (
+                                  <p className="text-xs font-semibold text-brand-300">
+                                    Demande #{stop.requestReference}
+                                  </p>
+                                )}
                                 {stop.notes && (
                                   <p className="text-xs text-zinc-500 italic">{stop.notes}</p>
                                 )}
@@ -667,6 +672,7 @@ function PlanificationTab() {
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
 interface StopDraft {
+  requestId?: Id<"requests">;
   address: string;
   contactName: string;
   contactPhone: string;
@@ -705,15 +711,37 @@ function TourneeForm({
   }
 
   function addFromCollecte(req: {
-    customer: { address?: string; firstName: string; lastName: string; phone: string };
+    _id: Id<"requests">;
+    reference?: string | null;
+    customer: {
+      address?: string;
+      firstName: string;
+      lastName: string;
+      phone: string;
+    };
+    collecte?: {
+      collectAddress?: {
+        address?: string;
+        postalCode?: string;
+        city?: string;
+      };
+    };
   }) {
+    const collectAddress = [
+      req.collecte?.collectAddress?.address ?? req.customer.address,
+      req.collecte?.collectAddress?.postalCode,
+      req.collecte?.collectAddress?.city,
+    ]
+      .filter(Boolean)
+      .join(" ");
     setStops((prev) => [
       ...prev,
       {
-        address: req.customer.address ?? "",
+        requestId: req._id,
+        address: collectAddress,
         contactName: `${req.customer.firstName} ${req.customer.lastName}`.trim(),
         contactPhone: req.customer.phone,
-        notes: "",
+        notes: req.reference ? `Demande #${req.reference}` : "",
       },
     ]);
   }
@@ -729,6 +757,7 @@ function TourneeForm({
       const validStops = stops
         .filter((s) => s.address.trim())
         .map((s, i) => ({
+          requestId: s.requestId,
           address: s.address.trim(),
           contactName: s.contactName.trim() || undefined,
           contactPhone: s.contactPhone.trim() || undefined,
@@ -832,10 +861,21 @@ function TourneeForm({
               >
                 <MapPin className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
                 <span className="text-zinc-300 truncate flex-1">
-                  {req.customer.firstName} {req.customer.lastName}
-                  {req.customer.address && (
-                    <span className="text-zinc-500"> — {req.customer.address}</span>
+                  {req.reference && (
+                    <span className="mr-1 font-semibold text-brand-300">#{req.reference}</span>
                   )}
+                  {req.customer.firstName} {req.customer.lastName}
+                  <span className="text-zinc-500">
+                    {" "}
+                    —{" "}
+                    {[
+                      req.collecte?.collectAddress?.address ?? req.customer.address,
+                      req.collecte?.collectAddress?.postalCode,
+                      req.collecte?.collectAddress?.city,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  </span>
                 </span>
                 <Plus className="h-3.5 w-3.5 text-brand-400 shrink-0" />
               </button>

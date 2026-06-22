@@ -9,8 +9,8 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireStaff } from "./lib";
-import type { Id } from "./_generated/dataModel";
+import { customerFullName, requireStaff } from "./lib";
+import type { Doc, Id } from "./_generated/dataModel";
 
 const TOURNEE_DEPOT_ADDRESS = "4 rue de la prairie 60650 Lachapelle-aux-Pots";
 const MAX_STORED_ROUTE_COORDINATES = 8_000;
@@ -66,6 +66,44 @@ function findStopForTrackingLink(
   );
 }
 
+function requestCollectAddressKey(request: Doc<"requests">) {
+  return normalizeTrackingText(
+    [
+      request.collecte?.collectAddress?.address ?? request.customer.address,
+      request.collecte?.collectAddress?.postalCode ?? request.customer.postalCode,
+      request.collecte?.collectAddress?.city ?? request.customer.city,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+}
+
+function stopAddressKey(stop: Pick<TourneeStop, "address">) {
+  return normalizeTrackingText(stop.address);
+}
+
+async function resolveRequestIdForStop(
+  ctx: MutationCtx,
+  stop: TourneeStop,
+) {
+  if (stop.requestId) return stop.requestId;
+  const stopAddress = stopAddressKey(stop);
+  const stopContact = normalizeTrackingText(stop.contactName);
+  if (!stopAddress) return undefined;
+
+  const candidates = (await ctx.db
+    .query("requests")
+    .filter((q) => q.eq(q.field("type"), "collecte"))
+    .filter((q) => q.eq(q.field("outcome"), "open"))
+    .collect()).filter((request) => {
+      if (requestCollectAddressKey(request) !== stopAddress) return false;
+      if (!stopContact) return true;
+      return normalizeTrackingText(customerFullName(request.customer)) === stopContact;
+    });
+
+  return candidates.length === 1 ? candidates[0]._id : undefined;
+}
+
 async function syncTrackingLinks(
   ctx: MutationCtx,
   tourneeId: Id<"tournees">,
@@ -79,18 +117,23 @@ async function syncTrackingLinks(
   const linksByKey = new Map(existingLinks.map((link) => [buildStopTrackingKey(link), link]));
   const usedLinkIds = new Set<Id<"tourneeTrackingLinks">>();
 
+  const resolvedStops: TourneeStop[] = [];
+
   for (const stop of stops) {
-    const key = buildStopTrackingKey(stop);
+    const requestId = await resolveRequestIdForStop(ctx, stop);
+    const stopWithRequest = requestId ? { ...stop, requestId } : stop;
+    resolvedStops.push(stopWithRequest);
+    const key = buildStopTrackingKey(stopWithRequest);
     const existing = linksByKey.get(key);
     if (existing) {
       usedLinkIds.add(existing._id);
       await ctx.db.patch(existing._id, {
-        stopOrder: stop.order,
-        requestId: stop.requestId,
-        contactName: stop.contactName,
-        address: stop.address,
-        latitude: stop.latitude,
-        longitude: stop.longitude,
+        stopOrder: stopWithRequest.order,
+        requestId: stopWithRequest.requestId,
+        contactName: stopWithRequest.contactName,
+        address: stopWithRequest.address,
+        latitude: stopWithRequest.latitude,
+        longitude: stopWithRequest.longitude,
       });
       continue;
     }
@@ -98,12 +141,12 @@ async function syncTrackingLinks(
     const insertedId = await ctx.db.insert("tourneeTrackingLinks", {
       tourneeId,
       shareToken: crypto.randomUUID(),
-      stopOrder: stop.order,
-      requestId: stop.requestId,
-      contactName: stop.contactName,
-      address: stop.address,
-      latitude: stop.latitude,
-      longitude: stop.longitude,
+      stopOrder: stopWithRequest.order,
+      requestId: stopWithRequest.requestId,
+      contactName: stopWithRequest.contactName,
+      address: stopWithRequest.address,
+      latitude: stopWithRequest.latitude,
+      longitude: stopWithRequest.longitude,
       createdAt: Date.now(),
     });
     usedLinkIds.add(insertedId);
@@ -114,6 +157,8 @@ async function syncTrackingLinks(
       .filter((link) => !usedLinkIds.has(link._id))
       .map((link) => ctx.db.delete(link._id)),
   );
+
+  return resolvedStops;
 }
 
 // ─── Sorties hors magasin ─────────────────────────────────────────────────────
@@ -240,7 +285,10 @@ export const createTournee = mutation({
       status: "planifiee",
       createdAt: Date.now(),
     });
-    await syncTrackingLinks(ctx, tourneeId, args.stops);
+    const resolvedStops = await syncTrackingLinks(ctx, tourneeId, args.stops);
+    if (resolvedStops.some((stop, index) => stop.requestId !== args.stops[index]?.requestId)) {
+      await ctx.db.patch(tourneeId, { stops: resolvedStops });
+    }
     return tourneeId;
   },
 });
@@ -288,7 +336,10 @@ export const applyTourneeOptimization = internalMutation({
       estimatedDurationSeconds,
       routeCoordinates,
     });
-    await syncTrackingLinks(ctx, tourneeId, orderedStops);
+    const resolvedStops = await syncTrackingLinks(ctx, tourneeId, orderedStops);
+    if (resolvedStops.some((stop, index) => stop.requestId !== orderedStops[index]?.requestId)) {
+      await ctx.db.patch(tourneeId, { stops: resolvedStops });
+    }
   },
 });
 
@@ -471,7 +522,10 @@ export const updateTourneeStop = mutation({
       s.order === stopOrder ? { ...s, status } : s,
     );
     await ctx.db.patch(tourneeId, { stops });
-    await syncTrackingLinks(ctx, tourneeId, stops);
+    const resolvedStops = await syncTrackingLinks(ctx, tourneeId, stops);
+    if (resolvedStops.some((stop, index) => stop.requestId !== stops[index]?.requestId)) {
+      await ctx.db.patch(tourneeId, { stops: resolvedStops });
+    }
   },
 });
 
@@ -482,7 +536,10 @@ export const updateTourneeStatus = mutation({
   },
   handler: async (ctx, { tourneeId, status }) => {
     await requireStaff(ctx);
-    await ctx.db.patch(tourneeId, { status });
+    const tournee = await ctx.db.get(tourneeId);
+    if (!tournee) throw new Error("Tournée introuvable");
+    const resolvedStops = await syncTrackingLinks(ctx, tourneeId, tournee.stops);
+    await ctx.db.patch(tourneeId, { status, stops: resolvedStops });
   },
 });
 
@@ -648,8 +705,18 @@ export const listTournees = query({
           .query("tourneeVehicleLocations")
           .withIndex("by_tourneeId", (q) => q.eq("tourneeId", t._id))
           .unique();
+        const stops = await Promise.all(
+          t.stops.map(async (stop) => {
+            const request = stop.requestId ? await ctx.db.get(stop.requestId) : null;
+            return {
+              ...stop,
+              requestReference: request?.reference ?? null,
+            };
+          }),
+        );
         return {
           ...t,
+          stops,
           driverName: driver?.name ?? null,
           vehicleLocation: vehicleLocation
             ? {
@@ -676,8 +743,18 @@ export const getTournee = query({
       .query("tourneeVehicleLocations")
       .withIndex("by_tourneeId", (q) => q.eq("tourneeId", tournee._id))
       .unique();
+    const stops = await Promise.all(
+      tournee.stops.map(async (stop) => {
+        const request = stop.requestId ? await ctx.db.get(stop.requestId) : null;
+        return {
+          ...stop,
+          requestReference: request?.reference ?? null,
+        };
+      }),
+    );
     return {
       ...tournee,
+      stops,
       driverName: driver?.name ?? null,
       vehicleLocation: vehicleLocation
         ? {
