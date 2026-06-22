@@ -26,6 +26,7 @@ import { Checkbox } from "../ui/Field";
 import { Lightbox } from "../ui/Lightbox";
 import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { UnderlineTabs } from "../ui/UnderlineTabs";
+import { MessageThread } from "../MessageThread";
 import { Modal } from "../ui/Modal";
 import { TypeBadge } from "./TypeBadge";
 import { PhoneInput } from "../ui/PhoneInput";
@@ -44,12 +45,13 @@ import { formatDateTime, formatPrice } from "../../lib/format";
 import { cn } from "../../lib/cn";
 
 type RequestDoc = NonNullable<ReturnType<typeof useQuery<typeof api.requests.get>>>;
-type Tab = "demande" | "gestion" | "client";
+type Tab = "demande" | "gestion" | "client" | "messages";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "demande", label: "Demande" },
   { key: "gestion", label: "Gestion" },
   { key: "client", label: "Client" },
+  { key: "messages", label: "Messages" },
 ];
 
 const LOST_REASON_OPTIONS = [
@@ -195,6 +197,11 @@ export function RequestDrawer({
           )}
           {tab === "client" && (
             <ClientTab key={request._id} request={request} />
+          )}
+          {tab === "messages" && (
+            <div className="h-[60vh]">
+              <MessageThread requestId={request._id} viewerRole="staff" theme="dark" />
+            </div>
           )}
         </div>
       )}

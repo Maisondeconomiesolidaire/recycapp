@@ -351,9 +351,21 @@ export function AccountOrders() {
             to={`/compte/commandes/${r._id}`}
             className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300 hover:shadow-sm"
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600">
-              {r.type === "collecte" ? <Truck className="h-5 w-5" /> : <Package className="h-5 w-5" />}
-            </div>
+            {r.type === "article" && r.imageUrl ? (
+              <img
+                src={r.imageUrl}
+                alt=""
+                className="h-11 w-11 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600">
+                {r.type === "collecte" ? (
+                  <Truck className="h-5 w-5" />
+                ) : (
+                  <Package className="h-5 w-5" />
+                )}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-zinc-900">{TYPE_LABELS[r.type]}</p>

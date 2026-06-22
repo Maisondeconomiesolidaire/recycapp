@@ -116,9 +116,22 @@ export const listMyRequests = query({
         const unread = messages.filter(
           (m) => m.senderRole === "staff" && !m.readByClientAt,
         ).length;
+
+        // Vignette : photo de couverture de l'article pour les demandes boutique.
+        let imageUrl: string | null = null;
+        if (r.type === "article") {
+          const articleId = r.article?.articleId ?? r.articles?.[0]?.articleId;
+          if (articleId) {
+            const article = await ctx.db.get(articleId);
+            const cover = article?.images?.[0];
+            if (cover) imageUrl = await ctx.storage.getUrl(cover);
+          }
+        }
+
         return {
           _id: r._id,
           type: r.type,
+          imageUrl,
           reference: r.reference ?? null,
           stage: r.stage,
           outcome: r.outcome,

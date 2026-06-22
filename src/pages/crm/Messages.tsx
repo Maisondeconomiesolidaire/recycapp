@@ -73,14 +73,22 @@ export function Messages() {
                       selected === c.requestId ? "bg-[var(--crm-surface-2)]" : ""
                     }`}
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-xs font-bold text-brand-300">
-                      {c.customerName
-                        .split(" ")
-                        .map((w) => w[0])
-                        .slice(0, 2)
-                        .join("")
-                        .toUpperCase() || "?"}
-                    </div>
+                    {c.imageUrl ? (
+                      <img
+                        src={c.imageUrl}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-xs font-bold text-brand-300">
+                        {c.customerName
+                          .split(" ")
+                          .map((w) => w[0])
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase() || "?"}
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="truncate text-sm font-semibold text-zinc-100">

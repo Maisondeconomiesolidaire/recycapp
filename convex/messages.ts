@@ -175,10 +175,22 @@ export const listConversations = query({
       [...byRequest.entries()].map(async ([requestId, info]) => {
         const request = await ctx.db.get(requestId);
         if (!request) return null;
+
+        let imageUrl: string | null = null;
+        if (request.type === "article") {
+          const articleId = request.article?.articleId ?? request.articles?.[0]?.articleId;
+          if (articleId) {
+            const article = await ctx.db.get(articleId);
+            const cover = article?.images?.[0];
+            if (cover) imageUrl = await ctx.storage.getUrl(cover);
+          }
+        }
+
         return {
           requestId,
           requestType: request.type,
           reference: request.reference ?? null,
+          imageUrl,
           customerName: `${request.customer.firstName} ${request.customer.lastName}`.trim(),
           lastBody: info.last.body,
           lastSenderRole: info.last.senderRole,
