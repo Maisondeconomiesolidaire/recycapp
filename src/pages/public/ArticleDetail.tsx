@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import confetti from "canvas-confetti";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -19,24 +15,8 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { Button } from "../../components/ui/Button";
-import { Field, Textarea } from "../../components/ui/Field";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { CustomerFields } from "../../components/public/CustomerFields";
 import { useCart } from "../../lib/useCart";
-
-const schema = z.object({
-  customer: z.object({
-    firstName: z.string().min(1, "Prénom requis"),
-    lastName: z.string().min(1, "Nom requis"),
-    email: z.string().email("Email invalide"),
-    phone: z.string().min(6, "Téléphone requis"),
-    address: z.string().min(1, "Adresse requise"),
-    postalCode: z.string().min(1, "Code postal requis"),
-    city: z.string().min(1, "Ville requise"),
-  }),
-  comment: z.string().optional(),
-});
-type FormData = z.infer<typeof schema>;
 
 function createViewSessionId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -51,32 +31,11 @@ export function ArticleDetail() {
     id: id as Id<"articles">,
   });
   const cart = useCart();
-  const reserve = useMutation(api.requests.submitArticleReservation);
+  const navigate = useNavigate();
   const heartbeatView = useMutation(api.articles.heartbeatView);
   const leaveView = useMutation(api.articles.leaveView);
   const [activeImage, setActiveImage] = useState(0);
   const [selectedBundledId, setSelectedBundledId] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
-
-  useEffect(() => {
-    if (!submitted) return;
-    const end = Date.now() + 3000;
-    const colors = ["#ff7700", "#ffb347", "#fff", "#ffd700", "#ff9a3d"];
-    function frame() {
-      confetti({ particleCount: 6, angle: 60, spread: 55, origin: { x: 0 }, colors });
-      confetti({ particleCount: 6, angle: 120, spread: 55, origin: { x: 1 }, colors });
-      if (Date.now() < end) requestAnimationFrame(frame);
-    }
-    frame();
-  }, [submitted]);
 
   useEffect(() => {
     if (!id) return;
@@ -166,13 +125,9 @@ export function ArticleDetail() {
     selectedBundledArticle?.imageUrls[0] ?? currentArticle.imageUrls[activeImage];
   const inCart = cart.has(currentArticle._id);
 
-  async function onSubmit(data: FormData) {
-    await reserve({
-      articleId: currentArticle._id,
-      customer: data.customer,
-      comment: data.comment || undefined,
-    });
-    setSubmitted(true);
+  function reserveNow() {
+    if (!inCart) cart.add(currentArticle._id);
+    navigate("/boutique/panier");
   }
 
   return (
@@ -368,77 +323,27 @@ export function ArticleDetail() {
             </div>
 
             <div className="rounded-[32px] border border-black/5 bg-white p-6 shadow-[0_22px_60px_rgba(24,24,27,0.08)]">
-              {submitted ? (
-                <div className="space-y-5">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 shadow-[0_10px_28px_rgba(255,119,0,0.28)]">
-                      <Check className="h-5 w-5 text-white" strokeWidth={3} />
-                    </span>
-                    <h2 className="text-xl font-bold tracking-tight text-zinc-950">
-                      Votre demande a bien été envoyée !
-                    </h2>
-                  </div>
-                  <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4 text-sm leading-7 text-zinc-700">
-                    <p>
-                      Votre article est désormais mis de côté pendant{" "}
-                      <strong className="text-zinc-900">48 heures</strong>.
-                    </p>
-                    <p className="mt-3">
-                      En cas d’indisponibilité, merci de nous en informer à l’adresse email
-                      suivante :{" "}
-                      <a
-                        href="mailto:accueil.recyclerie@eco-solidaire.fr"
-                        className="font-semibold text-brand-600 underline underline-offset-2"
-                      >
-                        accueil.recyclerie@eco-solidaire.fr
-                      </a>{" "}
-                      en communiquant la référence de l’article qui vous a été envoyé par email.
-                    </p>
-                    <p className="mt-3 text-zinc-500">
-                      Pensez à consulter vos spams en cas d’email non reçu.
-                    </p>
-                  </div>
-                  <Link
-                    to="/boutique"
-                    className="inline-flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Retour à la boutique
-                  </Link>
-                </div>
-              ) : available ? (
+              {available ? (
                 <>
                   <h2 className="text-2xl font-bold tracking-tight text-zinc-950">
                     Réserver cet article
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-zinc-500">
-                    Laissez vos coordonnées pour bloquer l’article et être recontacté rapidement.
+                    Ajoutez l’article à votre panier puis finalisez votre réservation. Un compte
+                    est nécessaire pour réserver.
                   </p>
-
-                  <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
-                    <CustomerFields
-                      register={register}
-                      errors={errors}
-                      withAddress
-                      watch={watch}
-                      setValue={setValue}
-                      autofillProfile
-                    />
-                    <Field label="Message (facultatif)">
-                      <Textarea
-                        {...register("comment")}
-                        placeholder="Une question sur l’article ?"
-                      />
-                    </Field>
-                    <Button
-                      type="submit"
-                      size="lg"
-                      className="w-full rounded-2xl"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? "Envoi…" : "Réserver maintenant"}
-                    </Button>
-                  </form>
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={reserveNow}
+                    className="mt-6 w-full rounded-2xl"
+                  >
+                    <ShoppingCart className="h-5 w-5" />
+                    {inCart ? "Voir mon panier" : "Réserver maintenant"}
+                  </Button>
+                  <p className="mt-3 text-center text-xs text-zinc-400">
+                    Article mis de côté 48 h après la réservation.
+                  </p>
                 </>
               ) : (
                 <div className="flex items-center gap-3 text-zinc-600">

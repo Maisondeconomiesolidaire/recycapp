@@ -204,22 +204,44 @@ export const staffUnreadCount = query({
   },
 });
 
-/** Contexte d'une demande pour l'en-tête de conversation côté CRM. */
+/** Contexte d'une demande pour l'en-tête + récapitulatif côté CRM. */
 export const getConversationContext = query({
   args: { requestId: v.id("requests") },
   handler: async (ctx, { requestId }) => {
     await requireStaff(ctx);
     const request = await ctx.db.get(requestId);
     if (!request) return null;
+    const c = request.customer;
+    const collectAddress = request.collecte?.collectAddress;
     return {
       requestId: request._id,
       type: request.type,
       reference: request.reference ?? null,
       stage: request.stage,
       outcome: request.outcome,
-      customerName: `${request.customer.firstName} ${request.customer.lastName}`.trim(),
-      customerEmail: request.customer.email,
-      customerPhone: request.customer.phone,
+      complete: request.complete,
+      collecteType: request.collecteType ?? null,
+      scheduledDate: request.scheduledDate ?? null,
+      quoteAmount: request.quoteAmount ?? null,
+      comment: request.comment ?? null,
+      createdAt: request.createdAt,
+      customerName: `${c.firstName} ${c.lastName}`.trim(),
+      customerEmail: c.email,
+      customerPhone: c.phone,
+      customerAddress:
+        [c.address, [c.postalCode, c.city].filter(Boolean).join(" ")]
+          .filter(Boolean)
+          .join(", ") || null,
+      collectAddress: collectAddress
+        ? [
+            collectAddress.address,
+            [collectAddress.postalCode, collectAddress.city].filter(Boolean).join(" "),
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : null,
+      // Articles réservés (type boutique) pour le récapitulatif.
+      articles: (request.articles ?? []).map((a) => a.articleTitle),
     };
   },
 });

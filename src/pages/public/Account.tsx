@@ -21,6 +21,8 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessageThread } from "../../components/MessageThread";
+import { PhoneInput } from "../../components/ui/PhoneInput";
+import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 
 const CONTAINER = "mx-auto w-full max-w-5xl px-5 py-8 sm:px-7 lg:px-8";
 
@@ -179,8 +181,34 @@ export function AccountInfo() {
         {field("Prénom", "firstName")}
         {field("Nom", "lastName")}
       </div>
-      {field("Téléphone", "phone", "06 12 34 56 78")}
-      {field("Adresse", "address", "12 rue des Lilas")}
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Téléphone
+        </label>
+        <PhoneInput
+          value={form.phone}
+          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+          placeholder="06 12 34 56 78"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Adresse
+        </label>
+        <AddressAutocomplete
+          value={form.address}
+          onValueChange={(v) => setForm((f) => ({ ...f, address: v }))}
+          onSelect={(a) =>
+            setForm((f) => ({
+              ...f,
+              address: a.address,
+              postalCode: a.postalCode,
+              city: a.city,
+            }))
+          }
+          placeholder="Commencez à saisir l'adresse…"
+        />
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {field("Code postal", "postalCode")}
         {field("Ville", "city")}

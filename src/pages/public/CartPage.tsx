@@ -23,6 +23,7 @@ import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import { CustomerSummary } from "../../components/public/CustomerSummary";
+import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
 
 const BRAND = "#f1104f";
 
@@ -49,6 +50,7 @@ export function CartPage() {
   const [paidSubmitted, setPaidSubmitted] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
   const reserve = useMutation(api.requests.submitArticleCartReservation);
+  const updateMyProfile = useMutation(api.users.updateMyProfile);
   const startPublicCartCheckout = useAction(api.stripe.startPublicCartCheckout);
   const confirmPublicCartCheckout = useAction(api.stripe.confirmPublicCartCheckout);
   const articles = useQuery(api.articles.getManyPublic, {
@@ -166,8 +168,25 @@ export function CartPage() {
   const total = availableArticles.reduce((sum, a) => sum + a.price, 0);
   const addressValue = String(watch("customer.address") ?? "");
 
+  // Mémorise les coordonnées saisies sur le profil du client connecté.
+  async function persistProfile(data: FormData) {
+    try {
+      await updateMyProfile({
+        firstName: data.customer.firstName,
+        lastName: data.customer.lastName,
+        phone: data.customer.phone,
+        address: data.customer.address,
+        postalCode: data.customer.postalCode,
+        city: data.customer.city,
+      });
+    } catch {
+      /* profil non connecté ou indisponible — sans gravité */
+    }
+  }
+
   async function onSubmit(data: FormData) {
     if (availableArticles.length === 0) return;
+    await persistProfile(data);
     await reserve({
       articleIds: availableArticles.map((a) => a._id),
       customer: data.customer,
@@ -180,6 +199,7 @@ export function CartPage() {
   async function onPayOnline(data: FormData) {
     if (availableArticles.length === 0) return;
     setCheckoutMessage(null);
+    await persistProfile(data);
     window.localStorage.setItem(PUBLIC_CART_DRAFT_KEY, JSON.stringify(data));
     const result = await startPublicCartCheckout({
       articleIds: availableArticles.map((article) => article._id),
@@ -287,6 +307,22 @@ export function CartPage() {
             </div>
           </div>
 
+          <SignedOut>
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 text-center">
+              <p className="text-base font-bold text-zinc-900">Créez un compte pour réserver</p>
+              <p className="mx-auto mt-1.5 max-w-sm text-sm text-zinc-500">
+                Un compte est nécessaire pour réserver : il vous permet de suivre l'avancement de
+                votre demande et d'échanger avec notre équipe.
+              </p>
+              <SignInButton mode="modal">
+                <button className="mt-4 inline-flex rounded-full bg-brand-500 px-6 py-3 text-sm font-bold text-white shadow-[0_12px_30px_rgba(241,16,79,0.28)] transition hover:-translate-y-0.5">
+                  Se connecter / S'inscrire
+                </button>
+              </SignInButton>
+            </div>
+          </SignedOut>
+
+          <SignedIn>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {showCustomerSummary ? (
               <CustomerSummary
@@ -387,6 +423,7 @@ export function CartPage() {
               </button>
             </div>
           </form>
+          </SignedIn>
         </div>
       </div>
     </div>

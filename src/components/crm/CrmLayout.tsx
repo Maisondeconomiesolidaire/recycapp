@@ -185,7 +185,9 @@ function Sidebar({
   const location = useLocation();
   const counts = useQuery(api.requests.counts);
   const unreadNotifications = useQuery(api.notifications.unreadCount);
+  const unreadMessages = useQuery(api.messages.staffUnreadCount);
   const onNotificationsPage = location.pathname === "/crm/notifications";
+  const onMessagesPage = location.pathname === "/crm/messages";
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[var(--crm-border)] bg-[var(--crm-surface)] lg:flex">
       <div className="flex h-16 items-center justify-center border-b border-[var(--crm-border)] px-5">
@@ -218,6 +220,13 @@ function Sidebar({
               (unreadNotifications ?? 0) > 0 && (
               <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
                 {unreadNotifications ?? "…"}
+              </span>
+            )}
+            {item.to === "/crm/messages" &&
+              !onMessagesPage &&
+              (unreadMessages ?? 0) > 0 && (
+              <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
+                {unreadMessages}
               </span>
             )}
             {item.to === "/crm/demandes" && (

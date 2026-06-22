@@ -49,7 +49,7 @@ export function Messages() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[320px_1fr] xl:grid-cols-[320px_1fr_320px]">
         {/* Conversation list */}
         <div className={`${selected ? "hidden lg:block" : "block"}`}>
           <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
@@ -167,7 +167,115 @@ export function Messages() {
             </div>
           )}
         </div>
+
+        {/* Recap column */}
+        <div className="hidden xl:block">
+          {selected && context ? (
+            <RequestRecap context={context} />
+          ) : (
+            <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 text-center text-sm text-zinc-500">
+              Le récapitulatif de la demande s'affichera ici.
+            </div>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function RecapRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-0.5 text-sm text-zinc-200">{value}</p>
+    </div>
+  );
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  nouveau: "Demande reçue",
+  validation: "En validation",
+  planifie: "Planifiée",
+};
+const OUTCOME_LABELS: Record<string, string> = {
+  open: "En cours",
+  gagnee: "Gagnée",
+  perdue: "Clôturée",
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function RequestRecap({ context }: { context: any }) {
+  return (
+    <div className="flex h-[70vh] flex-col gap-4 overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+          Récapitulatif
+        </p>
+        <h3 className="mt-1 text-lg font-bold text-zinc-100">
+          {TYPE_LABELS[context.type] ?? context.type}
+          {context.reference ? ` #${context.reference}` : ""}
+        </h3>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-300">
+          {STAGE_LABELS[context.stage] ?? context.stage}
+        </span>
+        <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-xs font-semibold text-zinc-300">
+          {OUTCOME_LABELS[context.outcome] ?? context.outcome}
+        </span>
+        {context.collecteType && context.collecteType !== "indefini" && (
+          <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-xs font-semibold text-zinc-300">
+            {context.collecteType}
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-3 border-t border-[var(--crm-border)] pt-4">
+        <RecapRow label="Client" value={context.customerName || "—"} />
+        {context.customerPhone && <RecapRow label="Téléphone" value={context.customerPhone} />}
+        {context.customerEmail && <RecapRow label="Email" value={context.customerEmail} />}
+        {context.customerAddress && <RecapRow label="Adresse" value={context.customerAddress} />}
+        {context.collectAddress && (
+          <RecapRow label="Adresse de collecte" value={context.collectAddress} />
+        )}
+      </div>
+
+      <div className="space-y-3 border-t border-[var(--crm-border)] pt-4">
+        {context.scheduledDate && (
+          <RecapRow
+            label="Date planifiée"
+            value={new Date(context.scheduledDate).toLocaleDateString("fr-FR", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            })}
+          />
+        )}
+        {context.quoteAmount != null && (
+          <RecapRow label="Devis" value={`${context.quoteAmount.toFixed(2)} €`} />
+        )}
+        {Array.isArray(context.articles) && context.articles.length > 0 && (
+          <RecapRow label="Articles" value={context.articles.join(", ")} />
+        )}
+        <RecapRow
+          label="Demande créée le"
+          value={new Date(context.createdAt).toLocaleDateString("fr-FR", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })}
+        />
+      </div>
+
+      {context.comment && (
+        <div className="border-t border-[var(--crm-border)] pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+            Message initial
+          </p>
+          <p className="mt-1 text-sm italic text-zinc-300">{context.comment}</p>
+        </div>
+      )}
     </div>
   );
 }
