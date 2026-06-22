@@ -87,9 +87,42 @@ function DriverMode() {
     accuracy?: number;
     speedKmh?: number;
   } | null>(null);
-  const sentOnceRef = useRef(false);
 
   const isActive = tournee?.status === "en_cours";
+
+  function payloadFromPosition(pos: GeolocationPosition) {
+    return {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      heading:
+        typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading)
+          ? pos.coords.heading
+          : undefined,
+      accuracy:
+        typeof pos.coords.accuracy === "number" && !Number.isNaN(pos.coords.accuracy)
+          ? pos.coords.accuracy
+          : undefined,
+      speedKmh:
+        typeof pos.coords.speed === "number" && !Number.isNaN(pos.coords.speed)
+          ? Math.max(0, Math.round(pos.coords.speed * 3.6))
+          : undefined,
+    };
+  }
+
+  function publishVehicleLocation(payload: NonNullable<typeof latestPayloadRef.current>) {
+    if (!tourneeId) return;
+    setPosition({ latitude: payload.latitude, longitude: payload.longitude });
+    void updateVehicleLocation({
+      tourneeId: tourneeId as Id<"tournees">,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      heading: payload.heading,
+      accuracy: payload.accuracy,
+      speedKmh: payload.speedKmh,
+    }).catch(() => {
+      /* network hiccup — keep the tracking loop alive */
+    });
+  }
 
   // Live GPS capture while the tour is running.
   useEffect(() => {
@@ -98,38 +131,8 @@ function DriverMode() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsError(null);
-        setPosition({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-        latestPayloadRef.current = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          heading:
-            typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading)
-              ? pos.coords.heading
-              : undefined,
-          accuracy:
-            typeof pos.coords.accuracy === "number" && !Number.isNaN(pos.coords.accuracy)
-              ? pos.coords.accuracy
-              : undefined,
-          speedKmh:
-            typeof pos.coords.speed === "number" && !Number.isNaN(pos.coords.speed)
-              ? Math.max(0, Math.round(pos.coords.speed * 3.6))
-              : undefined,
-        };
-
-        if (!sentOnceRef.current && latestPayloadRef.current) {
-          sentOnceRef.current = true;
-          const { latitude, longitude, heading, accuracy, speedKmh } = latestPayloadRef.current;
-          void updateVehicleLocation({
-            tourneeId: tourneeId as Id<"tournees">,
-            latitude,
-            longitude,
-            heading,
-            accuracy,
-            speedKmh,
-          }).catch(() => {
-            /* network hiccup — the 20s loop will retry */
-          });
-        }
+        latestPayloadRef.current = payloadFromPosition(pos);
+        publishVehicleLocation(latestPayloadRef.current);
       },
       (error) => {
         setGpsError(
@@ -154,29 +157,31 @@ function DriverMode() {
   useEffect(() => {
     if (!isActive || !tourneeId) return;
 
-    const sendLatest = () => {
-      const latest = latestPayloadRef.current;
-      if (!latest) return;
-      void updateVehicleLocation({
-        tourneeId: tourneeId as Id<"tournees">,
-        latitude: latest.latitude,
-        longitude: latest.longitude,
-        heading: latest.heading,
-        accuracy: latest.accuracy,
-        speedKmh: latest.speedKmh,
-      }).catch(() => {
-        /* retry on next tick */
-      });
+    const requestAndSendLatest = () => {
+      if (!("geolocation" in navigator)) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsError(null);
+          latestPayloadRef.current = payloadFromPosition(pos);
+          publishVehicleLocation(latestPayloadRef.current);
+        },
+        () => {
+          if (latestPayloadRef.current) {
+            publishVehicleLocation(latestPayloadRef.current);
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 15_000, timeout: 15_000 },
+      );
     };
 
-    broadcastIntervalRef.current = window.setInterval(sendLatest, 20_000);
+    requestAndSendLatest();
+    broadcastIntervalRef.current = window.setInterval(requestAndSendLatest, 20_000);
     return () => {
       if (broadcastIntervalRef.current !== null) {
         window.clearInterval(broadcastIntervalRef.current);
         broadcastIntervalRef.current = null;
       }
       latestPayloadRef.current = null;
-      sentOnceRef.current = false;
     };
   }, [isActive, tourneeId, updateVehicleLocation]);
 
