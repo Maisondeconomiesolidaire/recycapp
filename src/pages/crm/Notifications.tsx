@@ -112,89 +112,63 @@ function NotificationCard({
           </span>
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--crm-surface-2)] text-sm font-bold text-zinc-100">
-                {initialsFromName(notification.customerName)}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-zinc-100">
-                  {notification.customerName}
-                </p>
-                <p className="text-xs text-zinc-500">
-                  {formatDateTime(notification.createdAt)}
-                </p>
-              </div>
+        <div className="mt-4 min-w-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--crm-surface-2)] text-sm font-bold text-zinc-100">
+              {initialsFromName(notification.customerName)}
             </div>
-
-            <p className="mt-4 text-sm font-medium leading-6 text-zinc-200">
-              {notification.requestPreview}
-            </p>
-            {notification.requestSecondaryPreview && (
-              <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-zinc-500">
-                {notification.requestSecondaryPreview}
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-zinc-100">
+                {notification.customerName}
               </p>
-            )}
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {notification.currentStep && (
-                <InfoChip icon={<FileText className="h-3 w-3" />} label={notification.currentStep} />
-              )}
-              {notification.articleCount && notification.articleCount > 1 && (
-                <InfoChip
-                  icon={<ShoppingBag className="h-3 w-3" />}
-                  label={`${notification.articleCount} articles`}
-                />
-              )}
-              {notification.scheduledDate && (
-                <InfoChip
-                  icon={<CalendarClock className="h-3 w-3" />}
-                  label={`Planifiée le ${formatDateTime(notification.scheduledDate)}`}
-                  tone="success"
-                />
-              )}
-              {notification.paymentMethod === "cb" && (
-                <InfoChip
-                  icon={<CreditCard className="h-3 w-3" />}
-                  label={
-                    notification.paymentCaptured
-                      ? "Carte prélevée"
-                      : notification.paymentValidated
-                        ? "Carte validée"
-                        : "Carte en attente"
-                  }
-                  tone="success"
-                />
-              )}
-              {notification.paymentMethod === "especes" && (
-                <InfoChip label="Paiement en espèces en boutique" tone="amber" />
-              )}
+              <p className="text-xs text-zinc-500">
+                {formatDateTime(notification.createdAt)}
+              </p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-              Aperçu rapide
+          <p className="mt-4 text-sm font-medium leading-6 text-zinc-200">
+            {notification.requestPreview}
+          </p>
+          {notification.requestSecondaryPreview && (
+            <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-zinc-500">
+              {notification.requestSecondaryPreview}
             </p>
-            <div className="mt-3 space-y-2 text-sm">
-              <PreviewRow label="Objet" value={notification.requestPreview} />
-              <PreviewRow label="Statut" value={notification.title} />
-              <PreviewRow
-                label="Paiement"
-                value={
-                  notification.paymentMethod === "cb"
-                    ? notification.paymentCaptured
-                      ? "Carte bancaire prélevée"
-                      : notification.paymentValidated
-                        ? "Carte bancaire validée"
-                        : "Carte bancaire en attente"
-                    : notification.paymentMethod === "especes"
-                      ? "Espèces prévues en boutique"
-                      : undefined
-                }
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {notification.currentStep && (
+              <InfoChip icon={<FileText className="h-3 w-3" />} label={notification.currentStep} />
+            )}
+            {notification.articleCount && notification.articleCount > 1 && (
+              <InfoChip
+                icon={<ShoppingBag className="h-3 w-3" />}
+                label={`${notification.articleCount} articles`}
               />
-            </div>
+            )}
+            {notification.scheduledDate && (
+              <InfoChip
+                icon={<CalendarClock className="h-3 w-3" />}
+                label={`Planifiée le ${formatDateTime(notification.scheduledDate)}`}
+                tone="success"
+              />
+            )}
+            {notification.paymentMethod === "cb" && (
+              <InfoChip
+                icon={<CreditCard className="h-3 w-3" />}
+                label={
+                  notification.paymentCaptured
+                    ? "Carte prélevée"
+                    : notification.paymentValidated
+                      ? "Carte validée"
+                      : "Carte en attente"
+                }
+                tone="success"
+              />
+            )}
+            {notification.paymentMethod === "especes" && (
+              <InfoChip label="Paiement en espèces en boutique" tone="amber" />
+            )}
           </div>
         </div>
       </div>
@@ -211,16 +185,6 @@ function StatCard({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p>
-    </div>
-  );
-}
-
-function PreviewRow({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
-  return (
-    <div className="flex justify-between gap-4 border-b border-[var(--crm-border)] py-1.5 last:border-0">
-      <span className="text-zinc-500">{label}</span>
-      <span className="max-w-[65%] text-right text-zinc-200">{value}</span>
     </div>
   );
 }

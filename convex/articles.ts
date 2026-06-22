@@ -31,6 +31,27 @@ async function withBundleDetails(ctx: QueryCtx, article: Doc<"articles">) {
   return { ...enriched, bundledArticles };
 }
 
+async function activeViewerCounts(ctx: QueryCtx, articleIds: Id<"articles">[]) {
+  const uniqueIds = Array.from(new Set(articleIds.map(String))).map(
+    (id) => id as Id<"articles">,
+  );
+  if (uniqueIds.length === 0) return new Map<string, number>();
+
+  const threshold = Date.now() - 45_000;
+  const views = await ctx.db.query("articleViews").collect();
+  const counts = new Map<string, number>();
+  const activeIds = new Set(uniqueIds.map(String));
+
+  for (const view of views) {
+    if (view.lastSeenAt < threshold) continue;
+    const key = String(view.articleId);
+    if (!activeIds.has(key)) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
 async function similarArticlesFor(ctx: QueryCtx, article: Doc<"articles">) {
   const allArticles = await ctx.db.query("articles").order("desc").take(80);
   const currentKeywords = deriveKeywords(article);
@@ -263,7 +284,16 @@ export const listPublic = query({
         a.status !== "lot" &&
         matchesArticleFilters(a, args),
     );
-    return Promise.all(visible.map((a) => withImageUrls(ctx, a)));
+    const viewerCounts = await activeViewerCounts(
+      ctx,
+      visible.map((article) => article._id),
+    );
+    return Promise.all(
+      visible.map(async (a) => ({
+        ...(await withImageUrls(ctx, a)),
+        viewerCount: viewerCounts.get(String(a._id)) ?? 0,
+      })),
+    );
   },
 });
 
@@ -275,7 +305,62 @@ export const getPublic = query({
     if (!article) return null;
     const enriched = await withBundleDetails(ctx, article);
     const similarArticles = await similarArticlesFor(ctx, article);
-    return { ...enriched, similarArticles };
+    const viewerCounts = await activeViewerCounts(ctx, [article._id]);
+    return {
+      ...enriched,
+      similarArticles,
+      viewerCount: viewerCounts.get(String(article._id)) ?? 0,
+    };
+  },
+});
+
+export const heartbeatView = mutation({
+  args: { articleId: v.id("articles"), sessionId: v.string() },
+  handler: async (ctx, { articleId, sessionId }) => {
+    const article = await ctx.db.get(articleId);
+    if (!article) return null;
+
+    const existing = await ctx.db
+      .query("articleViews")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+      .collect();
+
+    const now = Date.now();
+    const sameArticle = existing.find((view) => view.articleId === articleId);
+
+    await Promise.all(
+      existing
+        .filter((view) => view.articleId !== articleId)
+        .map((view) => ctx.db.delete(view._id)),
+    );
+
+    if (sameArticle) {
+      await ctx.db.patch(sameArticle._id, { lastSeenAt: now });
+      return sameArticle._id;
+    }
+
+    return await ctx.db.insert("articleViews", {
+      articleId,
+      sessionId,
+      lastSeenAt: now,
+    });
+  },
+});
+
+export const leaveView = mutation({
+  args: { articleId: v.id("articles"), sessionId: v.string() },
+  handler: async (ctx, { articleId, sessionId }) => {
+    const existing = await ctx.db
+      .query("articleViews")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+      .collect();
+
+    await Promise.all(
+      existing
+        .filter((view) => view.articleId === articleId)
+        .map((view) => ctx.db.delete(view._id)),
+    );
+    return null;
   },
 });
 

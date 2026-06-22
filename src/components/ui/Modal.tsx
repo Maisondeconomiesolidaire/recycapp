@@ -37,10 +37,10 @@ export function Modal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-50 bg-black/50 animate-fade-in"
+        className="fixed inset-0 z-[260] bg-black/50 animate-fade-in"
         onClick={onClose}
       />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 z-[261] flex items-center justify-center p-4 pointer-events-none">
         <div
           className={cn(
             "pointer-events-auto w-full max-w-lg animate-fade-in overflow-y-auto rounded-[28px] border border-[var(--border)] bg-[var(--background)] shadow-2xl max-h-[90vh]",

@@ -1117,7 +1117,7 @@ function ProcessChecklist({
                       className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-300 transition hover:bg-black/20 hover:text-white"
                     >
                       <MessageSquareText className="h-3.5 w-3.5" />
-                      Voir les commentaires
+                      Notes
                       {noteCount > 0 && (
                         <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-200">
                           {noteCount}

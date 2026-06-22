@@ -253,6 +253,15 @@ export default defineSchema({
     error: v.optional(v.string()),
   }),
 
+  articleViews: defineTable({
+    articleId: v.id("articles"),
+    sessionId: v.string(),
+    lastSeenAt: v.number(),
+  })
+    .index("by_articleId", ["articleId"])
+    .index("by_sessionId", ["sessionId"])
+    .index("by_lastSeenAt", ["lastSeenAt"]),
+
   /** Sessions d'arrivage (GDR Collecte). */
   arrivages: defineTable({
     date: v.number(),

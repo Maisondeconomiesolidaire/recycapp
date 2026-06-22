@@ -45,6 +45,8 @@ export function ArticleDetail() {
   });
   const cart = useCart();
   const reserve = useMutation(api.requests.submitArticleReservation);
+  const heartbeatView = useMutation(api.articles.heartbeatView);
+  const leaveView = useMutation(api.articles.leaveView);
   const [activeImage, setActiveImage] = useState(0);
   const [selectedBundledId, setSelectedBundledId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -68,6 +70,34 @@ export function ArticleDetail() {
     }
     frame();
   }, [submitted]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const storageKey = "recycapp_article_view_session";
+    let sessionId = window.sessionStorage.getItem(storageKey);
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      window.sessionStorage.setItem(storageKey, sessionId);
+    }
+
+    const articleId = id as Id<"articles">;
+    const pulse = () =>
+      heartbeatView({
+        articleId,
+        sessionId,
+      }).catch(() => null);
+
+    void pulse();
+    const interval = window.setInterval(() => {
+      void pulse();
+    }, 15_000);
+
+    return () => {
+      window.clearInterval(interval);
+      void leaveView({ articleId, sessionId }).catch(() => null);
+    };
+  }, [heartbeatView, id, leaveView]);
 
   if (article === undefined) return <FullSpinner label="Chargement…" />;
   if (article === null) {

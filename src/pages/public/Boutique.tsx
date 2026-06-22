@@ -113,6 +113,7 @@ function ArticleCard({
     isLot?: boolean;
     bundledArticleIds?: string[];
     imageUrls: string[];
+    viewerCount?: number;
   };
 }) {
   const bundleCount = article.bundledArticleIds?.length ?? 0;
@@ -185,6 +186,11 @@ function ArticleCard({
           {truncateDescription(article.description)}{" "}
           <span className="font-semibold text-brand-600">Lire plus...</span>
         </p>
+        {article.viewerCount ? (
+          <p className="mt-2 text-[11px] font-medium text-brand-700">
+            {article.viewerCount} {article.viewerCount > 1 ? "personnes consultent" : "personne consulte"} cet article
+          </p>
+        ) : null}
 
         <div className="mt-4 flex items-end justify-between gap-2.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
