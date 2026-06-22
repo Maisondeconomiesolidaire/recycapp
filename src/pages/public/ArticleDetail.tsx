@@ -422,6 +422,7 @@ export function ArticleDetail() {
                       withAddress
                       watch={watch}
                       setValue={setValue}
+                      autofillProfile
                     />
                     <Field label="Message (facultatif)">
                       <Textarea

@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Field, Input } from "../ui/Field";
 import { FormSection } from "./FormShell";
 import { PhoneInput } from "../ui/PhoneInput";
 import { AddressAutocomplete } from "../ui/AddressAutocomplete";
+import { useProfileAutofill } from "./useProfileAutofill";
+import { CustomerSummary } from "./CustomerSummary";
 
 /* Champs de coordonnées client, partagés par tous les formulaires.
    Typage volontairement souple : chaque formulaire a son propre schéma, on
@@ -12,6 +15,7 @@ export function CustomerFields({
   withAddress,
   watch,
   setValue,
+  autofillProfile,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   register: any;
@@ -22,9 +26,30 @@ export function CustomerFields({
   watch?: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setValue?: any;
+  /** Préremplit et masque les coordonnées d'un client connecté (réservation). */
+  autofillProfile?: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  const { isSignedIn, customer, isComplete } = useProfileAutofill({
+    watch,
+    setValue,
+    enabled: Boolean(autofillProfile),
+    withAddress,
+  });
+
   const addressValue =
     withAddress && watch ? String(watch("customer.address") ?? "") : "";
+
+  // Client connecté avec des coordonnées complètes : on n'affiche qu'un résumé.
+  if (autofillProfile && isSignedIn && isComplete && !editing) {
+    return (
+      <CustomerSummary
+        customer={customer}
+        withAddress={withAddress}
+        onEdit={() => setEditing(true)}
+      />
+    );
+  }
 
   return (
     <FormSection title="Vos coordonnées">

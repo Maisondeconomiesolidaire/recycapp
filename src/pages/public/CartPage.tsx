@@ -21,6 +21,8 @@ import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
+import { useProfileAutofill } from "../../components/public/useProfileAutofill";
+import { CustomerSummary } from "../../components/public/CustomerSummary";
 
 const BRAND = "#f1104f";
 
@@ -60,6 +62,14 @@ export function CartPage() {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  const [editingCustomer, setEditingCustomer] = useState(false);
+  const {
+    isSignedIn: customerSignedIn,
+    customer: profileCustomer,
+    isComplete: customerComplete,
+  } = useProfileAutofill({ watch, setValue, enabled: true, withAddress: true });
+  const showCustomerSummary = customerSignedIn && customerComplete && !editingCustomer;
 
   useEffect(() => {
     const raw = window.localStorage.getItem(PUBLIC_CART_DRAFT_KEY);
@@ -278,49 +288,59 @@ export function CartPage() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Name row */}
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Prénom" required error={errors.customer?.firstName?.message}>
-                <Input {...register("customer.firstName")} placeholder="Marie" />
-              </Field>
-              <Field label="Nom" required error={errors.customer?.lastName?.message}>
-                <Input {...register("customer.lastName")} placeholder="Dupont" />
-              </Field>
-            </div>
-
-            {/* Contact row */}
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Email" required error={errors.customer?.email?.message}>
-                <Input type="email" {...register("customer.email")} placeholder="marie@email.fr" />
-              </Field>
-              <Field label="Téléphone" required error={errors.customer?.phone?.message}>
-                <PhoneInput {...register("customer.phone")} placeholder="06 12 34 56 78" />
-              </Field>
-            </div>
-
-            {/* Address */}
-            <Field label="Adresse" required error={errors.customer?.address?.message} htmlFor="cart-address">
-              <AddressAutocomplete
-                id="cart-address"
-                value={addressValue}
-                onValueChange={(v) => setValue("customer.address", v, { shouldValidate: true })}
-                onSelect={(addr) => {
-                  setValue("customer.address", addr.address, { shouldValidate: true });
-                  setValue("customer.postalCode", addr.postalCode, { shouldValidate: true });
-                  setValue("customer.city", addr.city, { shouldValidate: true });
-                }}
-                placeholder="12 rue des Lilas"
+            {showCustomerSummary ? (
+              <CustomerSummary
+                customer={profileCustomer}
+                withAddress
+                onEdit={() => setEditingCustomer(true)}
               />
-            </Field>
+            ) : (
+              <>
+                {/* Name row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Prénom" required error={errors.customer?.firstName?.message}>
+                    <Input {...register("customer.firstName")} placeholder="Marie" />
+                  </Field>
+                  <Field label="Nom" required error={errors.customer?.lastName?.message}>
+                    <Input {...register("customer.lastName")} placeholder="Dupont" />
+                  </Field>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Code postal" required error={errors.customer?.postalCode?.message}>
-                <Input {...register("customer.postalCode")} placeholder="75011" />
-              </Field>
-              <Field label="Ville" required error={errors.customer?.city?.message}>
-                <Input {...register("customer.city")} placeholder="Paris" />
-              </Field>
-            </div>
+                {/* Contact row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Email" required error={errors.customer?.email?.message}>
+                    <Input type="email" {...register("customer.email")} placeholder="marie@email.fr" />
+                  </Field>
+                  <Field label="Téléphone" required error={errors.customer?.phone?.message}>
+                    <PhoneInput {...register("customer.phone")} placeholder="06 12 34 56 78" />
+                  </Field>
+                </div>
+
+                {/* Address */}
+                <Field label="Adresse" required error={errors.customer?.address?.message} htmlFor="cart-address">
+                  <AddressAutocomplete
+                    id="cart-address"
+                    value={addressValue}
+                    onValueChange={(v) => setValue("customer.address", v, { shouldValidate: true })}
+                    onSelect={(addr) => {
+                      setValue("customer.address", addr.address, { shouldValidate: true });
+                      setValue("customer.postalCode", addr.postalCode, { shouldValidate: true });
+                      setValue("customer.city", addr.city, { shouldValidate: true });
+                    }}
+                    placeholder="12 rue des Lilas"
+                  />
+                </Field>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Code postal" required error={errors.customer?.postalCode?.message}>
+                    <Input {...register("customer.postalCode")} placeholder="75011" />
+                  </Field>
+                  <Field label="Ville" required error={errors.customer?.city?.message}>
+                    <Input {...register("customer.city")} placeholder="Paris" />
+                  </Field>
+                </div>
+              </>
+            )}
 
             <Field label="Message (facultatif)">
               <Textarea {...register("comment")} placeholder="Une précision sur votre réservation ?" />
