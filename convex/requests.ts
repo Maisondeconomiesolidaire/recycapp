@@ -412,10 +412,7 @@ export const finalizePublicStripeCheckout = internalMutation({
       processSteps: steps,
       completedSteps: steps.length,
       customer: draft.customer,
-      comment:
-        [draft.comment, "Paiement Stripe test valide depuis la boutique en ligne."]
-          .filter(Boolean)
-          .join("\n\n") || undefined,
+      comment: draft.comment || undefined,
       photos: [],
       article: articles[0],
       articles,

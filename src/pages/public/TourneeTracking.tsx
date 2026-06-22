@@ -90,42 +90,6 @@ type TrackingStop = {
   isRecipient: boolean;
 };
 
-function buildPinsGeoJson({
-  depot,
-  stops,
-}: {
-  depot?: [number, number] | null;
-  stops: TrackingStop[];
-}) {
-  const features: Array<{
-    type: "Feature";
-    geometry: { type: "Point"; coordinates: [number, number] };
-    properties: { kind: string; label: string };
-  }> = [];
-
-  if (depot) {
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: depot },
-      properties: { kind: "depot", label: "" },
-    });
-  }
-
-  for (const stop of stops) {
-    if (stop.latitude == null || stop.longitude == null) continue;
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [stop.longitude, stop.latitude] },
-      properties: {
-        kind: stop.isRecipient ? "recipient" : stop.done ? "done" : "pending",
-        label: String(stop.order),
-      },
-    });
-  }
-
-  return { type: "FeatureCollection" as const, features };
-}
-
 function createTruckMarkerElement() {
   const el = document.createElement("div");
   el.style.cssText = [
@@ -181,6 +145,7 @@ export function TourneeTracking() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const truckMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const userInteractedRef = useRef(false);
   const [, setNowTick] = useState(0);
 
@@ -264,46 +229,6 @@ export function TourneeTracking() {
         paint: { "line-color": "#16a34a", "line-width": 5, "line-opacity": 0.9 },
       });
 
-      map.addSource("pins", {
-        type: "geojson",
-        data: buildPinsGeoJson({ depot: depotCoordinates, stops }),
-      });
-      map.addLayer({
-        id: "pins-circles",
-        type: "circle",
-        source: "pins",
-        paint: {
-          "circle-radius": ["match", ["get", "kind"], "recipient", 15, "depot", 7, 13],
-          "circle-color": [
-            "match",
-            ["get", "kind"],
-            "depot",
-            "#0f766e",
-            "recipient",
-            "#ef4444",
-            "done",
-            "#16a34a",
-            "#71717a",
-          ],
-          "circle-stroke-width": 3,
-          "circle-stroke-color": "#ffffff",
-        },
-      });
-      // Numbered stop labels (Amazon-style ordered stops).
-      map.addLayer({
-        id: "pins-numbers",
-        type: "symbol",
-        source: "pins",
-        filter: ["!=", ["get", "kind"], "depot"],
-        layout: {
-          "text-field": ["get", "label"],
-          "text-size": 12,
-          "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
-          "text-allow-overlap": true,
-        },
-        paint: { "text-color": "#ffffff" },
-      });
-
       // Blue truck marker (Mapbox On-Demand Logistics style).
       const truckMarker = new mapboxgl.Marker({ element: createTruckMarkerElement() });
       if (truckCoordinates) {
@@ -321,6 +246,8 @@ export function TourneeTracking() {
     });
 
     return () => {
+      stopMarkersRef.current.forEach((marker) => marker.remove());
+      stopMarkersRef.current.clear();
       truckMarkerRef.current?.remove();
       truckMarkerRef.current = null;
       map.remove();
@@ -341,9 +268,6 @@ export function TourneeTracking() {
         recipientCoordinates,
       ),
     );
-    (map.getSource("pins") as mapboxgl.GeoJSONSource | undefined)?.setData(
-      buildPinsGeoJson({ depot: depotCoordinates, stops }),
-    );
 
     if (truckMarkerRef.current) {
       if (truckCoordinates) {
@@ -351,6 +275,46 @@ export function TourneeTracking() {
       } else {
         truckMarkerRef.current.remove();
       }
+    }
+
+    const desired = new Map<
+      string,
+      { lngLat: [number, number]; element: HTMLDivElement }
+    >();
+    if (depotCoordinates) {
+      desired.set("depot", {
+        lngLat: depotCoordinates,
+        element: createMapPinElement({ kind: "depot", label: "" }),
+      });
+    }
+    for (const stop of stops) {
+      if (stop.latitude == null || stop.longitude == null) continue;
+      desired.set(`stop-${stop.order}`, {
+        lngLat: [stop.longitude, stop.latitude],
+        element: createMapPinElement({
+          kind: stop.isRecipient ? "recipient" : stop.done ? "done" : "pending",
+          label: String(stop.order),
+        }),
+      });
+    }
+
+    for (const [key, marker] of stopMarkersRef.current.entries()) {
+      if (desired.has(key)) continue;
+      marker.remove();
+      stopMarkersRef.current.delete(key);
+    }
+    for (const [key, config] of desired.entries()) {
+      const existing = stopMarkersRef.current.get(key);
+      if (existing) {
+        existing.setLngLat(config.lngLat);
+        continue;
+      }
+      stopMarkersRef.current.set(
+        key,
+        new mapboxgl.Marker({ element: config.element, anchor: "center" })
+          .setLngLat(config.lngLat)
+          .addTo(map),
+      );
     }
 
     if (!userInteractedRef.current) {
@@ -530,4 +494,38 @@ export function TourneeTracking() {
       </div>
     </div>
   );
+}
+
+function createMapPinElement({
+  kind,
+  label,
+}: {
+  kind: "depot" | "recipient" | "done" | "pending";
+  label: string;
+}) {
+  const el = document.createElement("div");
+  const size = kind === "depot" ? 16 : 30;
+  const background =
+    kind === "depot"
+      ? "#0f766e"
+      : kind === "recipient"
+        ? "#ef4444"
+        : kind === "done"
+          ? "#16a34a"
+          : "#71717a";
+  el.style.cssText = [
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    `width:${size}px`,
+    `height:${size}px`,
+    "border-radius:9999px",
+    `background:${background}`,
+    "border:3px solid #ffffff",
+    "box-shadow:0 8px 18px rgba(24,24,27,0.22)",
+    "color:#ffffff",
+    kind === "depot" ? "" : "font:700 12px/1 Inter, sans-serif",
+  ].join(";");
+  el.textContent = label;
+  return el;
 }

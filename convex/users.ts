@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { normalizeCustomer, requireUser, titleCaseName } from "./lib";
+import { customerFullName, normalizeCustomer, requireUser, titleCaseName } from "./lib";
 import { STEP } from "./processes";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -201,10 +201,42 @@ async function findTrackingTokenForRequest(
   ctx: QueryCtx,
   requestId: Id<"requests">,
 ) {
-  const link = await ctx.db
+  let link = await ctx.db
     .query("tourneeTrackingLinks")
     .withIndex("by_requestId", (q) => q.eq("requestId", requestId))
     .first();
+  if (!link) {
+    const request = await ctx.db.get(requestId);
+    if (!request || request.type !== "collecte") return null;
+
+    const addresses = [
+      request.collecte?.collectAddress?.address,
+      [
+        request.collecte?.collectAddress?.address,
+        request.collecte?.collectAddress?.postalCode,
+        request.collecte?.collectAddress?.city,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      request.customer.address,
+      [request.customer.address, request.customer.postalCode, request.customer.city]
+        .filter(Boolean)
+        .join(" "),
+    ]
+      .map((value) => value?.trim().toLowerCase())
+      .filter((value): value is string => Boolean(value));
+
+    const contactName = customerFullName(request.customer).trim().toLowerCase();
+    const links = await ctx.db.query("tourneeTrackingLinks").collect();
+    link =
+      links.find((candidate) => candidate.requestId === requestId) ??
+      links.find((candidate) => {
+        const address = candidate.address.trim().toLowerCase();
+        const candidateName = candidate.contactName?.trim().toLowerCase();
+        return addresses.includes(address) || (candidateName && candidateName === contactName);
+      }) ??
+      null;
+  }
   if (!link) return null;
   const tournee = await ctx.db.get(link.tourneeId);
   return {

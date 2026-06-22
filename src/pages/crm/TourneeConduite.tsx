@@ -79,10 +79,19 @@ function DriverMode() {
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [savingOrder, setSavingOrder] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const broadcastIntervalRef = useRef<number | null>(null);
+  const latestPayloadRef = useRef<{
+    latitude: number;
+    longitude: number;
+    heading?: number;
+    accuracy?: number;
+    speedKmh?: number;
+  } | null>(null);
+  const sentOnceRef = useRef(false);
 
   const isActive = tournee?.status === "en_cours";
 
-  // Live GPS broadcast while the tour is running (powers the public tracking page).
+  // Live GPS capture while the tour is running.
   useEffect(() => {
     if (!isActive || !tourneeId || !("geolocation" in navigator)) return;
 
@@ -90,8 +99,7 @@ function DriverMode() {
       (pos) => {
         setGpsError(null);
         setPosition({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-        void updateVehicleLocation({
-          tourneeId: tourneeId as Id<"tournees">,
+        latestPayloadRef.current = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
           heading:
@@ -106,9 +114,22 @@ function DriverMode() {
             typeof pos.coords.speed === "number" && !Number.isNaN(pos.coords.speed)
               ? Math.max(0, Math.round(pos.coords.speed * 3.6))
               : undefined,
-        }).catch(() => {
-          /* network hiccup — keep watching */
-        });
+        };
+
+        if (!sentOnceRef.current && latestPayloadRef.current) {
+          sentOnceRef.current = true;
+          const { latitude, longitude, heading, accuracy, speedKmh } = latestPayloadRef.current;
+          void updateVehicleLocation({
+            tourneeId: tourneeId as Id<"tournees">,
+            latitude,
+            longitude,
+            heading,
+            accuracy,
+            speedKmh,
+          }).catch(() => {
+            /* network hiccup — the 20s loop will retry */
+          });
+        }
       },
       (error) => {
         setGpsError(
@@ -126,6 +147,36 @@ function DriverMode() {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
       }
+    };
+  }, [isActive, tourneeId, updateVehicleLocation]);
+
+  // Guaranteed 20-second location broadcast for the public tracking map.
+  useEffect(() => {
+    if (!isActive || !tourneeId) return;
+
+    const sendLatest = () => {
+      const latest = latestPayloadRef.current;
+      if (!latest) return;
+      void updateVehicleLocation({
+        tourneeId: tourneeId as Id<"tournees">,
+        latitude: latest.latitude,
+        longitude: latest.longitude,
+        heading: latest.heading,
+        accuracy: latest.accuracy,
+        speedKmh: latest.speedKmh,
+      }).catch(() => {
+        /* retry on next tick */
+      });
+    };
+
+    broadcastIntervalRef.current = window.setInterval(sendLatest, 20_000);
+    return () => {
+      if (broadcastIntervalRef.current !== null) {
+        window.clearInterval(broadcastIntervalRef.current);
+        broadcastIntervalRef.current = null;
+      }
+      latestPayloadRef.current = null;
+      sentOnceRef.current = false;
     };
   }, [isActive, tourneeId, updateVehicleLocation]);
 
