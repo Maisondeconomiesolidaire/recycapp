@@ -520,6 +520,14 @@ export const getPublicTrackingByToken = query({
       .withIndex("by_tourneeId", (q) => q.eq("tourneeId", link.tourneeId))
       .unique();
 
+    const stops = tournee.stops ?? [];
+    const totalStops = stops.length;
+    const stopsAhead = stops.filter(
+      (s) => s.order < link.stopOrder && s.status !== "effectue",
+    ).length;
+    const thisStopStatus =
+      stops.find((s) => s.order === link.stopOrder)?.status ?? "prevu";
+
     return {
       token,
       tournee: {
@@ -531,6 +539,8 @@ export const getPublicTrackingByToken = query({
         depotLatitude: tournee.depotLatitude ?? null,
         depotLongitude: tournee.depotLongitude ?? null,
         routeCoordinates: tournee.routeCoordinates ?? [],
+        estimatedDistanceMeters: tournee.estimatedDistanceMeters ?? null,
+        estimatedDurationSeconds: tournee.estimatedDurationSeconds ?? null,
       },
       recipient: {
         stopOrder: link.stopOrder,
@@ -538,6 +548,9 @@ export const getPublicTrackingByToken = query({
         address: link.address,
         latitude: link.latitude ?? null,
         longitude: link.longitude ?? null,
+        totalStops,
+        stopsAhead,
+        stopStatus: thisStopStatus,
       },
       vehicleLocation: vehicleLocation
         ? {

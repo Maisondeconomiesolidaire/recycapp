@@ -387,12 +387,17 @@ function PlanificationTab() {
                 {isOpen && (
                   <div className="border-t border-[var(--crm-border)]">
                     {/* Actions */}
-                    <div className="flex items-center gap-2 px-5 py-3 bg-[var(--crm-surface-2)]">
+                    <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-[var(--crm-surface-2)]">
                       <button
                         type="button"
                         onClick={async () => {
                           setOptimizingId(t._id);
                           setOptimizeErrorById((current) => {
+                            const next = { ...current };
+                            delete next[t._id];
+                            return next;
+                          });
+                          setOptimizeSuccessById((current) => {
                             const next = { ...current };
                             delete next[t._id];
                             return next;
@@ -433,7 +438,10 @@ function PlanificationTab() {
                             Optimisation…
                           </span>
                         ) : (
-                          "Optimiser"
+                          <span className="inline-flex items-center gap-1.5">
+                            <Route className="h-3.5 w-3.5" />
+                            Optimiser{t.stops.length < 3 ? ` (${t.stops.length}/3)` : ""}
+                          </span>
                         )}
                       </button>
                       {t.status === "planifiee" && (
@@ -474,14 +482,24 @@ function PlanificationTab() {
                         >
                           <span className="inline-flex items-center gap-1.5">
                             <Radio className="h-3.5 w-3.5" />
-                            {trackingActiveById[t._id] ? "Suivi en direct actif" : "Activer le suivi en direct"}
+                            {trackingActiveById[t._id] ? (
+                              <>
+                                <span className="relative flex h-2 w-2">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                                </span>
+                                Suivi actif
+                              </>
+                            ) : (
+                              "Suivi en direct"
+                            )}
                           </span>
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => window.print()}
-                        className="ml-auto flex items-center gap-1.5 rounded-lg border border-[var(--crm-border)] px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition"
+                        className="flex items-center gap-1.5 rounded-lg border border-[var(--crm-border)] px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition sm:ml-auto"
                       >
                         <Printer className="h-3.5 w-3.5" />
                         Feuille de route
@@ -649,66 +667,110 @@ function PlanificationTab() {
                     {t.stops.length === 0 ? (
                       <p className="px-5 py-4 text-sm text-zinc-500">Aucun passage enregistré.</p>
                     ) : (
-                      t.stops
-                        .slice()
-                        .sort((a, b) => a.order - b.order)
-                        .map((stop) => (
-                          <div
-                            key={stop.order}
-                            className="flex items-start gap-4 border-t border-[var(--crm-border)] px-5 py-4"
-                          >
-                            <div
-                              className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                                stop.status === "effectue"
-                                  ? "bg-emerald-500 text-white"
-                                  : stop.status === "annule"
-                                  ? "bg-zinc-700 text-zinc-500"
-                                  : "bg-zinc-800 text-zinc-300"
-                              }`}
-                            >
-                              {stop.status === "effectue" ? (
-                                <Check className="h-3.5 w-3.5" />
-                              ) : (
-                                stop.order
-                              )}
+                      <>
+                        {t.stops.some((s) => s.status === "prevu") &&
+                          (t.status === "planifiee" || t.status === "en_cours") && (
+                            <div className="px-5 py-2.5 bg-[var(--crm-surface-2)] border-t border-[var(--crm-border)]">
+                              <p className="text-xs text-zinc-500">
+                                {t.stops.filter((s) => s.status === "effectue").length} /{" "}
+                                {t.stops.length} passage
+                                {t.stops.length > 1 ? "s" : ""} complété
+                                {t.stops.filter((s) => s.status === "effectue").length > 1
+                                  ? "s"
+                                  : ""}
+                              </p>
                             </div>
-                            <div className="min-w-0 flex-1 space-y-0.5">
-                              <div className="flex items-center gap-1.5">
-                                <MapPin className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-                                <p className="text-sm font-medium text-zinc-200">{stop.address}</p>
+                          )}
+                        {t.stops
+                          .slice()
+                          .sort((a, b) => a.order - b.order)
+                          .map((stop) => (
+                            <div
+                              key={stop.order}
+                              className="flex items-start gap-3 border-t border-[var(--crm-border)] px-4 py-3 sm:gap-4 sm:px-5 sm:py-4"
+                            >
+                              <div
+                                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                                  stop.status === "effectue"
+                                    ? "bg-emerald-500 text-white"
+                                    : stop.status === "annule"
+                                      ? "bg-zinc-700 text-zinc-500 line-through"
+                                      : "bg-zinc-800 text-zinc-300"
+                                }`}
+                              >
+                                {stop.status === "effectue" ? (
+                                  <Check className="h-3.5 w-3.5" />
+                                ) : (
+                                  stop.order
+                                )}
                               </div>
-                              {stop.contactName && (
+                              <div className="min-w-0 flex-1 space-y-0.5">
                                 <div className="flex items-center gap-1.5">
-                                  <User className="h-3.5 w-3.5 text-zinc-600" />
-                                  <p className="text-xs text-zinc-400">
-                                    {stop.contactName}
-                                    {stop.contactPhone && (
-                                      <span className="text-zinc-500"> · {stop.contactPhone}</span>
-                                    )}
+                                  <MapPin className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                                  <p
+                                    className={`text-sm font-medium ${stop.status === "annule" ? "text-zinc-600 line-through" : "text-zinc-200"}`}
+                                  >
+                                    {stop.address}
                                   </p>
                                 </div>
-                              )}
-                              {stop.notes && (
-                                <p className="text-xs text-zinc-500 italic">{stop.notes}</p>
+                                {stop.contactName && (
+                                  <div className="flex items-center gap-1.5">
+                                    <User className="h-3.5 w-3.5 text-zinc-600" />
+                                    <p className="text-xs text-zinc-400">
+                                      {stop.contactName}
+                                      {stop.contactPhone && (
+                                        <span className="text-zinc-500">
+                                          {" "}
+                                          · {stop.contactPhone}
+                                        </span>
+                                      )}
+                                    </p>
+                                  </div>
+                                )}
+                                {stop.notes && (
+                                  <p className="text-xs text-zinc-500 italic">{stop.notes}</p>
+                                )}
+                              </div>
+                              {(t.status === "planifiee" || t.status === "en_cours") && (
+                                <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row sm:items-center">
+                                  {stop.status === "prevu" && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        updateStop({
+                                          tourneeId: t._id as Id<"tournees">,
+                                          stopOrder: stop.order,
+                                          status: "effectue",
+                                        })
+                                      }
+                                      className="rounded-xl bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/25"
+                                    >
+                                      <span className="inline-flex items-center gap-1">
+                                        <Check className="h-3 w-3" />
+                                        Complété
+                                      </span>
+                                    </button>
+                                  )}
+                                  {stop.status === "effectue" && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        updateStop({
+                                          tourneeId: t._id as Id<"tournees">,
+                                          stopOrder: stop.order,
+                                          status: "prevu",
+                                        })
+                                      }
+                                      className="rounded-xl bg-zinc-700/50 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-zinc-700"
+                                    >
+                                      Annuler
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
-                            {t.status === "en_cours" && stop.status === "prevu" && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateStop({
-                                    tourneeId: t._id as Id<"tournees">,
-                                    stopOrder: stop.order,
-                                    status: "effectue",
-                                  })
-                                }
-                                className="shrink-0 rounded-xl bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:bg-emerald-500/25 transition"
-                              >
-                                Effectué
-                              </button>
-                            )}
-                          </div>
-                        ))
+                          ))}
+                      </>
                     )}
                   </div>
                 )}
