@@ -11,6 +11,7 @@ import { Field, Input, Textarea, Checkbox, Select } from "../../components/ui/Fi
 import { Button } from "../../components/ui/Button";
 import { PhotoUpload } from "../../components/ui/PhotoUpload";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
+import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import { cn } from "../../lib/cn";
 import { COLLECTE_ITEM_OPTIONS, HOUSING_TYPES } from "../../lib/constants";
 
@@ -82,6 +83,10 @@ export function CollecteForm() {
     resolver: zodResolver(schema),
     defaultValues: { grosObjets: [], petitsObjets: [] },
   });
+
+  // Préremplit les coordonnées (dont l'adresse de facturation) depuis le profil
+  // du client connecté — sans écraser une saisie en cours.
+  useProfileAutofill({ watch, setValue, enabled: true, withAddress: true });
 
   function copyBillingToCollect() {
     const next = !sameAddress;

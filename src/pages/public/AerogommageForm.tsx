@@ -336,7 +336,14 @@ export function AerogommageForm() {
           )}
         </div>
 
-        <CustomerFields register={register} errors={errors} withAddress />
+        <CustomerFields
+          register={register}
+          errors={errors}
+          withAddress
+          watch={watch}
+          setValue={setValue}
+          autofillProfile
+        />
 
         <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Envoi en cours…" : "Soumettre ma demande"}

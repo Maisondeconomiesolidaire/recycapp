@@ -40,6 +40,8 @@ export function VeloForm() {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
@@ -133,7 +135,14 @@ export function VeloForm() {
           </div>
         </FormSection>
 
-        <CustomerFields register={register} errors={errors} withAddress />
+        <CustomerFields
+          register={register}
+          errors={errors}
+          withAddress
+          watch={watch}
+          setValue={setValue}
+          autofillProfile
+        />
 
         <Button
           type="submit"
