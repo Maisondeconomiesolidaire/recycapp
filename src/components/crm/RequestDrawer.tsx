@@ -1606,6 +1606,11 @@ function ArticleRequestPreview({
               GDR {article.gdrReference}
             </span>
           )}
+          {article.weightKg !== undefined && (
+            <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-[11px] text-zinc-400">
+              {article.weightKg} kg
+            </span>
+          )}
         </div>
         <div className="mt-2 flex items-center gap-2">
           {hasDiscount ? (

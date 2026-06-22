@@ -25,6 +25,7 @@ import type { DataModel } from "./dataModel.js";
  * Typesafe environment variables declared in `convex.config.ts`.
  */
 type Env = {
+  readonly MAPBOX_ACCESS_TOKEN: string | undefined;
   readonly STRIPE_SECRET_KEY: string | undefined;
 };
 

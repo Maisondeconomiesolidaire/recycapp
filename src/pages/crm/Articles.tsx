@@ -349,6 +349,7 @@ export function Articles() {
                       <th className="px-4 py-3 text-left font-medium">Article</th>
                       <th className="px-4 py-3 text-left font-medium">Références</th>
                       <th className="px-4 py-3 text-left font-medium">Catégorie</th>
+                      <th className="px-4 py-3 text-left font-medium">Poids</th>
                       <th className="px-4 py-3 text-left font-medium">Prix</th>
                       <th className="px-4 py-3 text-left font-medium">Statut</th>
                       <th className="px-4 py-3 text-left font-medium">Actions</th>
@@ -389,6 +390,9 @@ export function Articles() {
                             <p>{a.category}</p>
                             <p className="text-xs text-zinc-500">{a.subcategory ?? "—"}</p>
                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-400">
+                          {a.weightKg !== undefined ? `${a.weightKg} kg` : "—"}
                         </td>
                         <td className="px-4 py-3">
                           <div className="space-y-0.5">

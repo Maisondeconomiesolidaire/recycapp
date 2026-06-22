@@ -1,6 +1,8 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { action, env, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireStaff } from "./lib";
+import type { Id } from "./_generated/dataModel";
 
 // ─── Sorties hors magasin ─────────────────────────────────────────────────────
 
@@ -133,6 +135,157 @@ export const createTournee = mutation({
       status: "planifiee",
       createdAt: Date.now(),
     });
+  },
+});
+
+export const getTourneeForOptimization = internalQuery({
+  args: { tourneeId: v.id("tournees") },
+  handler: async (ctx, { tourneeId }) => {
+    return await ctx.db.get(tourneeId);
+  },
+});
+
+export const applyTourneeOptimization = internalMutation({
+  args: {
+    tourneeId: v.id("tournees"),
+    orderedStops: v.array(v.object({
+      requestId: v.optional(v.id("requests")),
+      address: v.string(),
+      contactName: v.optional(v.string()),
+      contactPhone: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      status: v.union(v.literal("prevu"), v.literal("effectue"), v.literal("annule")),
+      order: v.number(),
+    })),
+  },
+  handler: async (ctx, { tourneeId, orderedStops }) => {
+    await ctx.db.patch(tourneeId, { stops: orderedStops });
+  },
+});
+
+async function geocodeStop(address: string, accessToken: string) {
+  const url = new URL("https://api.mapbox.com/search/geocode/v6/forward");
+  url.searchParams.set("q", address);
+  url.searchParams.set("access_token", accessToken);
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("language", "fr");
+  url.searchParams.set("country", "FR");
+  url.searchParams.set("autocomplete", "false");
+
+  const response = await fetch(url.toString());
+  const payload = (await response.json()) as {
+    features?: Array<{ geometry?: { coordinates?: [number, number] } }>;
+    message?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(payload.message || "Géocodage Mapbox impossible.");
+  }
+
+  const coordinates = payload.features?.[0]?.geometry?.coordinates;
+  if (!coordinates || coordinates.length < 2) {
+    throw new Error(`Adresse introuvable ou imprécise : ${address}`);
+  }
+
+  return { longitude: coordinates[0], latitude: coordinates[1] };
+}
+
+type OptimizableStop = {
+  stop: {
+    requestId?: Id<"requests">;
+    address: string;
+    contactName?: string;
+    contactPhone?: string;
+    notes?: string;
+    status: "prevu" | "effectue" | "annule";
+    order: number;
+  };
+  longitude: number;
+  latitude: number;
+};
+
+export const optimizeTournee = action({
+  args: { tourneeId: v.id("tournees") },
+  handler: async (ctx, { tourneeId }) => {
+    await requireStaff(ctx);
+    const accessToken = env.MAPBOX_ACCESS_TOKEN;
+    if (!accessToken) {
+      throw new Error("MAPBOX_ACCESS_TOKEN n'est pas configurée côté Convex.");
+    }
+
+    const tournee = await ctx.runQuery(internal.sorties.getTourneeForOptimization, {
+      tourneeId,
+    });
+
+    if (!tournee) {
+      throw new Error("Tournée introuvable.");
+    }
+    if (tournee.stops.length < 3) {
+      throw new Error("Il faut au moins 3 arrêts pour optimiser une tournée.");
+    }
+    if (tournee.stops.length > 12) {
+      throw new Error("Mapbox Optimization v1 accepte au maximum 12 arrêts.");
+    }
+
+    const geocodedStops: OptimizableStop[] = [];
+    for (const stop of tournee.stops) {
+      const address = stop.address.trim();
+      if (!address) {
+        throw new Error("Chaque arrêt doit avoir une adresse avant optimisation.");
+      }
+      const coordinates = await geocodeStop(address, accessToken);
+      geocodedStops.push({ stop, ...coordinates });
+    }
+
+    const coordinatesPath = geocodedStops
+      .map(({ longitude, latitude }) => `${longitude},${latitude}`)
+      .join(";");
+
+    const optimizationUrl = new URL(
+      `https://api.mapbox.com/optimized-trips/v1/mapbox/driving/${coordinatesPath}`,
+    );
+    optimizationUrl.searchParams.set("access_token", accessToken);
+    optimizationUrl.searchParams.set("source", "first");
+    optimizationUrl.searchParams.set("destination", "last");
+    optimizationUrl.searchParams.set("roundtrip", "false");
+    optimizationUrl.searchParams.set("overview", "full");
+    optimizationUrl.searchParams.set("geometries", "geojson");
+
+    const response = await fetch(optimizationUrl.toString());
+    const payload = (await response.json()) as {
+      code?: string;
+      message?: string;
+      waypoints?: Array<{ waypoint_index?: number }>;
+      trips?: Array<{ distance?: number; duration?: number }>;
+    };
+
+    if (!response.ok || payload.code !== "Ok" || !payload.waypoints?.length) {
+      throw new Error(
+        payload.message || "Optimisation Mapbox impossible pour cette tournée.",
+      );
+    }
+
+    const orderedStops = payload.waypoints
+      .map((waypoint, inputIndex) => ({
+        stop: geocodedStops[inputIndex].stop,
+        waypointIndex: waypoint.waypoint_index ?? Number.MAX_SAFE_INTEGER,
+      }))
+      .sort((a, b) => a.waypointIndex - b.waypointIndex)
+      .map(({ stop }, index) => ({
+        ...stop,
+        order: index + 1,
+      }));
+
+    await ctx.runMutation(internal.sorties.applyTourneeOptimization, {
+      tourneeId,
+      orderedStops,
+    });
+
+    return {
+      stopCount: orderedStops.length,
+      distanceMeters: Math.round(payload.trips?.[0]?.distance ?? 0),
+      durationSeconds: Math.round(payload.trips?.[0]?.duration ?? 0),
+    };
   },
 });
 

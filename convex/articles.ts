@@ -31,25 +31,11 @@ async function withBundleDetails(ctx: QueryCtx, article: Doc<"articles">) {
   return { ...enriched, bundledArticles };
 }
 
-async function activeViewerCounts(ctx: QueryCtx, articleIds: Id<"articles">[]) {
-  const uniqueIds = Array.from(new Set(articleIds.map(String))).map(
-    (id) => id as Id<"articles">,
-  );
-  if (uniqueIds.length === 0) return new Map<string, number>();
-
-  const threshold = Date.now() - 45_000;
-  const views = await ctx.db.query("articleViews").collect();
-  const counts = new Map<string, number>();
-  const activeIds = new Set(uniqueIds.map(String));
-
-  for (const view of views) {
-    if (view.lastSeenAt < threshold) continue;
-    const key = String(view.articleId);
-    if (!activeIds.has(key)) continue;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+function normalizeWeightKg(weightKg?: number) {
+  if (weightKg === undefined || Number.isNaN(weightKg) || weightKg < 0) {
+    throw new Error("Le poids doit être un nombre positif ou nul.");
   }
-
-  return counts;
+  return Math.round(weightKg * 1000) / 1000;
 }
 
 async function similarArticlesFor(ctx: QueryCtx, article: Doc<"articles">) {
@@ -284,16 +270,7 @@ export const listPublic = query({
         a.status !== "lot" &&
         matchesArticleFilters(a, args),
     );
-    const viewerCounts = await activeViewerCounts(
-      ctx,
-      visible.map((article) => article._id),
-    );
-    return Promise.all(
-      visible.map(async (a) => ({
-        ...(await withImageUrls(ctx, a)),
-        viewerCount: viewerCounts.get(String(a._id)) ?? 0,
-      })),
-    );
+    return Promise.all(visible.map((a) => withImageUrls(ctx, a)));
   },
 });
 
@@ -305,12 +282,22 @@ export const getPublic = query({
     if (!article) return null;
     const enriched = await withBundleDetails(ctx, article);
     const similarArticles = await similarArticlesFor(ctx, article);
-    const viewerCounts = await activeViewerCounts(ctx, [article._id]);
     return {
       ...enriched,
       similarArticles,
-      viewerCount: viewerCounts.get(String(article._id)) ?? 0,
     };
+  },
+});
+
+export const viewerCount = query({
+  args: { articleId: v.id("articles") },
+  handler: async (ctx, { articleId }) => {
+    const threshold = Date.now() - 45_000;
+    const views = await ctx.db
+      .query("articleViews")
+      .withIndex("by_articleId", (q) => q.eq("articleId", articleId))
+      .collect();
+    return views.filter((view) => view.lastSeenAt >= threshold).length;
   },
 });
 
@@ -437,6 +424,7 @@ export const create = mutation({
     title: v.string(),
     description: v.string(),
     price: v.number(),
+    weightKg: v.number(),
     originalPrice: v.optional(v.number()),
     gdrReference: v.optional(v.string()),
     category: v.string(),
@@ -461,6 +449,7 @@ export const create = mutation({
       args.price < 10 || desiredStatus === "attente" || desiredStatus === "lot";
     const articleId = await ctx.db.insert("articles", {
       ...articleArgs,
+      weightKg: normalizeWeightKg(args.weightKg),
       internalReference,
       gdrReference: args.gdrReference || undefined,
       keywords: args.keywords?.length ? uniqueKeywords(args.keywords) : undefined,
@@ -512,6 +501,10 @@ export const publishLot = mutation({
     );
     const sameCategory = articles.every((article) => article.category === first.category);
     const total = articles.reduce((sum, article) => sum + article.price, 0);
+    const totalWeight = articles.reduce(
+      (sum, article) => sum + (article.weightKg ?? 0),
+      0,
+    );
     const bundleKey = normalizeText(
       `manual::${deriveThemeKey(first) || first.category}::${Date.now()}`,
     );
@@ -523,6 +516,7 @@ export const publishLot = mutation({
       title: args.title.trim() || `Lot ${first.subcategory || first.category}`,
       description: args.description.trim(),
       price: Math.max(10, Math.min(args.price, discountedBundlePrice(total))),
+      weightKg: normalizeWeightKg(totalWeight),
       internalReference,
       category: sameCategory ? first.category : "Loisirs",
       subcategory: sameSubcategory ? first.subcategory : undefined,
@@ -576,6 +570,7 @@ export const update = mutation({
     title: v.string(),
     description: v.string(),
     price: v.number(),
+    weightKg: v.number(),
     originalPrice: v.optional(v.number()),
     internalReference: v.string(),
     gdrReference: v.optional(v.string()),
@@ -598,6 +593,7 @@ export const update = mutation({
     assertArticleReferences(rest);
     await ctx.db.patch(id, {
       ...rest,
+      weightKg: normalizeWeightKg(rest.weightKg),
       gdrReference: rest.gdrReference || undefined,
       keywords: rest.keywords?.length ? uniqueKeywords(rest.keywords) : undefined,
       themeKey: rest.themeKey

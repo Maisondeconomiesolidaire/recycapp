@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ArrowRight, Check, PackageOpen, ShoppingCart, X } from "lucide-react";
+import { ArrowRight, Check, Flame, PackageOpen, ShoppingCart, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
@@ -113,12 +113,15 @@ function ArticleCard({
     isLot?: boolean;
     bundledArticleIds?: string[];
     imageUrls: string[];
-    viewerCount?: number;
+    weightKg?: number;
   };
 }) {
   const bundleCount = article.bundledArticleIds?.length ?? 0;
   const cart = useCart();
   const navigate = useNavigate();
+  const viewerCount = useQuery(api.articles.viewerCount, {
+    articleId: article._id as never,
+  });
   const inCart = cart.has(article._id);
   const reserved = article.status === "reserve";
   const [showPopup, setShowPopup] = useState(false);
@@ -163,6 +166,12 @@ function ArticleCard({
       </div>
 
       <div className={`bg-white p-4 ${reserved ? "opacity-55" : ""}`}>
+        {viewerCount ? (
+          <p className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#d9480f]">
+            <Flame className="h-4 w-4" />
+            {viewerCount} {viewerCount > 1 ? "personnes consultent" : "personne consulte"} cet article
+          </p>
+        ) : null}
         <div className="flex items-start justify-between gap-2.5">
           <h3 className="line-clamp-2 text-base font-semibold leading-5 text-zinc-950">
             {article.title}
@@ -186,9 +195,9 @@ function ArticleCard({
           {truncateDescription(article.description)}{" "}
           <span className="font-semibold text-brand-600">Lire plus...</span>
         </p>
-        {article.viewerCount ? (
-          <p className="mt-2 text-[11px] font-medium text-brand-700">
-            {article.viewerCount} {article.viewerCount > 1 ? "personnes consultent" : "personne consulte"} cet article
+        {article.weightKg !== undefined ? (
+          <p className="mt-1 text-[11px] text-zinc-500">
+            Poids : {article.weightKg} kg
           </p>
         ) : null}
 

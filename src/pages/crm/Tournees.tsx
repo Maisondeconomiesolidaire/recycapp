@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMemo, useState } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Truck, Plus, Check, MapPin, User,
   ChevronDown, ChevronRight, Printer, Loader2,
@@ -66,15 +66,22 @@ export function Tournees() {
 
 function PlanificationTab() {
   const [showForm, setShowForm] = useState(false);
-  const now = Date.now();
-  const start = now - 1 * 86400000;   // yesterday (catch today's already-started)
-  const end = now + 60 * 86400000;    // 2 months ahead
+  const { start, end } = useMemo(() => {
+    const now = Date.now();
+    return {
+      start: now - 1 * 86400000,
+      end: now + 60 * 86400000,
+    };
+  }, []);
 
   const tournees = useQuery(api.sorties.listTournees, { startDate: start, endDate: end });
   const teamMembers = useQuery(api.team.list, {});
   const updateStatus = useMutation(api.sorties.updateTourneeStatus);
   const updateStop = useMutation(api.sorties.updateTourneeStop);
+  const optimizeTournee = useAction(api.sorties.optimizeTournee);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [optimizingId, setOptimizingId] = useState<string | null>(null);
+  const [optimizeErrorById, setOptimizeErrorById] = useState<Record<string, string>>({});
 
   const active = tournees?.filter((t) => t.status !== "terminee" && t.status !== "annulee") ?? [];
 
@@ -165,6 +172,50 @@ function PlanificationTab() {
                   <div className="border-t border-[var(--crm-border)]">
                     {/* Actions */}
                     <div className="flex items-center gap-2 px-5 py-3 bg-[var(--crm-surface-2)]">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setOptimizingId(t._id);
+                          setOptimizeErrorById((current) => {
+                            const next = { ...current };
+                            delete next[t._id];
+                            return next;
+                          });
+                          try {
+                            await optimizeTournee({
+                              tourneeId: t._id as Id<"tournees">,
+                            });
+                          } catch (error) {
+                            setOptimizeErrorById((current) => ({
+                              ...current,
+                              [t._id]:
+                                error instanceof Error
+                                  ? error.message
+                                  : "Optimisation impossible.",
+                            }));
+                          } finally {
+                            setOptimizingId((current) =>
+                              current === t._id ? null : current,
+                            );
+                          }
+                        }}
+                        disabled={optimizingId === t._id || t.stops.length < 3}
+                        className="rounded-xl bg-sky-500/20 px-3 py-1.5 text-xs font-bold text-sky-300 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                        title={
+                          t.stops.length < 3
+                            ? "Au moins 3 arrêts sont nécessaires pour optimiser."
+                            : "Optimiser l'ordre des arrêts avec Mapbox."
+                        }
+                      >
+                        {optimizingId === t._id ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Optimisation…
+                          </span>
+                        ) : (
+                          "Optimiser"
+                        )}
+                      </button>
                       {t.status === "planifiee" && (
                         <button
                           type="button"
@@ -196,6 +247,12 @@ function PlanificationTab() {
                         Feuille de route
                       </button>
                     </div>
+                    {optimizeErrorById[t._id] && (
+                      <div className="mx-5 mt-3 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        {optimizeErrorById[t._id]}
+                      </div>
+                    )}
 
                     {/* Stops */}
                     {t.stops.length === 0 ? (
@@ -540,7 +597,7 @@ function TourneeForm({
 // ─── Historique ───────────────────────────────────────────────────────────────
 
 function HistoriqueTab() {
-  const now = Date.now();
+  const now = useMemo(() => Date.now(), []);
   const tournees = useQuery(api.sorties.listTournees, {
     startDate: now - 180 * 86400000,
     endDate: now,

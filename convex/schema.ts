@@ -138,6 +138,7 @@ export default defineSchema({
     title: v.string(),
     description: v.string(),
     price: v.number(),
+    weightKg: v.optional(v.number()),
     originalPrice: v.optional(v.number()),
     internalReference: v.optional(v.string()),
     gdrReference: v.optional(v.string()),

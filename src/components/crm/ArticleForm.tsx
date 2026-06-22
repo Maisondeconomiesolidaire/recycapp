@@ -192,6 +192,9 @@ export function ArticleForm({
   const [title, setTitle] = useState(article?.title ?? "");
   const [description, setDescription] = useState(article?.description ?? "");
   const [price, setPrice] = useState(article ? String(article.price) : "");
+  const [weightKg, setWeightKg] = useState(
+    article?.weightKg !== undefined ? String(article.weightKg) : "",
+  );
   const [originalPrice, setOriginalPrice] = useState(
     article?.originalPrice !== undefined ? String(article.originalPrice) : "",
   );
@@ -401,6 +404,10 @@ export function ArticleForm({
     const priceNum = Number(price);
     if (Number.isNaN(priceNum) || priceNum < 0)
       return setError("Prix invalide.");
+    const weightNum = Number(weightKg);
+    if (weightKg.trim() === "" || Number.isNaN(weightNum) || weightNum < 0) {
+      return setError("Le poids est requis.");
+    }
     const originalPriceNum =
       originalPrice.trim() === "" ? undefined : Number(originalPrice);
     if (
@@ -426,6 +433,7 @@ export function ArticleForm({
           title,
           description,
           price: priceNum,
+          weightKg: weightNum,
           originalPrice: originalPriceNum,
           internalReference,
           gdrReference: gdrReference.trim() || undefined,
@@ -445,6 +453,7 @@ export function ArticleForm({
           title,
           description,
           price: priceNum,
+          weightKg: weightNum,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
           category,
@@ -758,6 +767,16 @@ export function ArticleForm({
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               placeholder="25"
+            />
+          </Field>
+          <Field label="Poids (kg)" required>
+            <Input
+              type="number"
+              step="0.001"
+              min="0"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+              placeholder="0.850"
             />
           </Field>
           <Field label="Prix barré (€)">

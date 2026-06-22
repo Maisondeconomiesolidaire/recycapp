@@ -228,6 +228,11 @@ export function ArticleDetail() {
                   Lot de {bundledArticles.length} articles
                 </p>
               )}
+              {currentArticle.weightKg !== undefined && (
+                <p className="mt-3 text-sm font-medium text-zinc-500">
+                  Poids : {currentArticle.weightKg} kg
+                </p>
+              )}
 
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 {currentArticle.originalPrice && currentArticle.originalPrice > currentArticle.price ? (
