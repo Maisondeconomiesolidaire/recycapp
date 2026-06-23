@@ -425,6 +425,7 @@ export const create = mutation({
     description: v.string(),
     price: v.number(),
     weightKg: v.number(),
+    location: v.optional(v.string()),
     originalPrice: v.optional(v.number()),
     gdrReference: v.optional(v.string()),
     category: v.string(),
@@ -450,6 +451,7 @@ export const create = mutation({
     const articleId = await ctx.db.insert("articles", {
       ...articleArgs,
       weightKg: normalizeWeightKg(args.weightKg),
+      location: args.location?.trim() || undefined,
       internalReference,
       gdrReference: args.gdrReference || undefined,
       keywords: args.keywords?.length ? uniqueKeywords(args.keywords) : undefined,
@@ -571,6 +573,7 @@ export const update = mutation({
     description: v.string(),
     price: v.number(),
     weightKg: v.number(),
+    location: v.optional(v.string()),
     originalPrice: v.optional(v.number()),
     internalReference: v.string(),
     gdrReference: v.optional(v.string()),
@@ -594,6 +597,7 @@ export const update = mutation({
     await ctx.db.patch(id, {
       ...rest,
       weightKg: normalizeWeightKg(rest.weightKg),
+      location: rest.location?.trim() || undefined,
       gdrReference: rest.gdrReference || undefined,
       keywords: rest.keywords?.length ? uniqueKeywords(rest.keywords) : undefined,
       themeKey: rest.themeKey

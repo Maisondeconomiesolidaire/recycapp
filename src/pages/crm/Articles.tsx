@@ -17,9 +17,16 @@ import {
   Loader2,
   Check,
   Printer,
+  ScanLine,
 } from "lucide-react";
+import { lazy, Suspense } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
+
+const CameraScanner = lazy(() =>
+  import("../../components/ui/CameraScanner").then((m) => ({ default: m.CameraScanner })),
+);
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
@@ -154,6 +161,7 @@ export function Articles() {
   const [analyzingLots, setAnalyzingLots] = useState(false);
   const [lotAnalysisError, setLotAnalysisError] = useState("");
   const [printArticles, setPrintArticles] = useState<ArticleDoc[] | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   // Note: barcode scanner (external device) is handled globally by GlobalScanner in CrmLayout
 
   const filteredArticles = useMemo(() => {
@@ -201,6 +209,20 @@ export function Articles() {
     setFormOpen(true);
   }
 
+  function handleScannedCode(code: string) {
+    setScanOpen(false);
+    const ref = code.trim();
+    const found = (articles ?? []).find(
+      (a) => a.internalReference === ref || a.gdrReference === ref,
+    );
+    if (found) {
+      openEdit(found);
+    } else {
+      // Pas trouvé : on bascule la recherche sur le code scanné.
+      setSearchText(ref);
+    }
+  }
+
   async function handleAnalyzeLots() {
     setAnalyzingLots(true);
     setLotAnalysisError("");
@@ -244,6 +266,10 @@ export function Articles() {
                 <Sparkles className="h-4 w-4" />
               )}
               Analyser les lots potentiels
+            </Button>
+            <Button variant="outline" onClick={() => setScanOpen(true)}>
+              <ScanLine className="h-4 w-4" />
+              Scanner
             </Button>
             <Button onClick={openNew}>
               <Plus className="h-4 w-4" /> Nouvel article
@@ -349,7 +375,7 @@ export function Articles() {
                       <th className="px-4 py-3 text-left font-medium">Article</th>
                       <th className="px-4 py-3 text-left font-medium">Références</th>
                       <th className="px-4 py-3 text-left font-medium">Catégorie</th>
-                      <th className="px-4 py-3 text-left font-medium">Poids</th>
+                      <th className="px-4 py-3 text-left font-medium">Emplacement</th>
                       <th className="px-4 py-3 text-left font-medium">Prix</th>
                       <th className="px-4 py-3 text-left font-medium">Statut</th>
                       <th className="px-4 py-3 text-left font-medium">Actions</th>
@@ -392,7 +418,7 @@ export function Articles() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-zinc-400">
-                          {a.weightKg !== undefined ? `${a.weightKg} kg` : "—"}
+                          {a.location?.trim() ? a.location : "—"}
                         </td>
                         <td className="px-4 py-3">
                           <div className="space-y-0.5">
@@ -475,6 +501,50 @@ export function Articles() {
           articles={printArticles}
           onClose={() => setPrintArticles(null)}
         />
+      )}
+
+      {/* Scan caméra : ouvre directement l'article correspondant. */}
+      {scanOpen && (
+        <ErrorBoundary
+          fallback={() => (
+            <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-4 bg-black p-8 text-center">
+              <ScanLine className="h-9 w-9 text-zinc-500" />
+              <p className="max-w-xs text-sm text-zinc-200">
+                Le scanner n'a pas pu démarrer. Rechargez la page puis réessayez.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white"
+                >
+                  Recharger
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScanOpen(false)}
+                  className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          )}
+        >
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-3 bg-black">
+                <Loader2 className="h-8 w-8 animate-spin text-zinc-300" />
+                <p className="text-sm text-zinc-300">Ouverture du scanner…</p>
+              </div>
+            }
+          >
+            <CameraScanner
+              onDetected={handleScannedCode}
+              onClose={() => setScanOpen(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* Barcode scanner modal is handled globally by GlobalScanner in CrmLayout */}

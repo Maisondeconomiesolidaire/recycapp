@@ -141,6 +141,8 @@ export default defineSchema({
     description: v.string(),
     price: v.number(),
     weightKg: v.optional(v.number()),
+    // Emplacement physique de l'article en boutique / réserve.
+    location: v.optional(v.string()),
     originalPrice: v.optional(v.number()),
     internalReference: v.optional(v.string()),
     gdrReference: v.optional(v.string()),

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
-import { NotFoundException } from "@zxing/library";
+import { BarcodeFormat, DecodeHintType, NotFoundException } from "@zxing/library";
 import { X, Camera, AlertCircle, Loader2 } from "lucide-react";
 
 interface Props {
@@ -17,27 +17,52 @@ export function CameraScanner({ onDetected, onClose }: Props) {
   const controlsRef = useRef<IScannerControls | null>(null);
 
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
+    // Aide le décodeur (essaie plus fort, formats courants dont QR + Code128).
+    const hints = new Map();
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.DATA_MATRIX,
+    ]);
+    const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 120 });
     let stopped = false;
+
+    // Caméra arrière + haute résolution = code net même de près.
+    const constraints: MediaStreamConstraints = {
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    };
+
+    async function applyContinuousFocus() {
+      const stream = (videoRef.current?.srcObject as MediaStream | null) ?? null;
+      const track = stream?.getVideoTracks?.()[0];
+      if (!track) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const caps = (track.getCapabilities?.() as any) ?? {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const advanced: any[] = [];
+      if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) {
+        advanced.push({ focusMode: "continuous" });
+      }
+      if (advanced.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await track.applyConstraints({ advanced } as any).catch(() => {});
+      }
+    }
 
     (async () => {
       try {
-        const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-        if (devices.length === 0) {
-          setError("Aucune caméra détectée sur cet appareil.");
-          setLoading(false);
-          return;
-        }
-
-        // Prefer back camera on mobile
-        const backCamera = devices.find((d) =>
-          /back|rear|environment/i.test(d.label)
-        ) ?? devices[devices.length - 1];
-
         if (!videoRef.current || stopped) return;
-
-        controlsRef.current = await reader.decodeFromVideoDevice(
-          backCamera.deviceId,
+        controlsRef.current = await reader.decodeFromConstraints(
+          constraints,
           videoRef.current,
           (result, err) => {
             if (result && !stopped) {
@@ -48,10 +73,12 @@ export function CameraScanner({ onDetected, onClose }: Props) {
             if (err && !(err instanceof NotFoundException)) {
               // Ignore "not found" errors (continuous scanning)
             }
-          }
+          },
         );
-
-        if (!stopped) setLoading(false);
+        if (!stopped) {
+          void applyContinuousFocus();
+          setLoading(false);
+        }
       } catch (e: unknown) {
         if (!stopped) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -69,7 +96,9 @@ export function CameraScanner({ onDetected, onClose }: Props) {
       stopped = true;
       try {
         controlsRef.current?.stop();
-      } catch {}
+      } catch {
+        /* déjà arrêté */
+      }
     };
   }, [onDetected, onClose]);
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { ArrowLeft, Loader2, Mail, MessageSquare, Phone } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -123,7 +123,8 @@ export function Messages() {
         <div className={`${selected ? "block" : "hidden lg:block"}`}>
           {selected && context ? (
             <div className="flex h-[70vh] flex-col">
-              <div className="mb-3 flex items-center gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3">
+              {/* Barre minimale (mobile/lg) : le détail client est dans la colonne récap (xl). */}
+              <div className="mb-3 flex items-center gap-2 xl:hidden">
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
@@ -132,33 +133,11 @@ export function Messages() {
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-zinc-100">{context.customerName}</p>
-                  <p className="truncate text-xs text-zinc-500">
-                    {TYPE_LABELS[context.type] ?? context.type}
-                    {context.reference ? ` #${context.reference}` : ""}
-                  </p>
-                </div>
-                <div className="hidden items-center gap-3 sm:flex">
-                  {context.customerPhone && (
-                    <a
-                      href={`tel:${context.customerPhone}`}
-                      className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200"
-                    >
-                      <Phone className="h-3.5 w-3.5" />
-                      {context.customerPhone}
-                    </a>
-                  )}
-                  {context.customerEmail && (
-                    <a
-                      href={`mailto:${context.customerEmail}`}
-                      className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200"
-                    >
-                      <Mail className="h-3.5 w-3.5" />
-                      {context.customerEmail}
-                    </a>
-                  )}
-                </div>
+                <p className="truncate text-sm font-bold text-zinc-100">{context.customerName}</p>
+                <span className="truncate text-xs text-zinc-500">
+                  {TYPE_LABELS[context.type] ?? context.type}
+                  {context.reference ? ` #${context.reference}` : ""}
+                </span>
               </div>
               <div className="min-h-0 flex-1">
                 <MessageThread requestId={selected} viewerRole="staff" theme="dark" />
@@ -187,6 +166,31 @@ export function Messages() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function RecapLink({
+  label,
+  href,
+  value,
+  icon,
+}: {
+  label: string;
+  href: string;
+  value: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      <a
+        href={href}
+        className="mt-0.5 inline-flex items-center gap-1.5 text-sm text-brand-300 transition hover:text-brand-200 hover:underline"
+      >
+        {icon}
+        {value}
+      </a>
     </div>
   );
 }
@@ -241,8 +245,22 @@ function RequestRecap({ context }: { context: any }) {
 
       <div className="space-y-3 border-t border-[var(--crm-border)] pt-4">
         <RecapRow label="Client" value={context.customerName || "—"} />
-        {context.customerPhone && <RecapRow label="Téléphone" value={context.customerPhone} />}
-        {context.customerEmail && <RecapRow label="Email" value={context.customerEmail} />}
+        {context.customerPhone && (
+          <RecapLink
+            label="Téléphone"
+            href={`tel:${context.customerPhone}`}
+            icon={<Phone className="h-3.5 w-3.5" />}
+            value={context.customerPhone}
+          />
+        )}
+        {context.customerEmail && (
+          <RecapLink
+            label="Email"
+            href={`mailto:${context.customerEmail}`}
+            icon={<Mail className="h-3.5 w-3.5" />}
+            value={context.customerEmail}
+          />
+        )}
         {context.customerAddress && <RecapRow label="Adresse" value={context.customerAddress} />}
         {context.collectAddress && (
           <RecapRow label="Adresse de collecte" value={context.collectAddress} />

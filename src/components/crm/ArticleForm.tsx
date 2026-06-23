@@ -195,6 +195,7 @@ export function ArticleForm({
   const [weightKg, setWeightKg] = useState(
     article?.weightKg !== undefined ? String(article.weightKg) : "",
   );
+  const [location, setLocation] = useState(article?.location ?? "");
   const [originalPrice, setOriginalPrice] = useState(
     article?.originalPrice !== undefined ? String(article.originalPrice) : "",
   );
@@ -434,6 +435,7 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
+          location: location.trim() || undefined,
           originalPrice: originalPriceNum,
           internalReference,
           gdrReference: gdrReference.trim() || undefined,
@@ -454,6 +456,7 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
+          location: location.trim() || undefined,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
           category,
@@ -786,6 +789,13 @@ export function ArticleForm({
               value={originalPrice}
               onChange={(e) => setOriginalPrice(e.target.value)}
               placeholder="39"
+            />
+          </Field>
+          <Field label="Emplacement">
+            <Input
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Ex : Rayon A3, Réserve…"
             />
           </Field>
           <Field
