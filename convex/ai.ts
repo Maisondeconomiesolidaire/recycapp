@@ -119,7 +119,8 @@ Retourne UNIQUEMENT un objet JSON valide (sans markdown) :
   "bundleSaleNote": "Note IA courte : explique avec quels articles du même univers il pourrait être vendu en lot, et pourquoi.",
   "listingRecommendation": "Phrase opérationnelle en français : recommande clairement soit 'mise en ligne seule', soit 'mise en attente pour lot'. Même si price >= 10, recommande 'bundle' si l'article est plus attractif groupé avec des articles du même univers.",
   "keywords": ["8 à 12 mots-clés précis : marque, licence/univers, personnage, type d'objet, matière, usage. Exemple Mario Kart : mario, nintendo, kart, voiture, circuit, figurine"],
-  "themeKey": "clé courte en minuscules pour l'univers exact, pas une catégorie large. Exemples : mario, playmobil-pirates, lego-star-wars, vaisselle-vintage, livres-policiers"
+  "themeKey": "clé courte en minuscules pour l'univers exact, pas une catégorie large. Exemples : mario, playmobil-pirates, lego-star-wars, vaisselle-vintage, livres-policiers",
+  "sources": ["URLs complètes (https://…) des pages réellement consultées pour fixer le prix : annonces Leboncoin/Vinted/eBay, fiche produit Amazon/site officiel. 2 à 5 liens. Tableau vide si aucune source web."]
 }
 
 Sous-catégories :
@@ -146,6 +147,7 @@ export type ArticleAIAnalysis = {
   listingRecommendation?: string;
   keywords?: string[];
   themeKey?: string;
+  sources?: string[];
   backgroundPrompt?: string;
 };
 
@@ -194,7 +196,13 @@ async function callOpenAI<T>(
   };
 
   const raw = data.choices?.[0]?.message?.content ?? "";
-  const cleaned = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/, "").trim();
+  let cleaned = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/, "").trim();
+  // Le modèle ajoute parfois du texte autour du JSON : on isole l'objet { … }.
+  if (!cleaned.startsWith("{")) {
+    const first = cleaned.indexOf("{");
+    const last = cleaned.lastIndexOf("}");
+    if (first !== -1 && last > first) cleaned = cleaned.slice(first, last + 1);
+  }
 
   try {
     return JSON.parse(cleaned) as T;
@@ -474,7 +482,7 @@ Produis l'évaluation JSON complète basée sur les résultats trouvés.`;
 
     const result = await callOpenAI<ArticleAIAnalysis>(apiKey, {
       model: "gpt-4o-search-preview",
-      max_tokens: 800,
+      max_tokens: 1600,
       web_search_options: { search_context_size: "medium" },
       messages: [
         { role: "system", content: VALUATION_PROMPT },
@@ -515,6 +523,13 @@ Produis l'évaluation JSON complète basée sur les résultats trouvés.`;
     result.keywords = Array.from(
       new Set((result.keywords ?? []).map(normalizeKeyword).filter(Boolean)),
     ).slice(0, 12);
+    result.sources = Array.from(
+      new Set(
+        (Array.isArray(result.sources) ? result.sources : [])
+          .map((s) => (typeof s === "string" ? s.trim() : ""))
+          .filter((s) => /^https?:\/\//i.test(s)),
+      ),
+    ).slice(0, 6);
     result.themeKey =
       result.themeKey?.trim() || fallbackThemeKey({
         title: result.title,

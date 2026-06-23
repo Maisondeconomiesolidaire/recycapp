@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useAction } from "convex/react";
-import { ImagePlus, Loader2, Sparkles, Star, X } from "lucide-react";
+import { ExternalLink, ImagePlus, Loader2, Sparkles, Star, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
@@ -17,6 +17,15 @@ import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
 
 type ArticleDoc = Doc<"articles"> & { imageUrls: string[] };
+
+// Affiche un libellé lisible pour une URL source (domaine, sinon URL brute).
+function sourceLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 // Converts a hex color to a 0–100 position on the red→green gradient.
 // Red (#ef4444) ≈ hue 0°, Green (#22c55e) ≈ hue 142°.
@@ -233,6 +242,7 @@ export function ArticleForm({
   const [valueLabel, setValueLabel] = useState<string | null>(null);
   const [priceRationale, setPriceRationale] = useState<string | null>(null);
   const [priceJustification, setPriceJustification] = useState<string | null>(null);
+  const [sources, setSources] = useState<string[]>([]);
   const [listingRecommendation, setListingRecommendation] = useState<string | null>(null);
   const [onlineEligible, setOnlineEligible] = useState<boolean | null>(null);
   const [recommendedSaleMode, setRecommendedSaleMode] = useState<"single" | "bundle" | null>(null);
@@ -320,6 +330,7 @@ export function ArticleForm({
       setValueLabel(result.valueLabel);
       setPriceRationale(result.priceRationale ?? null);
       setPriceJustification(result.priceJustification ?? null);
+      setSources(result.sources ?? []);
       setOnlineEligible(result.onlineEligible ?? result.price >= 10);
       setRecommendedSaleMode(result.recommendedSaleMode ?? (result.price >= 10 ? "single" : "bundle"));
       setSingleSaleNote(
@@ -699,6 +710,29 @@ export function ArticleForm({
             rationale={priceRationale ?? undefined}
             justification={priceJustification ?? undefined}
           />
+        )}
+
+        {sources.length > 0 && (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-300">
+              Sources consultées par l'IA
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {sources.map((url) => (
+                <li key={url}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 break-all text-sm text-sky-300 transition hover:text-sky-200 hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    {sourceLabel(url)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {(listingRecommendation || singleSaleNote || bundleSaleNote || priceBelowOnlineThreshold) && (
