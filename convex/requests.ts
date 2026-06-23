@@ -119,6 +119,14 @@ export const submitCollecte = mutation({
       sorted: v.optional(v.boolean()),
       noWaste: v.optional(v.boolean()),
       objectCategories: v.optional(v.array(v.string())),
+      categoryPhotos: v.optional(
+        v.array(
+          v.object({
+            category: v.string(),
+            photos: v.array(v.id("_storage")),
+          }),
+        ),
+      ),
       grosObjets: v.optional(v.array(v.string())),
       grosObjetsAutre: v.optional(v.string()),
       petitsObjets: v.optional(v.array(v.string())),
@@ -507,6 +515,15 @@ export const get = query({
         ).filter((u): u is string => u !== null),
       ),
     );
+    // Résout les URLs des photos de collecte, groupées par catégorie.
+    const collecteCategoryPhotos = await Promise.all(
+      (request.collecte?.categoryPhotos ?? []).map(async (entry) => ({
+        category: entry.category,
+        urls: (
+          await Promise.all(entry.photos.map((p) => ctx.storage.getUrl(p)))
+        ).filter((u): u is string => u !== null),
+      })),
+    );
     return {
       ...request,
       customer: normalizeCustomer(request.customer),
@@ -514,6 +531,7 @@ export const get = query({
       beforePhotoUrls: beforePhotoUrls.filter((u): u is string => u !== null),
       afterPhotoUrls: afterPhotoUrls.filter((u): u is string => u !== null),
       aerogommagePhotos,
+      collecteCategoryPhotos,
     };
   },
 });

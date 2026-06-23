@@ -85,6 +85,15 @@ const collecteDetails = v.object({
   noWaste: v.optional(v.boolean()),
   // Catégories d'objets sélectionnées (pictogrammes). Clés de COLLECTE_CATEGORIES.
   objectCategories: v.optional(v.array(v.string())),
+  // Photos rattachées à chaque catégorie sélectionnée.
+  categoryPhotos: v.optional(
+    v.array(
+      v.object({
+        category: v.string(),
+        photos: v.array(v.id("_storage")),
+      }),
+    ),
+  ),
   // Champs hérités (multi-sélection par famille, anciennes demandes).
   grosObjets: v.optional(v.array(v.string())),
   grosObjetsAutre: v.optional(v.string()),

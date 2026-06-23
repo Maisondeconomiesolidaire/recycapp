@@ -1436,6 +1436,36 @@ function RequestDetails({ request }: { request: RequestDoc }) {
             </div>
           )}
         </section>
+
+        {(request.collecteCategoryPhotos?.length ?? 0) > 0 && (
+          <section>
+            <SectionTitle>Photos des objets</SectionTitle>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {request.collecteCategoryPhotos!.flatMap((entry) => {
+                const cat = COLLECTE_CATEGORY_BY_KEY[entry.category];
+                return entry.urls.map((url, i) => (
+                  <a
+                    key={`${entry.category}-${i}`}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="relative aspect-square overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]"
+                  >
+                    <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    {cat?.image && (
+                      <span
+                        title={cat.label}
+                        className="absolute left-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 shadow ring-1 ring-black/5"
+                      >
+                        <img src={cat.image} alt="" className="h-5 w-5 object-contain" />
+                      </span>
+                    )}
+                  </a>
+                ));
+              })}
+            </div>
+          </section>
+        )}
       </>
     );
   }
