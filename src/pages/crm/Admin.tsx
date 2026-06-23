@@ -1,16 +1,14 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   Check,
   CircleDashed,
-  KeyRound,
   Mail,
   Plus,
   Save,
   Search,
   ShieldCheck,
   ShieldOff,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -154,7 +152,6 @@ export function Admin() {
     <div>
       <PageHeader
         title="Admin"
-        subtitle="Contrôlez les accès CRM par page et par fonctionnalité."
         actions={
           <Button onClick={startManualAccess} variant="secondary">
             <Plus className="h-4 w-4" />
@@ -164,27 +161,6 @@ export function Admin() {
       />
 
       <div className="space-y-5 p-4 sm:p-6">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <MetricCard
-            icon={<ShieldCheck className="h-5 w-5" />}
-            label="Mode admin"
-            value="Admins illimités"
-            description="Le rôle Clerk admin garde toujours tous les accès."
-          />
-          <MetricCard
-            icon={<KeyRound className="h-5 w-5" />}
-            label="Pages contrôlées"
-            value={`${CRM_PAGES.filter((page) => !page.adminOnly).length}`}
-            description="Chaque page possède ses propres actions."
-          />
-          <MetricCard
-            icon={<Sparkles className="h-5 w-5" />}
-            label="Stock sécurisé"
-            value="Serveur + UI"
-            description="Lecture, création, modification et suppression sont vérifiées côté Convex."
-          />
-        </div>
-
         {data === undefined ? (
           <FullSpinner label="Chargement des accès…" />
         ) : (
@@ -316,35 +292,6 @@ export function Admin() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  description,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-[24px] border border-[var(--crm-border)] bg-[linear-gradient(135deg,var(--crm-surface),var(--crm-surface-2))] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-500/12 text-brand-300">
-          {icon}
-        </span>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-            {label}
-          </p>
-          <p className="text-lg font-semibold text-zinc-100">{value}</p>
-        </div>
-      </div>
-      <p className="mt-3 text-sm leading-6 text-zinc-400">{description}</p>
     </div>
   );
 }
