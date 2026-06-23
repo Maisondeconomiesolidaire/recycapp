@@ -130,12 +130,6 @@ export async function getCrmAccessForIdentity(
     return { staff: true, admin: true, email, bootstrapMode: false, grants: [] };
   }
 
-  const existingPermission = await ctx.db.query("crmPermissions").take(1);
-  const bootstrapMode = existingPermission.length === 0;
-  if (bootstrapMode) {
-    return { staff: true, admin: false, email, bootstrapMode: true, grants: [] };
-  }
-
   if (!email) {
     return { staff: true, admin: false, email, bootstrapMode: false, grants: [] };
   }

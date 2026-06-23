@@ -4,7 +4,6 @@ import {
   Check,
   CircleDashed,
   Mail,
-  Plus,
   Save,
   Search,
   ShieldCheck,
@@ -15,7 +14,7 @@ import { api } from "../../../convex/_generated/api";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { Field, Input } from "../../components/ui/Field";
+import { Field, Input, Select } from "../../components/ui/Field";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { cn } from "../../lib/cn";
 import {
@@ -30,10 +29,13 @@ type ClerkUser = {
   clerkId: string;
   email: string;
   name: string;
+  role: CrmRole;
   imageUrl: string | null;
   createdAt: number | null;
   lastSignInAt: number | null;
 };
+
+type CrmRole = "client" | "staff" | "admin";
 
 type PermissionPerson = {
   email: string;
@@ -48,6 +50,7 @@ type ManagedPerson = PermissionPerson & {
   imageUrl?: string | null;
   createdAt?: number | null;
   lastSignInAt?: number | null;
+  role: CrmRole;
   source: "clerk" | "manual";
 };
 
@@ -105,6 +108,7 @@ function mergeUsers(clerkUsers: ClerkUser[], permissionPeople: PermissionPerson[
       imageUrl: user.imageUrl,
       createdAt: user.createdAt,
       lastSignInAt: user.lastSignInAt,
+      role: user.role,
       permissionActive: undefined,
       grants: [],
       source: "clerk",
@@ -117,6 +121,7 @@ function mergeUsers(clerkUsers: ClerkUser[], permissionPeople: PermissionPerson[
       ...existing,
       email: permission.email,
       name: existing?.name ?? permission.name,
+      role: existing?.role ?? "staff",
       permissionActive: permission.permissionActive,
       grants: permission.grants,
       updatedAt: permission.updatedAt,
@@ -132,6 +137,7 @@ function mergeUsers(clerkUsers: ClerkUser[], permissionPeople: PermissionPerson[
 export function Admin() {
   const permissionsData = useQuery(api.permissions.listManaged);
   const listClerkUsers = useAction(api.permissions.listClerkUsers);
+  const updateClerkRole = useAction(api.permissions.updateClerkRole);
   const upsert = useMutation(api.permissions.upsert);
   const remove = useMutation(api.permissions.remove);
   const [search, setSearch] = useState("");
@@ -139,6 +145,7 @@ export function Admin() {
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
+  const [draftRole, setDraftRole] = useState<CrmRole>("client");
   const [active, setActive] = useState(true);
   const [grants, setGrants] = useState<CrmGrant[]>(emptyGrants);
   const [saving, setSaving] = useState(false);
@@ -191,13 +198,15 @@ export function Admin() {
     if (!selectedPerson) {
       setDraftName("");
       setDraftEmail("");
+      setDraftRole("client");
       setActive(true);
       setGrants(emptyGrants());
       return;
     }
     setDraftName(selectedPerson.name ?? "");
     setDraftEmail(selectedPerson.email);
-    setActive(selectedPerson.permissionActive ?? true);
+    setDraftRole(selectedPerson.role);
+    setActive(selectedPerson.role === "staff" ? selectedPerson.permissionActive ?? true : true);
     setGrants(mergeGrants(selectedPerson.grants));
   }, [selectedPerson]);
 
@@ -206,17 +215,47 @@ export function Admin() {
     if (!email) return;
     setSaving(true);
     try {
-      await upsert({
-        email,
-        name: draftName.trim() || undefined,
-        active,
-        grants: grants
-          .map((grant) => ({
-            pageKey: grant.pageKey,
-            actions: grant.actions,
-          }))
-          .filter((grant) => grant.actions.length > 0),
-      });
+      if (selectedPerson?.clerkId && selectedPerson.role !== draftRole) {
+        const roleResult = await updateClerkRole({
+          clerkId: selectedPerson.clerkId,
+          role: draftRole,
+        });
+        if (!roleResult.ok) {
+          throw new Error(
+            roleResult.setupError === "missing_clerk_secret_key"
+              ? "CLERK_SECRET_KEY est manquante côté Convex."
+              : "Impossible de modifier le rôle Clerk.",
+          );
+        }
+        setClerkData((current) =>
+          current
+            ? {
+                ...current,
+                users: current.users.map((user) =>
+                  user.clerkId === selectedPerson.clerkId
+                    ? { ...user, role: draftRole }
+                    : user,
+                ),
+              }
+            : current,
+        );
+      }
+
+      if (draftRole === "staff") {
+        await upsert({
+          email,
+          name: draftName.trim() || undefined,
+          active,
+          grants: grants
+            .map((grant) => ({
+              pageKey: grant.pageKey,
+              actions: grant.actions,
+            }))
+            .filter((grant) => grant.actions.length > 0),
+        });
+      } else if (selectedPerson?.grants.length) {
+        await remove({ email });
+      }
       setSelectedEmail(email);
     } finally {
       setSaving(false);
@@ -233,25 +272,11 @@ export function Admin() {
     }
   }
 
-  function startManualAccess() {
-    setSelectedEmail(null);
-    setDraftName("");
-    setDraftEmail("");
-    setActive(true);
-    setGrants(emptyGrants());
-  }
+  const permissionsDisabled = draftRole !== "staff";
 
   return (
     <div>
-      <PageHeader
-        title="Admin"
-        actions={
-          <Button onClick={startManualAccess} variant="secondary">
-            <Plus className="h-4 w-4" />
-            Nouvel accès
-          </Button>
-        }
-      />
+      <PageHeader title="Admin" />
 
       <div className="space-y-5 p-4 sm:p-6">
         {permissionsData === undefined || clerkData === null ? (
@@ -297,7 +322,7 @@ export function Admin() {
                         "mb-1 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition",
                         selectedEmail === person.email
                           ? "bg-brand-500/14 text-zinc-100 ring-1 ring-brand-400/35"
-                        : "text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
+                          : "text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
                       )}
                     >
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--crm-surface-2)] text-sm font-black text-zinc-300">
@@ -324,6 +349,7 @@ export function Admin() {
                           </span>
                         )}
                       </span>
+                      <RoleBadge role={person.role} />
                       {person.permissionActive === false ? (
                         <ShieldOff className="h-4 w-4 text-red-400" />
                       ) : person.grants.length > 0 ? (
@@ -339,7 +365,7 @@ export function Admin() {
 
             <section className="overflow-hidden rounded-[28px] border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_24px_70px_rgba(0,0,0,0.22)]">
               <div className="border-b border-[var(--crm-border)] p-5">
-                <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+                <div className="grid gap-4 lg:grid-cols-[1fr_1fr_180px_auto] lg:items-end">
                   <Field label="Nom affiché">
                     <Input
                       value={draftName}
@@ -355,28 +381,56 @@ export function Admin() {
                       placeholder="prenom@recyclerie.fr"
                     />
                   </Field>
+                  <Field label="Rôle">
+                    <Select
+                      value={draftRole}
+                      onChange={(event) => setDraftRole(event.target.value as CrmRole)}
+                      disabled={!selectedPerson?.clerkId}
+                    >
+                      <option value="client">Client</option>
+                      <option value="staff">Staff</option>
+                      <option value="admin">Admin</option>
+                    </Select>
+                  </Field>
                   <button
                     type="button"
                     onClick={() => setActive((current) => !current)}
+                    disabled={draftRole !== "staff"}
                     className={cn(
                       "flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition",
-                      active
+                      draftRole !== "staff"
+                        ? "cursor-not-allowed border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-500"
+                        : active
                         ? "border-brand-400/35 bg-brand-500/12 text-brand-200"
                         : "border-red-400/30 bg-red-500/10 text-red-300",
                     )}
                   >
                     {active ? <ShieldCheck className="h-4 w-4" /> : <ShieldOff className="h-4 w-4" />}
-                    {active ? "Accès actif" : "Accès coupé"}
+                    {draftRole === "staff"
+                      ? active
+                        ? "Accès actif"
+                        : "Accès coupé"
+                      : draftRole === "admin"
+                        ? "Accès total"
+                        : "Aucun CRM"}
                   </button>
                 </div>
+                {draftRole !== "staff" && (
+                  <p className="mt-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-xs leading-5 text-zinc-400">
+                    {draftRole === "admin"
+                      ? "Admin a automatiquement accès à tout le CRM. Les permissions ci-dessous ne sont pas utilisées."
+                      : "Client n'a aucun accès CRM. Les permissions ci-dessous ne sont pas utilisées."}
+                  </p>
+                )}
               </div>
 
-              <div className="divide-y divide-[var(--crm-border)]">
+              <div className={cn("divide-y divide-[var(--crm-border)]", permissionsDisabled && "opacity-45")}>
                 {CRM_PAGES.filter((page) => !page.adminOnly).map((page) => (
                   <PermissionRow
                     key={page.key}
                     page={page}
                     grants={grants}
+                    disabled={permissionsDisabled}
                     onToggle={(action) => setGrants((current) => toggleAction(current, page.key, action))}
                     onSetAll={(checked) => setGrants((current) => setPageAll(current, page, checked))}
                   />
@@ -385,8 +439,8 @@ export function Admin() {
 
               <div className="flex flex-col gap-3 border-t border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs leading-5 text-zinc-500">
-                  Les admins ne sont pas limités par cette matrice. Pour les autres comptes,
-                  l'email doit correspondre à l'email Clerk connecté.
+                  Admin = accès total. Staff = accès CRM limité aux fonctionnalités cochées.
+                  Client = aucun accès CRM.
                 </p>
                 <div className="flex gap-2">
                   {selectedPerson?.grants.length ? (
@@ -397,7 +451,7 @@ export function Admin() {
                   ) : null}
                   <Button onClick={save} disabled={saving || !draftEmail.trim()}>
                     <Save className="h-4 w-4" />
-                    {saving ? "Enregistrement…" : "Enregistrer les droits"}
+                    {saving ? "Enregistrement…" : "Enregistrer"}
                   </Button>
                 </div>
               </div>
@@ -412,11 +466,13 @@ export function Admin() {
 function PermissionRow({
   page,
   grants,
+  disabled,
   onToggle,
   onSetAll,
 }: {
   page: CrmPageDefinition;
   grants: CrmGrant[];
+  disabled?: boolean;
   onToggle: (action: CrmAction) => void;
   onSetAll: (checked: boolean) => void;
 }) {
@@ -442,9 +498,11 @@ function PermissionRow({
             <h3 className="font-semibold text-zinc-100">{page.label}</h3>
             <button
               type="button"
+              disabled={disabled}
               onClick={() => onSetAll(!allChecked)}
               className={cn(
                 "rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
+                disabled && "cursor-not-allowed",
                 allChecked
                   ? "bg-brand-500 text-white"
                   : "bg-[var(--crm-surface-2)] text-zinc-500 hover:text-zinc-200",
@@ -464,9 +522,11 @@ function PermissionRow({
             <button
               key={action}
               type="button"
+              disabled={disabled}
               onClick={() => onToggle(action)}
               className={cn(
                 "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                disabled && "cursor-not-allowed",
                 checked
                   ? "border-brand-400/30 bg-brand-500/15 text-brand-200"
                   : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-500 hover:text-zinc-200",
@@ -478,5 +538,21 @@ function PermissionRow({
         })}
       </div>
     </div>
+  );
+}
+
+function RoleBadge({ role }: { role: CrmRole }) {
+  const label = role === "admin" ? "Admin" : role === "staff" ? "Staff" : "Client";
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em]",
+        role === "admin" && "bg-brand-500 text-white",
+        role === "staff" && "bg-sky-500/15 text-sky-200 ring-1 ring-sky-400/20",
+        role === "client" && "bg-zinc-800 text-zinc-400",
+      )}
+    >
+      {label}
+    </span>
   );
 }

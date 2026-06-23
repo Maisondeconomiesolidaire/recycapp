@@ -83,9 +83,18 @@ type ClerkUserPayload = {
   image_url?: unknown;
   primary_email_address_id?: unknown;
   email_addresses?: unknown;
+  public_metadata?: unknown;
   created_at?: unknown;
   last_sign_in_at?: unknown;
 };
+
+const roleValidator = v.union(
+  v.literal("client"),
+  v.literal("staff"),
+  v.literal("admin"),
+);
+
+type CrmRole = "client" | "staff" | "admin";
 
 function stringOrNull(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -93,6 +102,12 @@ function stringOrNull(value: unknown) {
 
 function numberOrNull(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function roleFromMetadata(value: unknown): CrmRole {
+  if (!value || typeof value !== "object") return "client";
+  const role = (value as { role?: unknown }).role;
+  return role === "staff" || role === "admin" ? role : "client";
 }
 
 function clerkPrimaryEmail(user: ClerkUserPayload) {
@@ -115,6 +130,7 @@ function normalizeClerkUser(user: ClerkUserPayload) {
     clerkId: stringOrNull(user.id) ?? email,
     email,
     name: name || stringOrNull(user.username) || email,
+    role: roleFromMetadata(user.public_metadata),
     imageUrl: stringOrNull(user.image_url),
     createdAt: numberOrNull(user.created_at),
     lastSignInAt: numberOrNull(user.last_sign_in_at),
@@ -184,6 +200,42 @@ export const listClerkUsers = action({
       totalCount,
       setupError: null,
     };
+  },
+});
+
+export const updateClerkRole = action({
+  args: {
+    clerkId: v.string(),
+    role: roleValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const secretKey = env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+      return { ok: false, setupError: "missing_clerk_secret_key" };
+    }
+
+    const response = await fetch(
+      `https://api.clerk.com/v1/users/${encodeURIComponent(args.clerkId)}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          public_metadata: {
+            role: args.role,
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      return { ok: false, setupError: `clerk_api_${response.status}` };
+    }
+
+    return { ok: true, setupError: null };
   },
 });
 
