@@ -3,7 +3,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "../ui/Button";
-import { Checkbox, Field, Input } from "../ui/Field";
+import { Field, Input } from "../ui/Field";
 import { formatPrice } from "../../lib/format";
 import {
   AERO_FURNITURE,
@@ -336,12 +336,28 @@ function TransportField({
 }) {
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4">
-      <Checkbox
-        label={label}
-        checked={enabled}
-        onChange={(event) => onEnabledChange(event.target.checked)}
-        className="border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/60"
-      />
+      <button
+        type="button"
+        onClick={() => onEnabledChange(!enabled)}
+        className="flex w-full items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 text-left transition hover:bg-zinc-900/60"
+        aria-pressed={enabled}
+      >
+        <span
+          className={
+            enabled
+              ? "flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border border-brand-500 bg-brand-500"
+              : "h-4.5 w-4.5 shrink-0 rounded-full border border-zinc-600"
+          }
+        >
+          {enabled && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </span>
+        <span>
+          <span className="block text-sm font-medium text-zinc-100">{label}</span>
+          <span className="block text-xs text-zinc-500">
+            {enabled ? "Inclus dans le calcul du devis." : "Non inclus dans le devis."}
+          </span>
+        </span>
+      </button>
       {enabled && (
         <div className="mt-4 space-y-2">
           <Field label="Commune">

@@ -155,6 +155,29 @@ export const listTree = query({
   },
 });
 
+export const listAll = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireStaff(ctx);
+    const folders = await ctx.db.query("documentFolders").take(500);
+    const files = await ctx.db.query("documents").take(1000);
+    return {
+      folders,
+      files: await Promise.all(
+        files.map(async (file) => ({
+          _id: file._id,
+          name: file.name,
+          folderId: file.folderId ?? null,
+          mimeType: file.mimeType ?? null,
+          size: file.size ?? null,
+          createdAt: file.createdAt,
+          url: await ctx.storage.getUrl(file.storageId),
+        })),
+      ),
+    };
+  },
+});
+
 export const createFolder = mutation({
   args: { name: v.string(), parentId: v.optional(v.id("documentFolders")) },
   handler: async (ctx, { name, parentId }) => {

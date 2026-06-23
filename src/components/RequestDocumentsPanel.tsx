@@ -11,6 +11,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useUpload } from "../lib/useUpload";
 import { cn } from "../lib/cn";
+import { Modal } from "./ui/Modal";
 
 export type RequestDocumentType =
   | "devis"
@@ -57,7 +58,9 @@ export function RequestDocumentsPanel({
   const removeDocument = useMutation(api.documents.removeFromRequest);
   const upload = useUpload();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const selectedTypeRef = useRef<RequestDocumentType>("devis");
   const [docType, setDocType] = useState<RequestDocumentType>("devis");
+  const [typeModalOpen, setTypeModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const dark = theme === "dark";
   const canManageDocuments = viewerRole === "staff";
@@ -72,7 +75,7 @@ export function RequestDocumentsPanel({
           requestId,
           storageId,
           name: file.name,
-          docType,
+          docType: selectedTypeRef.current,
           mimeType: file.type || undefined,
         });
       }
@@ -80,6 +83,13 @@ export function RequestDocumentsPanel({
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
     }
+  }
+
+  function chooseTypeAndUpload(type: RequestDocumentType) {
+    selectedTypeRef.current = type;
+    setDocType(type);
+    setTypeModalOpen(false);
+    window.setTimeout(() => inputRef.current?.click(), 0);
   }
 
   return (
@@ -102,25 +112,9 @@ export function RequestDocumentsPanel({
         </div>
         {canManageDocuments && (
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={docType}
-              onChange={(event) => setDocType(event.target.value as RequestDocumentType)}
-              className={cn(
-                "h-10 rounded-xl border px-3 text-sm outline-none",
-                dark
-                  ? "border-zinc-700 bg-zinc-900 text-zinc-100 focus:border-brand-500"
-                  : "border-zinc-200 bg-white text-zinc-900 focus:border-brand-500",
-              )}
-            >
-              {DOC_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
             <button
               type="button"
-              onClick={() => inputRef.current?.click()}
+              onClick={() => setTypeModalOpen(true)}
               disabled={uploading}
               className={cn(
                 "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition",
@@ -146,6 +140,41 @@ export function RequestDocumentsPanel({
           </div>
         )}
       </div>
+
+      {canManageDocuments && (
+        <Modal
+          open={typeModalOpen}
+          onClose={() => setTypeModalOpen(false)}
+          title="Ajouter un document"
+          className={dark ? "dark max-w-xl" : "max-w-xl"}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Sélectionnez le type du document, puis choisissez le fichier à importer.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {DOC_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => chooseTypeAndUpload(type.value)}
+                  className={cn(
+                    "rounded-2xl border p-4 text-left transition",
+                    docType === type.value
+                      ? "border-brand-500 bg-brand-500/10 text-[var(--foreground)]"
+                      : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-brand-500/50 hover:bg-[var(--accent)]",
+                  )}
+                >
+                  <span className="text-sm font-semibold">{type.label}</span>
+                  <span className="mt-1 block text-xs text-[var(--muted-foreground)]">
+                    Importer comme {type.label.toLowerCase()}.
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <div className="mt-4 divide-y divide-zinc-200/10">
         {documents === undefined ? (

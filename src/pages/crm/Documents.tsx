@@ -3,13 +3,14 @@ import type { ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   ChevronRight,
+  ChevronDown,
   Download,
-  FileText,
   Folder,
   FolderOpen,
   Loader2,
   Pencil,
   Plus,
+  Search,
   Trash2,
   UploadCloud,
 } from "lucide-react";
@@ -40,9 +41,36 @@ function formatSize(size?: number | null) {
   return `${(size / 1024 / 1024).toFixed(1)} Mo`;
 }
 
+function fileKind(name: string, mimeType?: string | null) {
+  const extension = name.split(".").pop()?.toLowerCase() ?? "";
+  if (mimeType?.includes("pdf") || extension === "pdf") return "PDF";
+  if (mimeType?.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)) return "IMG";
+  if (mimeType?.includes("spreadsheet") || mimeType?.includes("excel") || ["xls", "xlsx", "csv"].includes(extension)) return "XLS";
+  if (mimeType?.includes("word") || ["doc", "docx"].includes(extension)) return "DOC";
+  if (mimeType?.includes("presentation") || ["ppt", "pptx"].includes(extension)) return "PPT";
+  if (mimeType?.startsWith("text/") || ["txt", "md", "rtf"].includes(extension)) return "TXT";
+  if (["zip", "rar", "7z"].includes(extension)) return "ZIP";
+  return extension ? extension.slice(0, 4).toUpperCase() : "FILE";
+}
+
+function FileKindBadge({
+  kind,
+}: {
+  kind: string;
+}) {
+  return (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 text-[13px] font-black tracking-[0.08em] text-sky-200">
+      {kind}
+    </div>
+  );
+}
+
 export function Documents() {
   const [folderId, setFolderId] = useState<FolderId | undefined>(undefined);
+  const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const tree = useQuery(api.documents.listTree);
+  const allEntries = useQuery(api.documents.listAll);
   const folder = useQuery(api.documents.listFolder, { folderId });
   const createFolder = useMutation(api.documents.createFolder);
   const renameFolder = useMutation(api.documents.renameFolder);
@@ -107,6 +135,38 @@ export function Documents() {
     }
   }
 
+  function selectFolder(id: FolderId | undefined) {
+    setFolderId(id);
+    if (id) {
+      setCollapsed((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  function toggleFolder(id: FolderId) {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const searchTerm = query.trim().toLowerCase();
+  const searchResults = searchTerm && allEntries
+    ? {
+        folders: allEntries.folders
+          .filter((item) => item.name.toLowerCase().includes(searchTerm))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+        files: allEntries.files
+          .filter((item) => item.name.toLowerCase().includes(searchTerm))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      }
+    : null;
+
   return (
     <div>
       <PageHeader
@@ -114,6 +174,15 @@ export function Documents() {
         subtitle="Gestionnaire de documents interne, dossiers et sous-dossiers."
         actions={
           <>
+            <div className="relative min-w-[220px] flex-1 sm:flex-none">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Rechercher documents, dossiers..."
+                className="h-10 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 pl-9 text-sm text-[var(--foreground)] outline-none transition focus:border-brand-500 sm:w-72"
+              />
+            </div>
             <Button variant="outline" onClick={handleCreateFolder}>
               <Plus className="h-4 w-4" />
               Nouveau dossier
@@ -147,7 +216,7 @@ export function Documents() {
           <div className="max-h-[calc(100vh-11rem)] overflow-auto p-2">
             <button
               type="button"
-              onClick={() => setFolderId(undefined)}
+              onClick={() => selectFolder(undefined)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition",
                 folderId === undefined
@@ -168,7 +237,9 @@ export function Documents() {
                 folders={tree}
                 parentId={undefined}
                 selectedId={folderId}
-                onSelect={setFolderId}
+                collapsed={collapsed}
+                onSelect={selectFolder}
+                onToggle={toggleFolder}
               />
             )}
           </div>
@@ -201,7 +272,18 @@ export function Documents() {
                 ))}
               </div>
 
-              {folder.folders.length === 0 && folder.files.length === 0 ? (
+              {searchResults ? (
+                <SearchResults
+                  folders={searchResults.folders}
+                  files={searchResults.files}
+                  allFolders={allEntries?.folders ?? []}
+                  onOpenFolder={selectFolder}
+                  onRenameFolder={handleRenameFolder}
+                  onDeleteFolder={handleDeleteFolder}
+                  onRenameFile={handleRenameFile}
+                  onDeleteFile={handleDeleteFile}
+                />
+              ) : folder.folders.length === 0 && folder.files.length === 0 ? (
                 <EmptyState
                   icon={<FolderOpen className="h-10 w-10" />}
                   title="Dossier vide"
@@ -213,10 +295,14 @@ export function Documents() {
                     {folder.folders.map((item) => (
                       <ExplorerItem
                         key={item._id}
-                        icon={<Folder className="h-8 w-8 text-amber-300" />}
+                        icon={
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--crm-surface-2)]">
+                            <Folder className="h-8 w-8 text-amber-300" />
+                          </div>
+                        }
                         title={item.name}
                         subtitle={`Dossier · ${formatDate(item.createdAt)}`}
-                        onOpen={() => setFolderId(item._id)}
+                        onOpen={() => selectFolder(item._id)}
                         onRename={() => handleRenameFolder(item)}
                         onDelete={() => handleDeleteFolder(item)}
                       />
@@ -224,7 +310,7 @@ export function Documents() {
                     {folder.files.map((item) => (
                       <ExplorerItem
                         key={item._id}
-                        icon={<FileText className="h-8 w-8 text-sky-300" />}
+                        icon={<FileKindBadge kind={fileKind(item.name, item.mimeType)} />}
                         title={item.name}
                         subtitle={`${formatSize(item.size)} · ${formatDate(item.createdAt)}`}
                         href={item.url ?? undefined}
@@ -247,13 +333,17 @@ function FolderTree({
   folders,
   parentId,
   selectedId,
+  collapsed,
   onSelect,
+  onToggle,
   depth = 0,
 }: {
   folders: FolderDoc[];
   parentId?: FolderId;
   selectedId?: FolderId;
+  collapsed: Set<string>;
   onSelect: (id: FolderId) => void;
+  onToggle: (id: FolderId) => void;
   depth?: number;
 }) {
   const children = folders
@@ -265,35 +355,209 @@ function FolderTree({
   return (
     <div className={depth === 0 ? "mt-1 space-y-0.5" : "space-y-0.5"}>
       {children.map((folder) => (
-        <div key={folder._id}>
-          <button
-            type="button"
-            onClick={() => onSelect(folder._id)}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-xl py-2 pr-3 text-left text-sm transition",
-              selectedId === folder._id
-                ? "bg-brand-600/15 text-brand-300"
-                : "text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
-            )}
-            style={{ paddingLeft: `${12 + depth * 16}px` }}
-          >
-            {selectedId === folder._id ? (
-              <FolderOpen className="h-4 w-4 shrink-0" />
-            ) : (
-              <Folder className="h-4 w-4 shrink-0" />
-            )}
-            <span className="truncate">{folder.name}</span>
-          </button>
-          <FolderTree
-            folders={folders}
-            parentId={folder._id}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            depth={depth + 1}
-          />
-        </div>
+        <FolderTreeNode
+          key={folder._id}
+          folder={folder}
+          folders={folders}
+          selectedId={selectedId}
+          collapsed={collapsed}
+          onSelect={onSelect}
+          onToggle={onToggle}
+          depth={depth}
+        />
       ))}
     </div>
+  );
+}
+
+function FolderTreeNode({
+  folder,
+  folders,
+  selectedId,
+  collapsed,
+  onSelect,
+  onToggle,
+  depth,
+}: {
+  folder: FolderDoc;
+  folders: FolderDoc[];
+  selectedId?: FolderId;
+  collapsed: Set<string>;
+  onSelect: (id: FolderId) => void;
+  onToggle: (id: FolderId) => void;
+  depth: number;
+}) {
+  const hasChildren = folders.some((child) => child.parentId === folder._id);
+  const isCollapsed = collapsed.has(folder._id);
+  const isSelected = selectedId === folder._id;
+  const isOpen = isSelected && !isCollapsed;
+
+  return (
+    <div>
+      <div
+        className={cn(
+          "flex items-center rounded-xl text-sm transition",
+          isSelected
+            ? "bg-brand-600/15 text-brand-300"
+            : "text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
+        )}
+        style={{ paddingLeft: `${4 + depth * 16}px` }}
+      >
+        <button
+          type="button"
+          onClick={() => hasChildren && onToggle(folder._id)}
+          className={cn(
+            "flex h-9 w-7 shrink-0 items-center justify-center rounded-lg transition",
+            hasChildren ? "text-zinc-500 hover:text-zinc-100" : "pointer-events-none text-transparent",
+          )}
+          aria-label={isCollapsed ? "Ouvrir le dossier" : "Replier le dossier"}
+        >
+          <ChevronDown className={cn("h-4 w-4 transition-transform", isCollapsed && "-rotate-90")} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelect(folder._id)}
+          className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-3 text-left"
+        >
+          {isOpen ? (
+            <FolderOpen className="h-4 w-4 shrink-0" />
+          ) : (
+            <Folder className="h-4 w-4 shrink-0" />
+          )}
+          <span className="truncate">{folder.name}</span>
+        </button>
+      </div>
+      {!isCollapsed && (
+        <FolderTree
+          folders={folders}
+          parentId={folder._id}
+          selectedId={selectedId}
+          collapsed={collapsed}
+          onSelect={onSelect}
+          onToggle={onToggle}
+          depth={depth + 1}
+        />
+      )}
+    </div>
+  );
+}
+
+function folderPath(folders: FolderDoc[], folderId?: FolderId | null) {
+  if (!folderId) return "Racine";
+  const parts: string[] = [];
+  let currentId: FolderId | undefined = folderId;
+  for (let i = 0; i < 30 && currentId; i++) {
+    const folder = folders.find((item) => item._id === currentId);
+    if (!folder) break;
+    parts.unshift(folder.name);
+    currentId = folder.parentId;
+  }
+  return parts.length ? parts.join(" / ") : "Racine";
+}
+
+function SearchResults({
+  folders,
+  files,
+  allFolders,
+  onOpenFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onRenameFile,
+  onDeleteFile,
+}: {
+  folders: FolderDoc[];
+  files: Array<{
+    _id: Id<"documents">;
+    name: string;
+    folderId: FolderId | null;
+    mimeType: string | null;
+    size: number | null;
+    createdAt: number;
+    url: string | null;
+  }>;
+  allFolders: FolderDoc[];
+  onOpenFolder: (id: FolderId) => void;
+  onRenameFolder: (target: { _id: FolderId; name: string }) => void;
+  onDeleteFolder: (target: { _id: FolderId; name: string }) => void;
+  onRenameFile: (target: { _id: Id<"documents">; name: string }) => void;
+  onDeleteFile: (target: { _id: Id<"documents">; name: string }) => void;
+}) {
+  if (folders.length === 0 && files.length === 0) {
+    return (
+      <EmptyState
+        icon={<Search className="h-10 w-10" />}
+        title="Aucun résultat"
+        description="Essayez avec un autre nom de dossier ou de document."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-8 p-4">
+      <SearchSection title="Dossiers trouvés" count={folders.length}>
+        {folders.map((item) => (
+          <ExplorerItem
+            key={item._id}
+            icon={
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--crm-surface-2)]">
+                <Folder className="h-8 w-8 text-amber-300" />
+              </div>
+            }
+            title={item.name}
+            subtitle={`Dossier · ${folderPath(allFolders, item.parentId)} · ${formatDate(item.createdAt)}`}
+            onOpen={() => onOpenFolder(item._id)}
+            onRename={() => onRenameFolder(item)}
+            onDelete={() => onDeleteFolder(item)}
+          />
+        ))}
+      </SearchSection>
+
+      <SearchSection title="Documents trouvés" count={files.length}>
+        {files.map((item) => (
+          <ExplorerItem
+            key={item._id}
+            icon={<FileKindBadge kind={fileKind(item.name, item.mimeType)} />}
+            title={item.name}
+            subtitle={`${formatSize(item.size)} · ${folderPath(allFolders, item.folderId)} · ${formatDate(item.createdAt)}`}
+            href={item.url ?? undefined}
+            onRename={() => onRenameFile(item)}
+            onDelete={() => onDeleteFile(item)}
+          />
+        ))}
+      </SearchSection>
+    </div>
+  );
+}
+
+function SearchSection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-500">
+          {title}
+        </h2>
+        <span className="rounded-full border border-[var(--crm-border)] px-2 py-0.5 text-xs text-zinc-500">
+          {count}
+        </span>
+      </div>
+      {count === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[var(--crm-border)] px-4 py-8 text-center text-sm text-zinc-500">
+          Aucun élément dans cette catégorie.
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {children}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -316,9 +580,7 @@ function ExplorerItem({
 }) {
   const content = (
     <>
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--crm-surface-2)]">
-        {icon}
-      </div>
+      {icon}
       <div className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm font-semibold text-zinc-100">{title}</p>
         <p className="mt-0.5 truncate text-xs text-zinc-500">{subtitle}</p>
