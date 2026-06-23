@@ -631,7 +631,7 @@ export function ArticleForm({
             <Textarea
               value={aiDetails}
               onChange={(e) => setAiDetails(e.target.value)}
-              placeholder="Ex : MacBook Pro 14&quot; M5 Pro, 32 Go RAM, 1 To SSD, 2025"
+              placeholder="Ex : marque, modèle, dimensions, matière, année, capacité/RAM, coloris, défauts…"
               rows={2}
             />
           </Field>
