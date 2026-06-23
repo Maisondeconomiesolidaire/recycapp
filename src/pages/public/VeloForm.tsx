@@ -67,6 +67,15 @@ export function VeloForm() {
       subtitle="Réparation, entretien, don ou recherche d'un vélo. Décrivez votre besoin."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <CustomerFields
+          register={register}
+          errors={errors}
+          withAddress
+          watch={watch}
+          setValue={setValue}
+          autofillProfile
+        />
+
         <FormSection title="Votre vélo">
           <div className="grid sm:grid-cols-2 gap-4">
             <Field
@@ -134,15 +143,6 @@ export function VeloForm() {
             <PhotoUpload value={photos} onChange={setPhotos} />
           </div>
         </FormSection>
-
-        <CustomerFields
-          register={register}
-          errors={errors}
-          withAddress
-          watch={watch}
-          setValue={setValue}
-          autofillProfile
-        />
 
         <Button
           type="submit"

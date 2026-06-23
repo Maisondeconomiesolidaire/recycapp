@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bike, ChevronDown, LayoutGrid, SprayCan, Store, Truck } from "lucide-react";
+import { Bike, ChevronDown, SprayCan, Store, Truck } from "lucide-react";
 
 const PAGES = [
   { to: "/boutique", label: "Boutique", icon: Store },
@@ -20,6 +20,7 @@ export function PageSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const current = matchPage(location.pathname);
+  const CurrentIcon = current.icon;
 
   useEffect(() => {
     if (!open) return;
@@ -37,7 +38,7 @@ export function PageSwitcher() {
         onClick={() => setOpen((v) => !v)}
         className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/55 bg-white/85 px-4 text-sm font-semibold text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur transition hover:-translate-y-0.5 sm:h-14"
       >
-        <LayoutGrid className="h-4 w-4" />
+        <CurrentIcon className="h-4 w-4" />
         <span className="hidden sm:inline">{current.label}</span>
         <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
       </button>

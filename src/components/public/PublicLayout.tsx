@@ -78,20 +78,17 @@ function PageHeaderBand({ pathname }: { pathname: string }) {
   if (!header) return null;
   const Icon = header.icon;
   return (
-    <div className={`${PUBLIC_CONTAINER} pt-7 sm:pt-9`}>
-      <div className="flex items-center gap-4">
+    <div className={`${PUBLIC_CONTAINER} pt-8 sm:pt-10`}>
+      <div className="flex flex-col items-center gap-3 text-center">
         <span
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-[0_10px_26px_rgba(241,16,79,0.28)] sm:h-14 sm:w-14"
+          className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-[0_10px_26px_rgba(241,16,79,0.28)] sm:h-16 sm:w-16"
           style={{ backgroundColor: BRAND }}
         >
-          <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
+          <Icon className="h-7 w-7 sm:h-8 sm:w-8" />
         </span>
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-zinc-950 sm:text-2xl">
-            {header.title}
-          </h1>
-          <p className="mt-0.5 truncate text-sm text-zinc-500">{header.subtitle}</p>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">
+          {header.title}
+        </h1>
       </div>
     </div>
   );

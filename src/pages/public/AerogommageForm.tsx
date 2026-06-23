@@ -136,6 +136,15 @@ export function AerogommageForm() {
       subtitle="Ajoutez un ou plusieurs objets à décaper, puis soumettez votre demande."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <CustomerFields
+          register={register}
+          errors={errors}
+          withAddress
+          watch={watch}
+          setValue={setValue}
+          autofillProfile
+        />
+
         <div className="space-y-5">
           {fields.map((field, index) => {
             const isOtherType =
@@ -335,15 +344,6 @@ export function AerogommageForm() {
             <p className="text-sm text-red-500">{errors.items.message}</p>
           )}
         </div>
-
-        <CustomerFields
-          register={register}
-          errors={errors}
-          withAddress
-          watch={watch}
-          setValue={setValue}
-          autofillProfile
-        />
 
         <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Envoi en cours…" : "Soumettre ma demande"}
