@@ -144,6 +144,8 @@ function ArticleCard({
           <img
             src={article.imageUrls[0]}
             alt={article.title}
+            loading="lazy"
+            decoding="async"
             className={`h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] group-hover:scale-[1.1] ${
               reserved ? "opacity-45 grayscale-[0.15]" : ""
             }`}
@@ -282,7 +284,13 @@ function ArticleCard({
           <div className="flex items-center gap-4 border-b border-zinc-100 p-5">
             <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-[#f2eee7]">
               {article.imageUrls[0] && (
-                <img src={article.imageUrls[0]} alt={article.title} className="h-full w-full object-cover" />
+                <img
+                  src={article.imageUrls[0]}
+                  alt={article.title}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
               )}
             </div>
             <div className="min-w-0 flex-1">

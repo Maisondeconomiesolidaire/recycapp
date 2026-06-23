@@ -148,6 +148,7 @@ export function ArticleDetail() {
                 <img
                   src={displayImage}
                   alt={selectedBundledArticle?.title ?? currentArticle.title}
+                  decoding="async"
                   className="aspect-square w-full object-cover"
                 />
               ) : (
@@ -173,7 +174,13 @@ export function ArticleDetail() {
                         : "border-transparent"
                     }`}
                   >
-                    <img src={url} alt="" className="aspect-square w-full object-cover" />
+                    <img
+                      src={url}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="aspect-square w-full object-cover"
+                    />
                   </button>
                 ))}
               </div>
@@ -281,6 +288,8 @@ export function ArticleDetail() {
                             <img
                               src={item.imageUrls[0]}
                               alt={item.title}
+                              loading="lazy"
+                              decoding="async"
                               className="h-full w-full object-cover"
                             />
                           ) : (
@@ -387,6 +396,8 @@ export function ArticleDetail() {
                       <img
                         src={item.imageUrls[0]}
                         alt={item.title}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                       />
                     ) : (

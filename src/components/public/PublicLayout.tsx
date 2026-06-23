@@ -217,7 +217,7 @@ function Header() {
                           >
                             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#f2eee7]">
                               {article.imageUrls[0] && (
-                                <img src={article.imageUrls[0]} alt={article.title} className="h-full w-full object-cover" />
+                                <img src={article.imageUrls[0]} alt={article.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
@@ -303,7 +303,7 @@ function Header() {
                                 className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#f2eee7]"
                               >
                                 {article.imageUrls[0] && (
-                                  <img src={article.imageUrls[0]} alt={article.title} className="h-full w-full object-cover" />
+                                  <img src={article.imageUrls[0]} alt={article.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                                 )}
                               </Link>
                               <div className="min-w-0 flex-1">
@@ -387,7 +387,7 @@ function Header() {
                             >
                               <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-[#f2eee7]">
                                 {article.imageUrls[0] ? (
-                                  <img src={article.imageUrls[0]} alt={article.title} className="h-full w-full object-cover" />
+                                  <img src={article.imageUrls[0]} alt={article.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                                 ) : null}
                               </div>
                               <div className="min-w-0 flex-1">

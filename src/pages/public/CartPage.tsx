@@ -248,6 +248,8 @@ export function CartPage() {
                     <img
                       src={article.imageUrls[0]}
                       alt={article.title}
+                      loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   ) : (
