@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm, UseFormRegister, FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,12 +12,13 @@ import { Button } from "../../components/ui/Button";
 import { PhotoUpload } from "../../components/ui/PhotoUpload";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
-import { useUpload } from "../../lib/useUpload";
-import { cn } from "../../lib/cn";
-import { Check, ImagePlus, Loader2, X } from "lucide-react";
-import { COLLECTE_CATEGORIES, HOUSING_TYPES } from "../../lib/constants";
-
-type CategoryPhoto = { storageId: Id<"_storage">; previewUrl: string };
+import {
+  CollecteCategoryPicker,
+  buildCategoryPhotosPayload,
+  selectedCategoryKeys,
+  type CategoryPhotoMap,
+} from "../../components/public/CollecteCategoryPicker";
+import { HOUSING_TYPES } from "../../lib/constants";
 
 const optNum = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
@@ -105,12 +106,7 @@ export function CollecteForm() {
         sorted: data.sorted === "oui",
         noWaste: data.noWaste === "oui",
         objectCategories: data.objectCategories,
-        categoryPhotos: (data.objectCategories ?? [])
-          .map((key) => ({
-            category: key,
-            photos: (categoryPhotos[key] ?? []).map((p) => p.storageId),
-          }))
-          .filter((entry) => entry.photos.length > 0),
+        categoryPhotos: buildCategoryPhotosPayload(categoryPhotos),
         grosObjetsAutre: data.grosObjetsAutre?.trim() || undefined,
         housingType: data.housingType,
         floors: data.floors,
@@ -123,53 +119,11 @@ export function CollecteForm() {
     navigate("/merci?type=collecte");
   }
 
-  const upload = useUpload();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const activeCategoryRef = useRef<string | null>(null);
-  const [categoryPhotos, setCategoryPhotos] = useState<Record<string, CategoryPhoto[]>>({});
-  const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
+  const [categoryPhotos, setCategoryPhotos] = useState<CategoryPhotoMap>({});
 
-  function syncSelected(next: Record<string, CategoryPhoto[]>) {
-    const keys = COLLECTE_CATEGORIES.map((c) => c.key).filter((k) => (next[k]?.length ?? 0) > 0);
-    setValue("objectCategories", keys, { shouldValidate: true });
-  }
-
-  // Tape une catégorie → ouvre immédiatement le sélecteur de photos.
-  function openPicker(categoryKey: string) {
-    activeCategoryRef.current = categoryKey;
-    fileInputRef.current?.click();
-  }
-
-  async function handleCategoryFiles(files: FileList | null) {
-    const categoryKey = activeCategoryRef.current;
-    if (!files || files.length === 0 || !categoryKey) return;
-    setUploadingCategory(categoryKey);
-    try {
-      const added: CategoryPhoto[] = [];
-      for (const file of Array.from(files)) {
-        const storageId = await upload(file);
-        added.push({ storageId, previewUrl: URL.createObjectURL(file) });
-      }
-      setCategoryPhotos((prev) => {
-        const next = { ...prev, [categoryKey]: [...(prev[categoryKey] ?? []), ...added] };
-        syncSelected(next);
-        return next;
-      });
-    } finally {
-      setUploadingCategory(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
-
-  function removeCategoryPhoto(categoryKey: string, storageId: Id<"_storage">) {
-    setCategoryPhotos((prev) => {
-      const remaining = (prev[categoryKey] ?? []).filter((p) => p.storageId !== storageId);
-      const next = { ...prev };
-      if (remaining.length > 0) next[categoryKey] = remaining;
-      else delete next[categoryKey];
-      syncSelected(next);
-      return next;
-    });
+  function handleCategoryChange(next: CategoryPhotoMap) {
+    setCategoryPhotos(next);
+    setValue("objectCategories", selectedCategoryKeys(next), { shouldValidate: true });
   }
 
   return (
@@ -301,87 +255,7 @@ export function CollecteForm() {
             est prise en compte dès qu'elle contient au moins une photo.
           </p>
 
-          {/* Sélecteur de fichiers partagé (caméra / galerie). */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => handleCategoryFiles(e.target.files)}
-          />
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {COLLECTE_CATEGORIES.map((cat) => {
-              const photos = categoryPhotos[cat.key] ?? [];
-              const checked = photos.length > 0;
-              const uploading = uploadingCategory === cat.key;
-              return (
-                <div
-                  key={cat.key}
-                  className={cn(
-                    "relative flex flex-col rounded-2xl border-2 p-3 transition",
-                    checked
-                      ? "border-brand-500 bg-brand-50 shadow-sm"
-                      : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => openPicker(cat.key)}
-                    aria-pressed={checked}
-                    className="flex flex-col items-center gap-2 text-center"
-                  >
-                    {checked && (
-                      <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-white">
-                        <Check className="h-3 w-3" strokeWidth={3} />
-                      </span>
-                    )}
-                    <img src={cat.image} alt="" className="h-16 w-16 object-contain" loading="lazy" />
-                    <span
-                      className={cn(
-                        "text-xs font-semibold leading-tight",
-                        checked ? "text-brand-700" : "text-zinc-700",
-                      )}
-                    >
-                      {cat.label}
-                    </span>
-                  </button>
-
-                  {/* Vignettes des photos uploadées pour la catégorie. */}
-                  {(photos.length > 0 || uploading) && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {photos.map((p) => (
-                        <div key={p.storageId} className="relative h-12 w-12 overflow-hidden rounded-lg">
-                          <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => removeCategoryPhoto(cat.key, p.storageId)}
-                            className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white"
-                            aria-label="Retirer la photo"
-                          >
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => openPicker(cat.key)}
-                        className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-zinc-400 transition hover:border-brand-400 hover:text-brand-500"
-                        aria-label="Ajouter une photo"
-                      >
-                        {uploading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ImagePlus className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <CollecteCategoryPicker value={categoryPhotos} onChange={handleCategoryChange} />
 
           <Field label="Autre catégorie (précisez)">
             <Input

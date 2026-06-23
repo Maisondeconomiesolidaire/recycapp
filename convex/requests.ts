@@ -858,6 +858,15 @@ export const createInternal = mutation({
         reusableGoodCondition: v.optional(v.boolean()),
         sorted: v.optional(v.boolean()),
         noWaste: v.optional(v.boolean()),
+        objectCategories: v.optional(v.array(v.string())),
+        categoryPhotos: v.optional(
+          v.array(
+            v.object({
+              category: v.string(),
+              photos: v.array(v.id("_storage")),
+            }),
+          ),
+        ),
         grosObjets: v.optional(v.array(v.string())),
         grosObjetsAutre: v.optional(v.string()),
         petitsObjets: v.optional(v.array(v.string())),

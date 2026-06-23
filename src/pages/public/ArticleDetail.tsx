@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   Check,
+  Eye,
   PackageOpen,
   ShieldCheck,
   ShoppingCart,
@@ -32,6 +33,10 @@ export function ArticleDetail() {
   });
   const cart = useCart();
   const navigate = useNavigate();
+  const viewerCount = useQuery(
+    api.articles.viewerCount,
+    id ? { articleId: id as Id<"articles"> } : "skip",
+  );
   const heartbeatView = useMutation(api.articles.heartbeatView);
   const leaveView = useMutation(api.articles.leaveView);
   const [activeImage, setActiveImage] = useState(0);
@@ -199,6 +204,13 @@ export function ArticleDetail() {
                 {!available && (
                   <span className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
                     Réservé
+                  </span>
+                )}
+                {(viewerCount ?? 0) > 1 && (
+                  <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                    <Eye className="h-3.5 w-3.5" />
+                    {(viewerCount ?? 1) - 1}{" "}
+                    {(viewerCount ?? 1) - 1 > 1 ? "personnes regardent" : "personne regarde"}
                   </span>
                 )}
               </div>

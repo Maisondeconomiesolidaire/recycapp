@@ -19,11 +19,16 @@ import {
   WOOD_TYPES,
   STRIPPING_OPTIONS,
   COATING_OPTIONS,
-  COLLECTE_ITEM_OPTIONS,
   HOUSING_TYPES,
   TYPE_LABELS,
   TYPE_COLORS,
 } from "../../lib/constants";
+import {
+  CollecteCategoryPicker,
+  buildCategoryPhotosPayload,
+  selectedCategoryKeys,
+  type CategoryPhotoMap,
+} from "../public/CollecteCategoryPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,10 +98,8 @@ const collecteSchema = z.object({
   dedicatedParking: z.boolean().optional(),
   parkingUnknown: z.boolean().optional(),
   parkingDistance: z.preprocess(pre, z.number().nonnegative().optional()),
-  grosObjets: z.array(z.string()).optional(),
+  objectCategories: z.array(z.string()).optional(),
   grosObjetsAutre: z.string().optional(),
-  petitsObjets: z.array(z.string()).optional(),
-  petitsObjetsAutre: z.string().optional(),
   dismountable: ouiNon,
   reusableGoodCondition: ouiNon,
   sorted: ouiNon,
@@ -192,6 +195,7 @@ export function NewRequestDrawer({
       }
     >
       <div className="flex-1 overflow-y-auto p-5">
+        <div className="mx-auto w-full max-w-2xl">
         {type === null && <TypeChoice onSelect={setType} />}
         {type === "aerogommage" && (
           <AeroForm
@@ -211,6 +215,7 @@ export function NewRequestDrawer({
             onSubmittingChange={setIsSubmitting}
           />
         )}
+        </div>
       </div>
     </Drawer>
   );
@@ -633,7 +638,6 @@ function AeroForm({
 
 // ─── Form: Collecte ────────────────────────────────────────────────────────────
 
-const AUTRE = "Autres (précisez)";
 
 function CollecteForm({
   onDone,
@@ -652,11 +656,15 @@ function CollecteForm({
     formState: { errors, isSubmitting },
   } = useForm<CollecteData>({
     resolver: zodResolver(collecteSchema),
-    defaultValues: { grosObjets: [], petitsObjets: [] },
+    defaultValues: { objectCategories: [] },
   });
 
-  const grosSel = watch("grosObjets") ?? [];
-  const petitsSel = watch("petitsObjets") ?? [];
+  const [categoryPhotos, setCategoryPhotos] = useState<CategoryPhotoMap>({});
+
+  function handleCategoryChange(next: CategoryPhotoMap) {
+    setCategoryPhotos(next);
+    setValue("objectCategories", selectedCategoryKeys(next));
+  }
 
   function copyBilling() {
     const next = !sameAddress;
@@ -680,10 +688,9 @@ function CollecteForm({
           reusableGoodCondition: data.reusableGoodCondition === "oui" ? true : data.reusableGoodCondition === "non" ? false : undefined,
           sorted: data.sorted === "oui" ? true : data.sorted === "non" ? false : undefined,
           noWaste: data.noWaste === "oui" ? true : data.noWaste === "non" ? false : undefined,
-          grosObjets: data.grosObjets,
-          grosObjetsAutre: data.grosObjets?.includes(AUTRE) ? data.grosObjetsAutre : undefined,
-          petitsObjets: data.petitsObjets,
-          petitsObjetsAutre: data.petitsObjets?.includes(AUTRE) ? data.petitsObjetsAutre : undefined,
+          objectCategories: data.objectCategories,
+          categoryPhotos: buildCategoryPhotosPayload(categoryPhotos),
+          grosObjetsAutre: data.grosObjetsAutre?.trim() || undefined,
           housingType: data.housingType || undefined,
           floors: data.floors,
           dedicatedParking: data.dedicatedParking,
@@ -776,18 +783,14 @@ function CollecteForm({
 
       <SectionHeader>Objets à collecter</SectionHeader>
       <div className="space-y-4">
-        <DarkItemMultiSelect title="Gros objets" name="grosObjets" selected={grosSel} register={register} />
-        {grosSel.includes(AUTRE) && (
-          <Field label="Autres gros objets (précisez)">
-            <Input {...register("grosObjetsAutre")} />
-          </Field>
-        )}
-        <DarkItemMultiSelect title="Petits objets" name="petitsObjets" selected={petitsSel} register={register} />
-        {petitsSel.includes(AUTRE) && (
-          <Field label="Autres petits objets (précisez)">
-            <Input {...register("petitsObjetsAutre")} />
-          </Field>
-        )}
+        <p className="text-xs text-zinc-500">
+          Touchez une catégorie pour ajouter des photos. Une catégorie est prise en compte dès
+          qu'elle contient au moins une photo.
+        </p>
+        <CollecteCategoryPicker value={categoryPhotos} onChange={handleCategoryChange} theme="dark" />
+        <Field label="Autre catégorie (précisez)">
+          <Input {...register("grosObjetsAutre")} />
+        </Field>
       </div>
 
       <SectionHeader>Conditions du don</SectionHeader>
@@ -937,48 +940,6 @@ function ArticleForm({
 }
 
 // ─── Dark-mode multi-select ───────────────────────────────────────────────────
-
-function DarkItemMultiSelect({
-  title,
-  name,
-  selected,
-  register,
-}: {
-  title: string;
-  name: "grosObjets" | "petitsObjets";
-  selected: string[];
-  register: ReturnType<typeof useForm<CollecteData>>["register"];
-}) {
-  return (
-    <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {COLLECTE_ITEM_OPTIONS.map((opt) => {
-          const checked = selected.includes(opt);
-          return (
-            <label
-              key={opt}
-              className={cn(
-                "flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm transition-colors",
-                checked
-                  ? "border-brand-500/50 bg-brand-500/10 text-zinc-100"
-                  : "border-zinc-800 text-zinc-400 hover:border-zinc-700",
-              )}
-            >
-              <input
-                type="checkbox"
-                value={opt}
-                {...register(name)}
-                className="h-4 w-4 rounded border-zinc-600 accent-brand-500"
-              />
-              <span>{opt}</span>
-            </label>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // ─── Dark-mode Oui/Non ────────────────────────────────────────────────────────
 
