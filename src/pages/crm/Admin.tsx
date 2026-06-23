@@ -234,7 +234,7 @@ export function Admin() {
                       placeholder="Jean Dupont"
                     />
                   </Field>
-                  <Field label="Email Clerk / staff" required>
+                  <Field label="Email" required>
                     <Input
                       type="email"
                       value={draftEmail}
