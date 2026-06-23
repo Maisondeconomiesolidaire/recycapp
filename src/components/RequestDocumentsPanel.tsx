@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   Download,
-  FileText,
   Loader2,
   Trash2,
   UploadCloud,
@@ -12,6 +11,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { useUpload } from "../lib/useUpload";
 import { cn } from "../lib/cn";
 import { Modal } from "./ui/Modal";
+import { FileTypePreview } from "./ui/FileTypePreview";
 
 export type RequestDocumentType =
   | "devis"
@@ -194,14 +194,11 @@ export function RequestDocumentsPanel({
         ) : (
           documents.map((document) => (
             <div key={document._id} className="flex items-center gap-3 py-3">
-              <div
-                className={cn(
-                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-                  dark ? "bg-zinc-900 text-brand-300" : "bg-brand-50 text-brand-600",
-                )}
-              >
-                <FileText className="h-5 w-5" />
-              </div>
+              <FileTypePreview
+                name={document.name}
+                mimeType={document.mimeType}
+                size="sm"
+              />
               <div className="min-w-0 flex-1">
                 <p className={cn("truncate text-sm font-semibold", dark ? "text-zinc-100" : "text-zinc-900")}>
                   {document.name}

@@ -19,6 +19,7 @@ import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { FileTypePreview } from "../../components/ui/FileTypePreview";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
@@ -39,30 +40,6 @@ function formatSize(size?: number | null) {
   if (size < 1024) return `${size} o`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} Ko`;
   return `${(size / 1024 / 1024).toFixed(1)} Mo`;
-}
-
-function fileKind(name: string, mimeType?: string | null) {
-  const extension = name.split(".").pop()?.toLowerCase() ?? "";
-  if (mimeType?.includes("pdf") || extension === "pdf") return "PDF";
-  if (mimeType?.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)) return "IMG";
-  if (mimeType?.includes("spreadsheet") || mimeType?.includes("excel") || ["xls", "xlsx", "csv"].includes(extension)) return "XLS";
-  if (mimeType?.includes("word") || ["doc", "docx"].includes(extension)) return "DOC";
-  if (mimeType?.includes("presentation") || ["ppt", "pptx"].includes(extension)) return "PPT";
-  if (mimeType?.startsWith("text/") || ["txt", "md", "rtf"].includes(extension)) return "TXT";
-  if (["zip", "rar", "7z"].includes(extension)) return "ZIP";
-  return extension ? extension.slice(0, 4).toUpperCase() : "FILE";
-}
-
-function FileKindBadge({
-  kind,
-}: {
-  kind: string;
-}) {
-  return (
-    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 text-[13px] font-black tracking-[0.08em] text-sky-200">
-      {kind}
-    </div>
-  );
 }
 
 export function Documents() {
@@ -310,7 +287,7 @@ export function Documents() {
                     {folder.files.map((item) => (
                       <ExplorerItem
                         key={item._id}
-                        icon={<FileKindBadge kind={fileKind(item.name, item.mimeType)} />}
+                        icon={<FileTypePreview name={item.name} mimeType={item.mimeType} />}
                         title={item.name}
                         subtitle={`${formatSize(item.size)} · ${formatDate(item.createdAt)}`}
                         href={item.url ?? undefined}
@@ -516,7 +493,7 @@ function SearchResults({
         {files.map((item) => (
           <ExplorerItem
             key={item._id}
-            icon={<FileKindBadge kind={fileKind(item.name, item.mimeType)} />}
+            icon={<FileTypePreview name={item.name} mimeType={item.mimeType} />}
             title={item.name}
             subtitle={`${formatSize(item.size)} · ${folderPath(allFolders, item.folderId)} · ${formatDate(item.createdAt)}`}
             href={item.url ?? undefined}
