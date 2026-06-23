@@ -225,6 +225,54 @@ export const COLLECTE_ITEM_OPTIONS = [
   "Autres (précisez)",
 ];
 
+/**
+ * Catégories d'objets à collecter, illustrées par les pictogrammes
+ * (`public/icones-collecte/<key>.png`). La clé sert de valeur stockée.
+ */
+export const COLLECTE_CATEGORIES: { key: string; label: string; image: string }[] = [
+  { key: "mobilier", label: "Mobilier", image: "/icones-collecte/mobilier.png" },
+  {
+    key: "gros-appareils-electromenagers",
+    label: "Gros électroménager",
+    image: "/icones-collecte/gros-appareils-electromenagers.png",
+  },
+  {
+    key: "objets-electriques",
+    label: "Objets électriques",
+    image: "/icones-collecte/objets-electriques.png",
+  },
+  {
+    key: "outils-thermiques",
+    label: "Outils thermiques",
+    image: "/icones-collecte/outils-thermiques.png",
+  },
+  {
+    key: "bricolage-jardin",
+    label: "Bricolage & jardin",
+    image: "/icones-collecte/bricolage-jardin.png",
+  },
+  { key: "sport-loisirs", label: "Sport & loisirs", image: "/icones-collecte/sport-loisirs.png" },
+  { key: "jeux-jouets", label: "Jeux & jouets", image: "/icones-collecte/jeux-jouets.png" },
+  { key: "livres", label: "Livres", image: "/icones-collecte/livres.png" },
+  {
+    key: "vinyles-cd-dvd-jeux-videos",
+    label: "Vinyles, CD, DVD & jeux vidéo",
+    image: "/icones-collecte/vinyles-cd-dvd-jeux-videos.png",
+  },
+  {
+    key: "vaiselle-decoration",
+    label: "Vaisselle & décoration",
+    image: "/icones-collecte/vaiselle-decoration.png",
+  },
+  { key: "deco-textile", label: "Déco & textile", image: "/icones-collecte/deco-textile.png" },
+  { key: "textile", label: "Textile", image: "/icones-collecte/textile.png" },
+];
+
+export const COLLECTE_CATEGORY_BY_KEY: Record<
+  string,
+  { key: string; label: string; image: string }
+> = Object.fromEntries(COLLECTE_CATEGORIES.map((c) => [c.key, c]));
+
 export const HOUSING_TYPES = ["Maison", "Appartement", "Studio", "Autre"];
 
 export const ARTICLE_CONDITIONS = [

@@ -13,7 +13,8 @@ import { PhotoUpload } from "../../components/ui/PhotoUpload";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import { cn } from "../../lib/cn";
-import { COLLECTE_ITEM_OPTIONS, HOUSING_TYPES } from "../../lib/constants";
+import { Check } from "lucide-react";
+import { COLLECTE_CATEGORIES, HOUSING_TYPES } from "../../lib/constants";
 
 const optNum = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
@@ -42,10 +43,8 @@ const schema = z
     dedicatedParking: z.boolean().optional(),
     parkingUnknown: z.boolean().optional(),
     parkingDistance: optNum,
-    grosObjets: z.array(z.string()).optional(),
+    objectCategories: z.array(z.string()).optional(),
     grosObjetsAutre: z.string().optional(),
-    petitsObjets: z.array(z.string()).optional(),
-    petitsObjetsAutre: z.string().optional(),
     dismountable: ouiNon,
     reusableGoodCondition: ouiNon,
     sorted: ouiNon,
@@ -53,19 +52,13 @@ const schema = z
     comment: z.string().optional(),
   })
   .refine(
-    (d) =>
-      (d.grosObjets?.length ?? 0) > 0 ||
-      (d.petitsObjets?.length ?? 0) > 0 ||
-      d.grosObjetsAutre?.trim() ||
-      d.petitsObjetsAutre?.trim(),
+    (d) => (d.objectCategories?.length ?? 0) > 0 || Boolean(d.grosObjetsAutre?.trim()),
     {
-      message: "Sélectionnez au moins un type d'objet à collecter",
-      path: ["grosObjets"],
+      message: "Sélectionnez au moins une catégorie d'objet à collecter",
+      path: ["objectCategories"],
     },
   );
 type FormData = z.infer<typeof schema>;
-
-const AUTRE = "Autres (précisez)";
 
 export function CollecteForm() {
   const navigate = useNavigate();
@@ -81,7 +74,7 @@ export function CollecteForm() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { grosObjets: [], petitsObjets: [] },
+    defaultValues: { objectCategories: [] },
   });
 
   // Préremplit les coordonnées (dont l'adresse de facturation) depuis le profil
@@ -108,14 +101,8 @@ export function CollecteForm() {
         reusableGoodCondition: data.reusableGoodCondition === "oui",
         sorted: data.sorted === "oui",
         noWaste: data.noWaste === "oui",
-        grosObjets: data.grosObjets,
-        grosObjetsAutre: data.grosObjets?.includes(AUTRE)
-          ? data.grosObjetsAutre
-          : undefined,
-        petitsObjets: data.petitsObjets,
-        petitsObjetsAutre: data.petitsObjets?.includes(AUTRE)
-          ? data.petitsObjetsAutre
-          : undefined,
+        objectCategories: data.objectCategories,
+        grosObjetsAutre: data.grosObjetsAutre?.trim() || undefined,
         housingType: data.housingType,
         floors: data.floors,
         dedicatedParking: data.dedicatedParking,
@@ -127,8 +114,14 @@ export function CollecteForm() {
     navigate("/merci?type=collecte");
   }
 
-  const grosSel = watch("grosObjets") ?? [];
-  const petitsSel = watch("petitsObjets") ?? [];
+  const selectedCategories = watch("objectCategories") ?? [];
+
+  function toggleCategory(key: string) {
+    const next = selectedCategories.includes(key)
+      ? selectedCategories.filter((k) => k !== key)
+      : [...selectedCategories, key];
+    setValue("objectCategories", next, { shouldValidate: true });
+  }
 
   return (
     <FormShell
@@ -254,32 +247,59 @@ export function CollecteForm() {
         </FormSection>
 
         <FormSection title="Objets à collecter">
-          <ItemMultiSelect
-            title="Gros objets"
-            name="grosObjets"
-            selected={grosSel}
-            register={register}
-          />
-          {grosSel.includes(AUTRE) && (
-            <Field label="Autres gros objets (précisez)">
-              <Input {...register("grosObjetsAutre")} />
-            </Field>
-          )}
+          <p className="-mt-1 mb-1 text-sm text-zinc-500">
+            Sélectionnez les catégories d'objets que nous viendrons récupérer.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {COLLECTE_CATEGORIES.map((cat) => {
+              const checked = selectedCategories.includes(cat.key);
+              return (
+                <button
+                  type="button"
+                  key={cat.key}
+                  onClick={() => toggleCategory(cat.key)}
+                  aria-pressed={checked}
+                  className={cn(
+                    "group relative flex flex-col items-center gap-2 rounded-2xl border-2 p-3 text-center transition",
+                    checked
+                      ? "border-brand-500 bg-brand-50 shadow-sm"
+                      : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50",
+                  )}
+                >
+                  {checked && (
+                    <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-white">
+                      <Check className="h-3 w-3" strokeWidth={3} />
+                    </span>
+                  )}
+                  <img
+                    src={cat.image}
+                    alt=""
+                    className="h-16 w-16 object-contain"
+                    loading="lazy"
+                  />
+                  <span
+                    className={cn(
+                      "text-xs font-semibold leading-tight",
+                      checked ? "text-brand-700" : "text-zinc-700",
+                    )}
+                  >
+                    {cat.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-          <ItemMultiSelect
-            title="Petits objets"
-            name="petitsObjets"
-            selected={petitsSel}
-            register={register}
-          />
-          {petitsSel.includes(AUTRE) && (
-            <Field label="Autres petits objets (précisez)">
-              <Input {...register("petitsObjetsAutre")} />
-            </Field>
-          )}
-          {errors.grosObjets?.message && (
+          <Field label="Autre catégorie (précisez)">
+            <Input
+              {...register("grosObjetsAutre")}
+              placeholder="Ex : instruments de musique, matériel médical…"
+            />
+          </Field>
+
+          {errors.objectCategories?.message && (
             <p className="text-sm text-red-500">
-              {errors.grosObjets.message as string}
+              {errors.objectCategories.message as string}
             </p>
           )}
         </FormSection>
@@ -329,49 +349,6 @@ export function CollecteForm() {
         </Button>
       </form>
     </FormShell>
-  );
-}
-
-/** Groupe de cases à cocher (multi-sélection) pour une famille d'objets. */
-function ItemMultiSelect({
-  title,
-  name,
-  selected,
-  register,
-}: {
-  title: string;
-  name: "grosObjets" | "petitsObjets";
-  selected: string[];
-  register: UseFormRegister<FormData>;
-}) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-zinc-700 mb-2">{title}</p>
-      <div className="grid sm:grid-cols-2 gap-2">
-        {COLLECTE_ITEM_OPTIONS.map((opt) => {
-          const checked = selected.includes(opt);
-          return (
-            <label
-              key={opt}
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors",
-                checked
-                  ? "border-brand-500 bg-brand-50"
-                  : "border-zinc-300 hover:bg-zinc-50",
-              )}
-            >
-              <input
-                type="checkbox"
-                value={opt}
-                {...register(name)}
-                className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500"
-              />
-              <span className="text-zinc-800">{opt}</span>
-            </label>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

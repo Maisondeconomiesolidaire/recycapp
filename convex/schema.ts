@@ -83,7 +83,9 @@ const collecteDetails = v.object({
   reusableGoodCondition: v.optional(v.boolean()),
   sorted: v.optional(v.boolean()),
   noWaste: v.optional(v.boolean()),
-  // Objets à collecter (multi-sélection par famille).
+  // Catégories d'objets sélectionnées (pictogrammes). Clés de COLLECTE_CATEGORIES.
+  objectCategories: v.optional(v.array(v.string())),
+  // Champs hérités (multi-sélection par famille, anciennes demandes).
   grosObjets: v.optional(v.array(v.string())),
   grosObjetsAutre: v.optional(v.string()),
   petitsObjets: v.optional(v.array(v.string())),

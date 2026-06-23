@@ -100,6 +100,7 @@ type CollecteInput = {
   reusableGoodCondition?: boolean;
   sorted?: boolean;
   noWaste?: boolean;
+  objectCategories?: string[];
   grosObjets?: string[];
   grosObjetsAutre?: string;
   petitsObjets?: string[];
@@ -165,7 +166,8 @@ export function isCollecteComplete(
   d: CollecteInput,
 ): boolean {
   const hasItems = Boolean(
-    (d.grosObjets && d.grosObjets.length > 0) ||
+    (d.objectCategories && d.objectCategories.length > 0) ||
+      (d.grosObjets && d.grosObjets.length > 0) ||
       (d.petitsObjets && d.petitsObjets.length > 0) ||
       d.grosObjetsAutre?.trim() ||
       d.petitsObjetsAutre?.trim() ||

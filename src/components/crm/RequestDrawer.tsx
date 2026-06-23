@@ -35,6 +35,7 @@ import {
   OUTCOME_LABELS,
   COLLECTE_TYPE_OPTIONS,
   COLLECTE_TYPE_LABELS,
+  COLLECTE_CATEGORY_BY_KEY,
   CollecteType,
   TYPE_COLORS,
   SITE_LABELS,
@@ -1402,10 +1403,38 @@ function RequestDetails({ request }: { request: RequestDoc }) {
 
         <section>
           <SectionTitle>Objets</SectionTitle>
-          <div className="text-sm">
-            <Row label="Gros objets" value={joinItems(c.grosObjets, c.grosObjetsAutre, c.largeItems)} />
-            <Row label="Petits objets" value={joinItems(c.petitsObjets, c.petitsObjetsAutre, c.smallItems)} />
-          </div>
+          {(c.objectCategories?.length ?? 0) > 0 ? (
+            <>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {c.objectCategories!.map((key) => {
+                  const cat = COLLECTE_CATEGORY_BY_KEY[key];
+                  return (
+                    <div
+                      key={key}
+                      className="flex flex-col items-center gap-1 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-2"
+                    >
+                      {cat?.image && (
+                        <img src={cat.image} alt="" className="h-12 w-12 object-contain" />
+                      )}
+                      <span className="text-center text-[11px] leading-tight text-zinc-300">
+                        {cat?.label ?? key}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {c.grosObjetsAutre && (
+                <p className="mt-2 text-sm text-zinc-400">
+                  <span className="text-zinc-500">Autre :</span> {c.grosObjetsAutre}
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="text-sm">
+              <Row label="Gros objets" value={joinItems(c.grosObjets, c.grosObjetsAutre, c.largeItems)} />
+              <Row label="Petits objets" value={joinItems(c.petitsObjets, c.petitsObjetsAutre, c.smallItems)} />
+            </div>
+          )}
         </section>
       </>
     );
