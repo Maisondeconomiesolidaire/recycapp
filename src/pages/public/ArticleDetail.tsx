@@ -16,6 +16,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { Button } from "../../components/ui/Button";
+import { Lightbox } from "../../components/ui/Lightbox";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { useCart } from "../../lib/useCart";
 
@@ -41,6 +42,7 @@ export function ArticleDetail() {
   const leaveView = useMutation(api.articles.leaveView);
   const [activeImage, setActiveImage] = useState(0);
   const [selectedBundledId, setSelectedBundledId] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -150,18 +152,33 @@ export function ArticleDetail() {
           <section>
             <div className="relative overflow-hidden rounded-[24px] bg-[#f2eee7]">
               {displayImage ? (
-                <img
-                  src={displayImage}
-                  alt={selectedBundledArticle?.title ?? currentArticle.title}
-                  decoding="async"
-                  className="aspect-square w-full object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  className="block w-full cursor-zoom-in"
+                  aria-label="Agrandir la photo"
+                >
+                  <img
+                    src={displayImage}
+                    alt={selectedBundledArticle?.title ?? currentArticle.title}
+                    decoding="async"
+                    className="aspect-square w-full object-cover"
+                  />
+                </button>
               ) : (
                 <div className="flex aspect-square w-full items-center justify-center text-zinc-300">
                   <PackageOpen className="h-16 w-16" />
                 </div>
               )}
             </div>
+
+            {lightboxOpen && (
+              <Lightbox
+                images={selectedBundledArticle?.imageUrls ?? currentArticle.imageUrls}
+                startIndex={selectedBundledArticle ? 0 : activeImage}
+                onClose={() => setLightboxOpen(false)}
+              />
+            )}
 
             {currentArticle.imageUrls.length > 1 && (
               <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-5">
@@ -243,33 +260,11 @@ export function ArticleDetail() {
                     </span>
                   </>
                 ) : (
-                  <span className="text-3xl font-extrabold text-zinc-950 sm:text-4xl">
+                  <span className="text-3xl font-extrabold text-brand-600 sm:text-4xl">
                     {formatPrice(currentArticle.price)}
                   </span>
                 )}
               </div>
-
-              {available && (
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    type="button"
-                    size="lg"
-                    className="rounded-2xl bg-zinc-950 hover:bg-zinc-900"
-                    onClick={() => cart.add(currentArticle._id)}
-                  >
-                    <ShoppingCart className="h-5 w-5" />
-                    {inCart ? "Déjà dans le panier" : "Ajouter au panier"}
-                  </Button>
-                  {cart.count > 0 && (
-                    <Link
-                      to="/boutique/panier"
-                      className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-200 bg-white px-6 text-base font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50"
-                    >
-                      Voir le panier ({cart.count})
-                    </Link>
-                  )}
-                </div>
-              )}
 
               <p className="mt-6 whitespace-pre-line text-base leading-8 text-zinc-600">
                 {currentArticle.description}
@@ -353,14 +348,21 @@ export function ArticleDetail() {
                     Ajoutez l’article à votre panier puis finalisez votre réservation. Un compte
                     est nécessaire pour réserver.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => cart.add(currentArticle._id)}
+                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-3.5 text-base font-bold text-white shadow-[0_12px_30px_rgba(249,115,22,0.28)] transition hover:bg-orange-600"
+                  >
+                    {inCart ? <Check className="h-5 w-5" /> : <ShoppingCart className="h-5 w-5" />}
+                    {inCart ? "Ajouté au panier" : "Ajouter au panier"}
+                  </button>
                   <Button
                     type="button"
                     size="lg"
                     onClick={reserveNow}
-                    className="mt-6 w-full rounded-2xl"
+                    className="mt-3 w-full rounded-2xl"
                   >
-                    <ShoppingCart className="h-5 w-5" />
-                    {inCart ? "Voir mon panier" : "Réserver maintenant"}
+                    Réserver maintenant
                   </Button>
                   <p className="mt-3 text-center text-xs text-zinc-400">
                     Article mis de côté 48 h après la réservation.

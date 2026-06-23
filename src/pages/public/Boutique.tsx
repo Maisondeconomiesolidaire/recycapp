@@ -12,7 +12,8 @@ import {
 import { useCart } from "../../lib/useCart";
 
 const BRAND = "#f1104f";
-const BRAND_DARK = "#c90d40";
+const ORANGE = "#f97316";
+const ORANGE_DARK = "#ea6a0c";
 
 function truncateDescription(value: string, max = 88) {
   const trimmed = value.trim();
@@ -130,7 +131,7 @@ function ArticleCard({
     <>
     <Link
       to={`/boutique/${article._id}`}
-      className={`group relative overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.08)] transition-shadow duration-300 hover:shadow-[0_24px_56px_rgba(24,24,27,0.16)] ${
+      className={`group relative flex h-full flex-col overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.08)] transition-shadow duration-300 hover:shadow-[0_24px_56px_rgba(24,24,27,0.16)] ${
         article.isLot ? "ring-2 ring-brand-500/20" : ""
       }`}
     >
@@ -167,7 +168,7 @@ function ArticleCard({
         </div>
       </div>
 
-      <div className={`bg-white p-4 ${reserved ? "opacity-55" : ""}`}>
+      <div className={`flex flex-1 flex-col bg-white p-4 ${reserved ? "opacity-55" : ""}`}>
         {viewerCount ? (
           <p className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#d9480f]">
             <Flame className="h-4 w-4" />
@@ -203,11 +204,14 @@ function ArticleCard({
           </p>
         ) : null}
 
-        <div className="mt-4 flex items-center justify-between gap-2.5">
+        <div className="mt-auto flex items-center justify-between gap-2.5 pt-4">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {article.originalPrice && article.originalPrice > article.price ? (
               <>
-                <span className="rounded-2xl bg-brand-500 px-2.5 py-2 text-xl font-extrabold leading-none text-white shadow-[0_12px_28px_rgba(255,119,0,0.22)]">
+                <span
+                  className="rounded-2xl px-2.5 py-2 text-xl font-extrabold leading-none text-white shadow-[0_12px_28px_rgba(241,16,79,0.22)]"
+                  style={{ backgroundColor: BRAND }}
+                >
                   {formatPrice(article.price)}
                 </span>
                 <span className="text-sm font-semibold text-zinc-400 line-through">
@@ -215,7 +219,7 @@ function ArticleCard({
                 </span>
               </>
             ) : (
-              <span className="text-xl font-bold text-zinc-950">
+              <span className="text-xl font-bold" style={{ color: BRAND }}>
                 {formatPrice(article.price)}
               </span>
             )}
@@ -235,8 +239,8 @@ function ArticleCard({
               if (!inCart) cart.add(article._id);
               setShowPopup(true);
             }}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-bold text-white shadow-[0_10px_26px_rgba(241,16,79,0.26)] transition hover:-translate-y-0.5"
-            style={{ backgroundColor: inCart ? BRAND_DARK : BRAND }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-bold text-white shadow-[0_10px_26px_rgba(249,115,22,0.28)] transition hover:-translate-y-0.5"
+            style={{ backgroundColor: inCart ? ORANGE_DARK : ORANGE }}
           >
             {inCart ? <Check className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
             {inCart ? "Ajouté au panier" : "Ajouter au panier"}
