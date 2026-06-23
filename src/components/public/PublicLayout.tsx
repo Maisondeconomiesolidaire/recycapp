@@ -79,7 +79,7 @@ function PageHeaderBand({ pathname }: { pathname: string }) {
   const Icon = header.icon;
   return (
     <div className={`${PUBLIC_CONTAINER} pt-7 sm:pt-9`}>
-      <div className="flex items-center gap-4 rounded-[26px] border border-white/70 bg-white/80 px-5 py-4 shadow-[0_18px_50px_rgba(24,24,27,0.08)] backdrop-blur sm:px-7 sm:py-5">
+      <div className="flex items-center gap-4">
         <span
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-[0_10px_26px_rgba(241,16,79,0.28)] sm:h-14 sm:w-14"
           style={{ backgroundColor: BRAND }}
@@ -100,10 +100,9 @@ function PageHeaderBand({ pathname }: { pathname: string }) {
 function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  // « Shop-like » = barre complète (recherche, panier, catégories) : boutique
-  // et Cycle en Bray. Collecte/Aérogommage gardent une barre minimale.
-  const isBoutiqueArea =
-    location.pathname.startsWith("/boutique") || location.pathname === "/velo";
+  // Barre complète (recherche, panier, catégories) : boutique uniquement.
+  // Collecte / Aérogommage / Cycle en Bray sont des formulaires → barre minimale.
+  const isBoutiqueArea = location.pathname.startsWith("/boutique");
   const isBoutiqueListing =
     location.pathname === "/boutique" ||
     location.pathname.startsWith("/boutique/categorie/");

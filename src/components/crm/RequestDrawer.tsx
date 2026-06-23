@@ -31,6 +31,7 @@ import { Modal } from "../ui/Modal";
 import { TypeBadge } from "./TypeBadge";
 import { PhoneInput } from "../ui/PhoneInput";
 import { RequestOriginBadge } from "./RequestOriginBadge";
+import { C3QuoteCalculator } from "./C3QuoteCalculator";
 import {
   OUTCOME_LABELS,
   COLLECTE_TYPE_OPTIONS,
@@ -46,7 +47,7 @@ import { formatDateTime, formatPrice } from "../../lib/format";
 import { cn } from "../../lib/cn";
 
 type RequestDoc = NonNullable<ReturnType<typeof useQuery<typeof api.requests.get>>>;
-type Tab = "demande" | "gestion" | "client" | "messages";
+type Tab = "demande" | "gestion" | "calculDevis" | "client" | "messages";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "demande", label: "Demande" },
@@ -54,6 +55,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "client", label: "Client" },
   { key: "messages", label: "Messages" },
 ];
+
+const C3_QUOTE_TAB = { key: "calculDevis", label: "Calcul devis" } as const;
 
 const LOST_REASON_OPTIONS = [
   { value: "devis_refuse", label: "Devis refusé" },
@@ -87,6 +90,11 @@ export function RequestDrawer({
   const collecteUndefined =
     request?.type === "collecte" &&
     (request.collecteType ?? "indefini") === "indefini";
+  const isC3Collecte = request?.type === "collecte" && request.collecteType === "C3";
+  const visibleTabs = isC3Collecte
+    ? [TABS[0], TABS[1], C3_QUOTE_TAB, TABS[2], TABS[3]]
+    : TABS;
+  const activeTab = isC3Collecte || tab !== "calculDevis" ? tab : "gestion";
 
   return (
     <Drawer
@@ -185,21 +193,24 @@ export function RequestDrawer({
         <div>
           {/* Onglets */}
           <UnderlineTabs
-            items={TABS}
-            value={tab}
+            items={visibleTabs}
+            value={activeTab}
             onChange={setTab}
             className="mb-5"
             size="sm"
           />
 
-          {tab === "demande" && <DemandeTab request={request} />}
-          {tab === "gestion" && (
+          {activeTab === "demande" && <DemandeTab request={request} />}
+          {activeTab === "gestion" && (
             <GestionTab request={request} collecteUndefined={!!collecteUndefined} />
           )}
-          {tab === "client" && (
+          {activeTab === "calculDevis" && isC3Collecte && (
+            <C3QuoteCalculator key={request._id} request={request} />
+          )}
+          {activeTab === "client" && (
             <ClientTab key={request._id} request={request} />
           )}
-          {tab === "messages" && (
+          {activeTab === "messages" && (
             <div className="h-[60vh]">
               <MessageThread requestId={request._id} viewerRole="staff" theme="dark" />
             </div>
