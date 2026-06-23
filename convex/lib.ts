@@ -47,6 +47,13 @@ export async function requireUser(ctx: QueryCtx | MutationCtx | ActionCtx) {
   return identity;
 }
 
+function allowedEmailsFromEnv(name: string) {
+  return (process.env[name] ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 /**
  * Détermine si une identité Clerk correspond à un membre du staff.
  *
@@ -60,18 +67,20 @@ export async function requireUser(ctx: QueryCtx | MutationCtx | ActionCtx) {
  */
 export function isStaffIdentity(identity: UserIdentity): boolean {
   const role = (identity as { role?: unknown }).role;
-  if (role === "staff" || role === "admin") return true;
+  if (role === "staff" || isAdminIdentity(identity)) return true;
 
-  const allow = (process.env.STAFF_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
+  const allow = allowedEmailsFromEnv("STAFF_EMAILS");
   const email = identity.email?.toLowerCase();
   return Boolean(email && allow.includes(email));
 }
 
 export function isAdminIdentity(identity: UserIdentity): boolean {
-  return (identity as { role?: unknown }).role === "admin";
+  const role = (identity as { role?: unknown }).role;
+  if (role === "admin") return true;
+
+  const allow = allowedEmailsFromEnv("ADMIN_EMAILS");
+  const email = identity.email?.toLowerCase();
+  return Boolean(email && allow.includes(email));
 }
 
 /** Vérifie qu'une session Clerk *staff* est présente (CRM). */
