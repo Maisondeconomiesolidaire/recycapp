@@ -299,6 +299,22 @@ export default defineSchema({
     createdAt: v.number(),
   }),
 
+  /** Droits CRM fins par email staff. Les admins Clerk gardent toujours tous les accès. */
+  crmPermissions: defineTable({
+    email: v.string(),
+    name: v.optional(v.string()),
+    active: v.boolean(),
+    grants: v.array(
+      v.object({
+        pageKey: v.string(),
+        actions: v.array(v.string()),
+      }),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_email", ["email"]),
+
   bgJobs: defineTable({
     status: v.union(v.literal("pending"), v.literal("done"), v.literal("error")),
     storageIds: v.array(v.id("_storage")),

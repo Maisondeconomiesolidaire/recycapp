@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { requireStaff } from "./lib";
+import { requireCrmPermission } from "./lib";
 import { Doc, Id } from "./_generated/dataModel";
 
 async function withImageUrls(
@@ -391,7 +391,7 @@ export const listAll = query({
     categories: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "articles", "read");
     const articles = await ctx.db.query("articles").order("desc").collect();
     const filtered = articles.filter((a) => matchesArticleFilters(a, args));
     return Promise.all(filtered.map((a) => withImageUrls(ctx, a)));
@@ -401,7 +401,7 @@ export const listAll = query({
 export const listForLotAnalysis = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "articles", "analyze");
     const articles = await ctx.db.query("articles").order("desc").collect();
     const candidates = articles.filter(
       (article) =>
@@ -452,7 +452,7 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "articles", "create");
     const internalReference = await generateInternalReference(ctx);
     assertArticleReferences({
       internalReference,
@@ -486,7 +486,7 @@ export const publishLot = mutation({
     price: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "articles", "create");
     if (args.articleIds.length < 2) {
       throw new Error("Un lot doit contenir au moins 2 articles.");
     }
@@ -574,7 +574,7 @@ export const patchStatus = mutation({
     ),
   },
   handler: async (ctx, { id, status }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "articles", "update");
     await ctx.db.patch(id, { status });
   },
 });
@@ -605,7 +605,7 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, { id, ...rest }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "articles", "update");
     assertArticleReferences(rest);
     await ctx.db.patch(id, {
       ...rest,
@@ -623,7 +623,7 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("articles") },
   handler: async (ctx, { id }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "articles", "delete");
     await ctx.db.delete(id);
   },
 });

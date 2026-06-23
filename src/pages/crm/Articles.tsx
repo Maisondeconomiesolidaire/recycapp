@@ -40,6 +40,8 @@ import { MultiSelectChips } from "../../components/ui/MultiSelectChips";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { PrintLabels } from "../../components/crm/PrintLabels";
+import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
+import { canAccess } from "../../lib/crmPermissions";
 
 type ArticleDoc = Doc<"articles"> & { imageUrls: string[] };
 type Tab = "stock" | "lots" | "dashboard";
@@ -69,7 +71,15 @@ const STATUS_OPTIONS: { value: ArticleStatus; label: string; style: string }[] =
   { value: "attente",    label: "En attente", style: STATUS_STYLE.attente },
 ];
 
-function StatusDropdown({ id, status }: { id: string; status: string }) {
+function StatusDropdown({
+  id,
+  status,
+  disabled,
+}: {
+  id: string;
+  status: string;
+  disabled?: boolean;
+}) {
   const patchStatus = useMutation(api.articles.patchStatus);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -99,7 +109,7 @@ function StatusDropdown({ id, status }: { id: string; status: string }) {
     <div ref={ref} className="relative inline-block">
       <button
         type="button"
-        disabled={loading}
+        disabled={loading || disabled}
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-opacity ${STATUS_STYLE[status] ?? "bg-zinc-700 text-zinc-100"} ${loading ? "opacity-60" : "hover:opacity-90"}`}
       >
@@ -147,6 +157,12 @@ function normalizeDigits(value: string) {
 }
 
 export function Articles() {
+  const access = useCrmAccess();
+  const canCreate = canAccess(access, "articles", "create");
+  const canUpdate = canAccess(access, "articles", "update");
+  const canDelete = canAccess(access, "articles", "delete");
+  const canPrint = canAccess(access, "articles", "print");
+  const canAnalyze = canAccess(access, "articles", "analyze");
   const [tab, setTab] = useState<Tab>("stock");
   const [searchText, setSearchText] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -224,6 +240,7 @@ export function Articles() {
   }
 
   async function handleAnalyzeLots() {
+    if (!canAnalyze) return;
     setAnalyzingLots(true);
     setLotAnalysisError("");
     try {
@@ -249,7 +266,7 @@ export function Articles() {
             <Button
               variant="outline"
               onClick={() => filteredArticles && filteredArticles.length > 0 && setPrintArticles(filteredArticles)}
-              disabled={!filteredArticles?.length}
+              disabled={!canPrint || !filteredArticles?.length}
               title="Imprimer les étiquettes des articles visibles"
             >
               <Printer className="h-4 w-4" />
@@ -258,7 +275,7 @@ export function Articles() {
             <Button
               variant="outline"
               onClick={handleAnalyzeLots}
-              disabled={analyzingLots || !articles?.length}
+              disabled={!canAnalyze || analyzingLots || !articles?.length}
             >
               {analyzingLots ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -271,9 +288,11 @@ export function Articles() {
               <ScanLine className="h-4 w-4" />
               Scanner
             </Button>
-            <Button onClick={openNew}>
-              <Plus className="h-4 w-4" /> Nouvel article
-            </Button>
+            {canCreate && (
+              <Button onClick={openNew}>
+                <Plus className="h-4 w-4" /> Nouvel article
+              </Button>
+            )}
           </div>
         }
       />
@@ -306,7 +325,9 @@ export function Articles() {
             aiGroups={aiGroups}
             loading={analyzingLots}
             error={lotAnalysisError}
+            canPublish={canCreate}
             onPublish={async (group) => {
+              if (!canCreate) return;
               await publishLot({
                 articleIds: group.items.map((article) => article._id),
                 title:
@@ -362,9 +383,11 @@ export function Articles() {
                     : "Ajoutez votre premier article pour qu'il apparaisse en boutique."
                 }
                 action={
-                  <Button onClick={openNew}>
-                    <Plus className="h-4 w-4" /> Nouvel article
-                  </Button>
+                  canCreate ? (
+                    <Button onClick={openNew}>
+                      <Plus className="h-4 w-4" /> Nouvel article
+                    </Button>
+                  ) : undefined
                 }
               />
             ) : (
@@ -433,29 +456,35 @@ export function Articles() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <StatusDropdown id={a._id} status={a.status} />
+                          <StatusDropdown id={a._id} status={a.status} disabled={!canUpdate} />
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => setPrintArticles([a])}
-                              className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                              title="Imprimer l'étiquette"
-                            >
-                              <Printer className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => openEdit(a)}
-                              className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleting(a)}
-                              className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-400"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {canPrint && (
+                              <button
+                                onClick={() => setPrintArticles([a])}
+                                className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                                title="Imprimer l'étiquette"
+                              >
+                                <Printer className="h-4 w-4" />
+                              </button>
+                            )}
+                            {canUpdate && (
+                              <button
+                                onClick={() => openEdit(a)}
+                                className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => setDeleting(a)}
+                                className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-400"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                             <ChevronRight className="h-4 w-4 text-zinc-600" />
                           </div>
                         </td>
@@ -735,12 +764,14 @@ function PotentialLots({
   aiGroups,
   loading,
   error,
+  canPublish,
   onPublish,
 }: {
   articles: ArticleDoc[];
   aiGroups: AiLotGroup[] | null;
   loading: boolean;
   error: string;
+  canPublish: boolean;
   onPublish: (group: PotentialLotGroup) => Promise<void>;
 }) {
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
@@ -939,19 +970,21 @@ function PotentialLots({
             </p>
           )}
 
-          <div className="mt-5 flex justify-end">
-            <Button
-              onClick={() => handlePublish(group)}
-              disabled={publishingKey === group.key}
-            >
-              {publishingKey === group.key ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ShoppingBag className="h-4 w-4" />
-              )}
-              Mettre le lot en ligne
-            </Button>
-          </div>
+          {canPublish && (
+            <div className="mt-5 flex justify-end">
+              <Button
+                onClick={() => handlePublish(group)}
+                disabled={publishingKey === group.key}
+              >
+                {publishingKey === group.key ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShoppingBag className="h-4 w-4" />
+                )}
+                Mettre le lot en ligne
+              </Button>
+            </div>
+          )}
         </div>
       ))}
     </div>

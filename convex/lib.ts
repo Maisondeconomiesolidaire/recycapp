@@ -70,6 +70,10 @@ export function isStaffIdentity(identity: UserIdentity): boolean {
   return Boolean(email && allow.includes(email));
 }
 
+export function isAdminIdentity(identity: UserIdentity): boolean {
+  return (identity as { role?: unknown }).role === "admin";
+}
+
 /** Vérifie qu'une session Clerk *staff* est présente (CRM). */
 export async function requireStaff(ctx: QueryCtx | MutationCtx | ActionCtx) {
   const identity = await requireUser(ctx);
@@ -77,6 +81,92 @@ export async function requireStaff(ctx: QueryCtx | MutationCtx | ActionCtx) {
     throw new Error("Accès réservé au personnel.");
   }
   return identity;
+}
+
+/** Vérifie qu'une session Clerk admin est présente. */
+export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
+  const identity = await requireUser(ctx);
+  if (!isAdminIdentity(identity)) {
+    throw new Error("Accès réservé aux administrateurs.");
+  }
+  return identity;
+}
+
+export type CrmPermissionAction =
+  | "read"
+  | "create"
+  | "update"
+  | "delete"
+  | "manage"
+  | "reply"
+  | "share"
+  | "checkout"
+  | "print"
+  | "analyze"
+  | "start";
+
+export async function getCrmAccessForIdentity(
+  ctx: QueryCtx | MutationCtx,
+  identity: UserIdentity,
+) {
+  const staff = isStaffIdentity(identity);
+  const admin = isAdminIdentity(identity);
+  const email = identity.email?.trim().toLowerCase() ?? null;
+
+  if (!staff) {
+    return { staff: false, admin: false, email, bootstrapMode: false, grants: [] };
+  }
+
+  if (admin) {
+    return { staff: true, admin: true, email, bootstrapMode: false, grants: [] };
+  }
+
+  const existingPermission = await ctx.db.query("crmPermissions").take(1);
+  const bootstrapMode = existingPermission.length === 0;
+  if (bootstrapMode) {
+    return { staff: true, admin: false, email, bootstrapMode: true, grants: [] };
+  }
+
+  if (!email) {
+    return { staff: true, admin: false, email, bootstrapMode: false, grants: [] };
+  }
+
+  const record = await ctx.db
+    .query("crmPermissions")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .unique();
+
+  return {
+    staff: true,
+    admin: false,
+    email,
+    bootstrapMode: false,
+    grants: record?.active ? record.grants : [],
+  };
+}
+
+export async function hasCrmPermission(
+  ctx: QueryCtx | MutationCtx,
+  pageKey: string,
+  action: CrmPermissionAction = "read",
+) {
+  const identity = await requireUser(ctx);
+  const access = await getCrmAccessForIdentity(ctx, identity);
+  if (access.admin || access.bootstrapMode) return true;
+  if (!access.staff) return false;
+  const grant = access.grants.find((entry) => entry.pageKey === pageKey);
+  return Boolean(grant?.actions.includes(action));
+}
+
+export async function requireCrmPermission(
+  ctx: QueryCtx | MutationCtx,
+  pageKey: string,
+  action: CrmPermissionAction = "read",
+) {
+  const allowed = await hasCrmPermission(ctx, pageKey, action);
+  if (!allowed) {
+    throw new Error("Accès CRM insuffisant.");
+  }
 }
 
 type AerogommageItemInput = {

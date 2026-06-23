@@ -17,6 +17,7 @@ import {
   AccountSettings,
 } from "./pages/public/Account";
 import { CrmLayout } from "./components/crm/CrmLayout";
+import { RequireCrmPermission } from "./components/crm/RequireCrmPermission";
 import { Dashboard } from "./pages/crm/Dashboard";
 import { Demandes } from "./pages/crm/Demandes";
 import { Calendrier } from "./pages/crm/Calendrier";
@@ -32,6 +33,7 @@ import { Tournees } from "./pages/crm/Tournees";
 import { TourneeConduite } from "./pages/crm/TourneeConduite";
 import { Messages } from "./pages/crm/Messages";
 import { Documents } from "./pages/crm/Documents";
+import { Admin } from "./pages/crm/Admin";
 
 export default function App() {
   return (
@@ -61,20 +63,21 @@ export default function App() {
 
       {/* CRM (dark mode, protégé Clerk) */}
       <Route path="/crm" element={<CrmLayout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="notifications" element={<Notifications />} />
-        <Route path="messages" element={<Messages />} />
-        <Route path="documents" element={<Documents />} />
-        <Route path="demandes" element={<Demandes />} />
-        <Route path="calendrier" element={<Calendrier />} />
-        <Route path="clients" element={<Clients />} />
-        <Route path="articles" element={<Articles />} />
-        <Route path="arrivages" element={<Arrivages />} />
-        <Route path="caisse" element={<Caisse />} />
-        <Route path="ateliers" element={<Ateliers />} />
-        <Route path="sorties" element={<Sorties />} />
-        <Route path="tournees" element={<Tournees />} />
-        <Route path="equipe" element={<Equipe />} />
+        <Route index element={<RequireCrmPermission page="dashboard"><Dashboard /></RequireCrmPermission>} />
+        <Route path="notifications" element={<RequireCrmPermission page="notifications"><Notifications /></RequireCrmPermission>} />
+        <Route path="messages" element={<RequireCrmPermission page="messages"><Messages /></RequireCrmPermission>} />
+        <Route path="documents" element={<RequireCrmPermission page="documents"><Documents /></RequireCrmPermission>} />
+        <Route path="demandes" element={<RequireCrmPermission page="demandes"><Demandes /></RequireCrmPermission>} />
+        <Route path="calendrier" element={<RequireCrmPermission page="calendrier"><Calendrier /></RequireCrmPermission>} />
+        <Route path="clients" element={<RequireCrmPermission page="clients"><Clients /></RequireCrmPermission>} />
+        <Route path="articles" element={<RequireCrmPermission page="articles"><Articles /></RequireCrmPermission>} />
+        <Route path="arrivages" element={<RequireCrmPermission page="ateliers"><Arrivages /></RequireCrmPermission>} />
+        <Route path="caisse" element={<RequireCrmPermission page="caisse"><Caisse /></RequireCrmPermission>} />
+        <Route path="ateliers" element={<RequireCrmPermission page="ateliers"><Ateliers /></RequireCrmPermission>} />
+        <Route path="sorties" element={<RequireCrmPermission page="caisse"><Sorties /></RequireCrmPermission>} />
+        <Route path="tournees" element={<RequireCrmPermission page="tournees"><Tournees /></RequireCrmPermission>} />
+        <Route path="equipe" element={<RequireCrmPermission page="equipe"><Equipe /></RequireCrmPermission>} />
+        <Route path="admin" element={<RequireCrmPermission page="admin"><Admin /></RequireCrmPermission>} />
       </Route>
 
       {/* Mode conduite (plein écran mobile, protégé Clerk) */}

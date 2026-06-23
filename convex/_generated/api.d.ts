@@ -19,6 +19,7 @@ import type * as files from "../files.js";
 import type * as lib from "../lib.js";
 import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
+import type * as permissions from "../permissions.js";
 import type * as processes from "../processes.js";
 import type * as requests from "../requests.js";
 import type * as sorties from "../sorties.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   lib: typeof lib;
   messages: typeof messages;
   notifications: typeof notifications;
+  permissions: typeof permissions;
   processes: typeof processes;
   requests: typeof requests;
   sorties: typeof sorties;

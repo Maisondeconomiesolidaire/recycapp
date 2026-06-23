@@ -9,40 +9,15 @@ import {
   useUser,
 } from "@clerk/clerk-react";
 import {
-  LayoutDashboard,
-  Bell,
-  MessageSquare,
-  KanbanSquare,
-  CalendarDays,
-  FolderOpen,
-  Package,
-  Users,
-  UserCog,
   Menu,
   Sun,
   Moon,
-  ShoppingCart,
-  Wrench,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { api } from "../../../convex/_generated/api";
 import { Drawer } from "../ui/Drawer";
 import { GlobalScanner } from "./GlobalScanner";
-
-const nav = [
-  { to: "/crm", end: true, icon: LayoutDashboard, label: "Tableau de bord" },
-  { to: "/crm/notifications", icon: Bell, label: "Notifications" },
-  { to: "/crm/messages", icon: MessageSquare, label: "Messages" },
-  { to: "/crm/documents", icon: FolderOpen, label: "Documents" },
-  { to: "/crm/demandes", icon: KanbanSquare, label: "Demandes" },
-  { to: "/crm/calendrier", icon: CalendarDays, label: "Calendrier" },
-  { to: "/crm/clients", icon: Users, label: "Clients" },
-  { to: "/crm/articles", icon: Package, label: "Stock articles" },
-  { to: "/crm/caisse", icon: ShoppingCart, label: "Caisse boutique" },
-  { to: "/crm/ateliers", icon: Wrench, label: "Atelier valorisation" },
-  { to: "/crm/tournees", icon: CalendarDays, label: "Tournées collecte" },
-  { to: "/crm/equipe", icon: UserCog, label: "Équipe" },
-];
+import { CRM_PAGES, canAccess } from "../../lib/crmPermissions";
 
 export const ThemeContext = createContext(true); // true = dark
 export function useThemeContext() { return useContext(ThemeContext); }
@@ -100,8 +75,12 @@ function MobileTopBar({ onToggleTheme }: { onToggleTheme: () => void }) {
   const location = useLocation();
   const counts = useQuery(api.requests.counts);
   const unreadNotifications = useQuery(api.notifications.unreadCount);
+  const access = useQuery(api.permissions.myAccess);
   const onNotificationsPage = location.pathname === "/crm/notifications";
   const isDark = useThemeContext();
+  const nav = CRM_PAGES.filter((item) =>
+    item.adminOnly ? access?.isAdmin : canAccess(access, item.key),
+  );
 
   return (
     <>
@@ -188,8 +167,12 @@ function Sidebar({
   const counts = useQuery(api.requests.counts);
   const unreadNotifications = useQuery(api.notifications.unreadCount);
   const unreadMessages = useQuery(api.messages.staffUnreadCount);
+  const access = useQuery(api.permissions.myAccess);
   const onNotificationsPage = location.pathname === "/crm/notifications";
   const onMessagesPage = location.pathname === "/crm/messages";
+  const nav = CRM_PAGES.filter((item) =>
+    item.adminOnly ? access?.isAdmin : canAccess(access, item.key),
+  );
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[var(--crm-border)] bg-[var(--crm-surface)] lg:flex">
       <div className="flex h-16 items-center justify-center border-b border-[var(--crm-border)] px-5">
