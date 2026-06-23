@@ -724,10 +724,10 @@ function GestionTab({
           <button
             type="button"
             onClick={() => setScheduleOpen(true)}
-            className="flex h-11 flex-1 items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/40 px-3 text-left text-sm transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+            className="flex h-11 flex-1 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 text-left text-sm text-[var(--foreground)] shadow-sm transition-colors hover:border-brand-500/60 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
           >
-            <CalendarDays className="h-4 w-4 shrink-0 text-zinc-500" />
-            <span className={request.scheduledDate ? "text-zinc-200" : "text-zinc-500"}>
+            <CalendarDays className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+            <span className={request.scheduledDate ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}>
               {request.scheduledDate
                 ? format(new Date(request.scheduledDate), "EEEE d MMMM yyyy", { locale: fr })
                 : "Programmer une date"}
