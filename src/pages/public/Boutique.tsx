@@ -203,7 +203,7 @@ function ArticleCard({
           </p>
         ) : null}
 
-        <div className="mt-4 flex items-end justify-between gap-2.5">
+        <div className="mt-4 flex items-center justify-between gap-2.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {article.originalPrice && article.originalPrice > article.price ? (
               <>
@@ -220,37 +220,28 @@ function ArticleCard({
               </span>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {!reserved && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (!inCart) {
-                    cart.add(article._id);
-                    setShowPopup(true);
-                  } else {
-                    setShowPopup(true);
-                  }
-                }}
-                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-xs font-semibold text-white transition hover:-translate-y-0.5"
-                style={{ backgroundColor: inCart ? BRAND_DARK : BRAND }}
-              >
-                {inCart ? (
-                  <Check className="mr-1.5 h-3.5 w-3.5" />
-                ) : (
-                  <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
-                )}
-                {inCart ? "Ajouté" : "Panier"}
-              </button>
-            )}
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-900">
-              Voir
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </span>
-          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-zinc-900">
+            Voir
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
         </div>
+
+        {!reserved && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!inCart) cart.add(article._id);
+              setShowPopup(true);
+            }}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-bold text-white shadow-[0_10px_26px_rgba(241,16,79,0.26)] transition hover:-translate-y-0.5"
+            style={{ backgroundColor: inCart ? BRAND_DARK : BRAND }}
+          >
+            {inCart ? <Check className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
+            {inCart ? "Ajouté au panier" : "Ajouter au panier"}
+          </button>
+        )}
       </div>
     </Link>
 

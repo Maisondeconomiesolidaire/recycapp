@@ -5,11 +5,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { Id } from "../../../convex/_generated/dataModel";
 import { FormShell, FormSection } from "../../components/public/FormShell";
 import { Field, Input, Textarea, Checkbox, Select } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
-import { PhotoUpload } from "../../components/ui/PhotoUpload";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import {
@@ -67,7 +65,6 @@ type FormData = z.infer<typeof schema>;
 export function CollecteForm() {
   const navigate = useNavigate();
   const submit = useMutation(api.requests.submitCollecte);
-  const [photos, setPhotos] = useState<Id<"_storage">[]>([]);
   const [sameAddress, setSameAddress] = useState(false);
 
   const {
@@ -99,7 +96,7 @@ export function CollecteForm() {
     await submit({
       customer: data.customer,
       comment: data.comment || undefined,
-      photos,
+      photos: [],
       details: {
         dismountable: data.dismountable === "oui",
         reusableGoodCondition: data.reusableGoodCondition === "oui",
@@ -298,11 +295,7 @@ export function CollecteForm() {
           />
         </FormSection>
 
-        <FormSection title="Photos & commentaire">
-          <div>
-            <p className="text-sm font-medium text-zinc-700 mb-1.5">Photos</p>
-            <PhotoUpload value={photos} onChange={setPhotos} />
-          </div>
+        <FormSection title="Commentaire">
           <Field label="Commentaire">
             <Textarea
               {...register("comment")}
