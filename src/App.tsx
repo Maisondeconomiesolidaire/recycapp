@@ -31,6 +31,7 @@ import { Sorties } from "./pages/crm/Sorties";
 import { Tournees } from "./pages/crm/Tournees";
 import { TourneeConduite } from "./pages/crm/TourneeConduite";
 import { Messages } from "./pages/crm/Messages";
+import { Documents } from "./pages/crm/Documents";
 
 export default function App() {
   return (
@@ -63,6 +64,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="messages" element={<Messages />} />
+        <Route path="documents" element={<Documents />} />
         <Route path="demandes" element={<Demandes />} />
         <Route path="calendrier" element={<Calendrier />} />
         <Route path="clients" element={<Clients />} />

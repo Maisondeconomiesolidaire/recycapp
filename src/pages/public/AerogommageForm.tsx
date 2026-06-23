@@ -56,6 +56,10 @@ const schema = z.object({
     postalCode: z.string().min(1, "Code postal requis"),
     city: z.string().min(1, "Ville requise"),
   }),
+  options: z.object({
+    pickupAtHome: z.boolean().optional(),
+    deliveryAtHome: z.boolean().optional(),
+  }),
   items: z.array(itemSchema).min(1, "Ajoutez au moins un objet"),
 });
 type FormData = z.infer<typeof schema>;
@@ -71,8 +75,6 @@ const emptyItem = {
   stripping: "",
   coating: "",
   coatingOther: "",
-  delivery: false,
-  retrieval: false,
   comment: "",
   photos: [],
 } as unknown as FormData["items"][number];
@@ -92,15 +94,29 @@ export function AerogommageForm() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { items: [emptyItem] },
+    defaultValues: {
+      options: { pickupAtHome: false, deliveryAtHome: false },
+      items: [emptyItem],
+    },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
   async function submitRequest(data: FormData) {
+    const customerAddress = {
+      address: data.customer.address,
+      postalCode: data.customer.postalCode,
+      city: data.customer.city,
+    };
     await submit({
       customer: data.customer,
       photos: [],
+      options: {
+        pickupAtHome: !!data.options.pickupAtHome,
+        deliveryAtHome: !!data.options.deliveryAtHome,
+        pickupAddress: data.options.pickupAtHome ? customerAddress : undefined,
+        deliveryAddress: data.options.deliveryAtHome ? customerAddress : undefined,
+      },
       items: data.items.map((it) => ({
         objectType: it.objectType,
         label: it.label || undefined,
@@ -112,8 +128,6 @@ export function AerogommageForm() {
         stripping: it.stripping,
         coating: it.coating,
         coatingOther: it.coatingOther || undefined,
-        delivery: !!it.delivery,
-        retrieval: !!it.retrieval,
         comment: it.comment || undefined,
         photos: (it.photos ?? []) as Id<"_storage">[],
       })),
@@ -144,6 +158,34 @@ export function AerogommageForm() {
           setValue={setValue}
           autofillProfile
         />
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-zinc-900">
+              Retrait et livraison
+            </h3>
+            <p className="mt-1 text-sm text-zinc-600">
+              Ces options nous permettent d'intégrer directement les frais de transport au devis.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Checkbox
+              label="Je souhaite un retrait à domicile"
+              description="Nous venons chercher les objets à l'adresse indiquée plus haut."
+              {...register("options.pickupAtHome")}
+            />
+            <Checkbox
+              label="Je souhaite une livraison à domicile"
+              description="Nous relivrons les objets à l'adresse indiquée plus haut après intervention."
+              {...register("options.deliveryAtHome")}
+            />
+          </div>
+          {(watch("options.pickupAtHome") || watch("options.deliveryAtHome")) && (
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Les frais seront calculés selon votre commune : {watch("customer.city") || "ville à renseigner"}.
+            </p>
+          )}
+        </section>
 
         <div className="space-y-5">
           {fields.map((field, index) => {
@@ -285,31 +327,6 @@ export function AerogommageForm() {
                       <Input {...register(`items.${index}.coatingOther`)} />
                     </Field>
                   )}
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div>
-                    <Checkbox
-                      label="Retrait à domicile"
-                      {...register(`items.${index}.retrieval`)}
-                    />
-                    {watch(`items.${index}.retrieval`) && (
-                      <p className="mt-1.5 text-xs text-amber-700">
-                        Des frais vous seront facturés.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <Checkbox
-                      label="Livraison à domicile"
-                      {...register(`items.${index}.delivery`)}
-                    />
-                    {watch(`items.${index}.delivery`) && (
-                      <p className="mt-1.5 text-xs text-amber-700">
-                        Des frais vous seront facturés.
-                      </p>
-                    )}
-                  </div>
                 </div>
 
                 <Field label="Commentaire">

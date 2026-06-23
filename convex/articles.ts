@@ -14,6 +14,19 @@ async function withImageUrls(
   return { ...article, imageUrls: imageUrls.filter((u): u is string => u !== null) };
 }
 
+/**
+ * Variante allégée pour les listes : ne résout que l'image de couverture
+ * (les cartes n'affichent que la première), ce qui accélère fortement la
+ * requête boutique sur les gros catalogues.
+ */
+async function withCoverImageUrl(
+  ctx: { storage: { getUrl: (id: Id<"_storage">) => Promise<string | null> } },
+  article: Doc<"articles">,
+) {
+  const cover = article.images[0] ? await ctx.storage.getUrl(article.images[0]) : null;
+  return { ...article, imageUrls: cover ? [cover] : [] };
+}
+
 async function withBundleDetails(ctx: QueryCtx, article: Doc<"articles">) {
   const enriched = await withImageUrls(ctx, article);
   if (!article.isLot || !article.bundledArticleIds?.length) {
@@ -270,7 +283,7 @@ export const listPublic = query({
         a.status !== "lot" &&
         matchesArticleFilters(a, args),
     );
-    return Promise.all(visible.map((a) => withImageUrls(ctx, a)));
+    return Promise.all(visible.map((a) => withCoverImageUrl(ctx, a)));
   },
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useParams } from "react-router-dom";
 import { SignedIn, SignedOut, SignInButton, useClerk, useUser } from "@clerk/clerk-react";
 import { useMutation, useQuery } from "convex/react";
@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  ImagePlus,
   Loader2,
   LogOut,
   MessageSquare,
@@ -21,9 +22,12 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessageThread } from "../../components/MessageThread";
+import { RequestDocumentsPanel } from "../../components/RequestDocumentsPanel";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { LiveDeliveryTracking } from "../../components/public/LiveDeliveryTracking";
+import { useUpload } from "../../lib/useUpload";
+import { COLLECTE_CATEGORY_BY_KEY } from "../../lib/constants";
 
 const CONTAINER = "mx-auto w-full max-w-5xl px-5 py-8 sm:px-7 lg:px-8";
 
@@ -47,6 +51,8 @@ type ClientStatus = {
   index: number;
   cancelled: boolean;
 };
+
+type AccountRequest = NonNullable<ReturnType<typeof useQuery<typeof api.users.getMyRequest>>>;
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString("fr-FR", {
@@ -565,6 +571,8 @@ export function AccountOrderDetail() {
               <p className="mt-1.5 text-sm text-zinc-700">{request.comment}</p>
             </div>
           )}
+
+          <ClientFilesTabs request={request} />
         </div>
 
         {/* Messaging */}
@@ -578,6 +586,182 @@ export function AccountOrderDetail() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ClientFilesTabs({ request }: { request: AccountRequest }) {
+  const [tab, setTab] = useState<"documents" | "photos">("documents");
+  const canUploadPhotos = request.type === "aerogommage" || request.type === "collecte";
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-2">
+      <div className="mb-3 flex gap-1 rounded-xl bg-zinc-100 p-1">
+        <button
+          type="button"
+          onClick={() => setTab("documents")}
+          className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+            tab === "documents" ? "bg-white text-zinc-950 shadow-sm" : "text-zinc-500"
+          }`}
+        >
+          Documents
+        </button>
+        {canUploadPhotos && (
+          <button
+            type="button"
+            onClick={() => setTab("photos")}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              tab === "photos" ? "bg-white text-zinc-950 shadow-sm" : "text-zinc-500"
+            }`}
+          >
+            Photos
+          </button>
+        )}
+      </div>
+      {tab === "documents" ? (
+        <RequestDocumentsPanel requestId={request._id} theme="light" viewerRole="client" />
+      ) : (
+        <ClientRequestPhotosPanel request={request} />
+      )}
+    </div>
+  );
+}
+
+function ClientRequestPhotosPanel({ request }: { request: AccountRequest }) {
+  const upload = useUpload();
+  const addAeroPhotos = useMutation(api.users.addMyAerogommageItemPhotos);
+  const addCollectePhotos = useMutation(api.users.addMyCollecteCategoryPhotos);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [selectedAeroIndex, setSelectedAeroIndex] = useState(0);
+  const collecteCategories =
+    request.collecte?.objectCategories && request.collecte.objectCategories.length > 0
+      ? request.collecte.objectCategories
+      : ["objets"];
+  const [selectedCategory, setSelectedCategory] = useState(collecteCategories[0] ?? "objets");
+
+  if (request.type !== "aerogommage" && request.type !== "collecte") return null;
+
+  const aeroItems = request.aerogommage ?? [];
+  const currentAeroItem = aeroItems[Math.min(selectedAeroIndex, Math.max(aeroItems.length - 1, 0))];
+  const currentCollectePhotos =
+    request.collecte?.categoryPhotos.find((entry) => entry.category === selectedCategory)?.urls ?? [];
+
+  async function handleFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      const storageIds: Id<"_storage">[] = [];
+      for (const file of Array.from(files)) {
+        storageIds.push(await upload(file));
+      }
+      if (request.type === "aerogommage") {
+        await addAeroPhotos({
+          requestId: request._id,
+          itemIndex: selectedAeroIndex,
+          storageIds,
+        });
+      } else {
+        await addCollectePhotos({
+          requestId: request._id,
+          category: selectedCategory,
+          storageIds,
+        });
+      }
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  const existingUrls =
+    request.type === "aerogommage" ? currentAeroItem?.photoUrls ?? [] : currentCollectePhotos;
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900">Photos de la demande</h3>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Elles seront visibles par notre équipe dans votre fiche de demande.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading || (request.type === "aerogommage" && aeroItems.length === 0)}
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+          Ajouter des photos
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(event) => handleFiles(event.target.files)}
+        />
+      </div>
+
+      {request.type === "aerogommage" && aeroItems.length > 1 && (
+        <div className="mt-4 flex gap-2 overflow-x-auto">
+          {aeroItems.map((item, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => setSelectedAeroIndex(index)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                index === selectedAeroIndex
+                  ? "bg-brand-500 text-white"
+                  : "bg-zinc-100 text-zinc-500"
+              }`}
+            >
+              {item.objectType || item.label || `Objet ${index + 1}`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {request.type === "collecte" && (
+        <div className="mt-4 flex gap-2 overflow-x-auto">
+          {collecteCategories.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setSelectedCategory(category)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                category === selectedCategory
+                  ? "bg-brand-500 text-white"
+                  : "bg-zinc-100 text-zinc-500"
+              }`}
+            >
+              {COLLECTE_CATEGORY_BY_KEY[category]?.label ?? "Objets à collecter"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {existingUrls.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-dashed border-zinc-200 px-4 py-8 text-center text-sm text-zinc-500">
+          Aucune photo ajoutée pour le moment.
+        </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {existingUrls.map((url, index) => (
+            <a
+              key={`${url}-${index}`}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="aspect-square overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100"
+            >
+              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

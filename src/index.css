@@ -268,6 +268,13 @@ body {
   animation: navbar-sweep-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Cartes boutique : on n'effectue le rendu/décodage que des cartes proches du
+   viewport (grosses listes plus rapides à afficher). */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 420px;
+}
+
 @theme inline {
   --font-heading: "Inter Variable", var(--font-sans);
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",

@@ -77,6 +77,13 @@ const address = v.object({
   city: v.optional(v.string()),
 });
 
+const aerogommageOptions = v.object({
+  pickupAtHome: v.optional(v.boolean()),
+  deliveryAtHome: v.optional(v.boolean()),
+  pickupAddress: v.optional(address),
+  deliveryAddress: v.optional(address),
+});
+
 const collecteDetails = v.object({
   // Forfaits / conditions (Oui/Non).
   dismountable: v.optional(v.boolean()),
@@ -224,6 +231,7 @@ export default defineSchema({
     beforePhotos: v.optional(v.array(v.id("_storage"))),
     afterPhotos: v.optional(v.array(v.id("_storage"))),
     aerogommage: v.optional(v.array(aerogommageItem)),
+    aerogommageOptions: v.optional(aerogommageOptions),
     collecte: v.optional(collecteDetails),
     article: v.optional(articleDetails),
     articles: v.optional(v.array(reservedArticleDetails)),
@@ -310,6 +318,42 @@ export default defineSchema({
     .index("by_articleId", ["articleId"])
     .index("by_sessionId", ["sessionId"])
     .index("by_lastSeenAt", ["lastSeenAt"]),
+
+  /** Documents rattachés à une demande (devis, facture…), côté client + CRM. */
+  requestDocuments: defineTable({
+    requestId: v.id("requests"),
+    storageId: v.id("_storage"),
+    name: v.string(),
+    docType: v.union(
+      v.literal("devis"),
+      v.literal("facture"),
+      v.literal("bon_commande"),
+      v.literal("bon_collecte"),
+      v.literal("contrat"),
+      v.literal("photo"),
+      v.literal("autre"),
+    ),
+    mimeType: v.optional(v.string()),
+    uploadedByRole: v.union(v.literal("client"), v.literal("staff")),
+    createdAt: v.number(),
+  }).index("by_requestId", ["requestId"]),
+
+  /** Arborescence de dossiers du gestionnaire de documents (CRM). */
+  documentFolders: defineTable({
+    name: v.string(),
+    parentId: v.optional(v.id("documentFolders")),
+    createdAt: v.number(),
+  }).index("by_parent", ["parentId"]),
+
+  /** Fichiers du gestionnaire de documents (CRM). */
+  documents: defineTable({
+    name: v.string(),
+    folderId: v.optional(v.id("documentFolders")),
+    storageId: v.id("_storage"),
+    mimeType: v.optional(v.string()),
+    size: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_folder", ["folderId"]),
 
   /** Sessions d'arrivage (GDR Collecte). */
   arrivages: defineTable({

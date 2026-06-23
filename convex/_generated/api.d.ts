@@ -14,6 +14,7 @@ import type * as articles from "../articles.js";
 import type * as ateliers from "../ateliers.js";
 import type * as clients from "../clients.js";
 import type * as dashboard from "../dashboard.js";
+import type * as documents from "../documents.js";
 import type * as files from "../files.js";
 import type * as lib from "../lib.js";
 import type * as messages from "../messages.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   ateliers: typeof ateliers;
   clients: typeof clients;
   dashboard: typeof dashboard;
+  documents: typeof documents;
   files: typeof files;
   lib: typeof lib;
   messages: typeof messages;

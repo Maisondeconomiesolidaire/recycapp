@@ -241,8 +241,35 @@ export const getMyRequest = query({
       );
     }
 
+    const aerogommage = await Promise.all(
+      (request.aerogommage ?? []).map(async (item) => ({
+        objectType: item.objectType ?? null,
+        label: item.label ?? null,
+        quantity: item.quantity ?? null,
+        photoUrls: (
+          await Promise.all((item.photos ?? []).map((photo) => ctx.storage.getUrl(photo)))
+        ).filter((url): url is string => url !== null),
+      })),
+    );
+
+    const collecteCategoryPhotos = await Promise.all(
+      (request.collecte?.categoryPhotos ?? []).map(async (entry) => ({
+        category: entry.category,
+        urls: (
+          await Promise.all(entry.photos.map((photo) => ctx.storage.getUrl(photo)))
+        ).filter((url): url is string => url !== null),
+      })),
+    );
+
     return {
       articles,
+      aerogommage,
+      collecte: request.collecte
+        ? {
+            objectCategories: request.collecte.objectCategories ?? [],
+            categoryPhotos: collecteCategoryPhotos,
+          }
+        : null,
       _id: request._id,
       type: request.type,
       reference: request.reference ?? null,
@@ -263,5 +290,71 @@ export const getMyRequest = query({
       updatedAt: request.updatedAt,
       tracking,
     };
+  },
+});
+
+async function requireOwnedRequest(
+  ctx: MutationCtx,
+  requestId: Id<"requests">,
+) {
+  const identity = await requireUser(ctx);
+  const request = await ctx.db.get(requestId);
+  if (!request || request.userId !== identity.subject) {
+    throw new Error("Demande introuvable.");
+  }
+  return request;
+}
+
+export const addMyAerogommageItemPhotos = mutation({
+  args: {
+    requestId: v.id("requests"),
+    itemIndex: v.number(),
+    storageIds: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, { requestId, itemIndex, storageIds }) => {
+    const request = await requireOwnedRequest(ctx, requestId);
+    if (request.type !== "aerogommage") {
+      throw new Error("Cette demande n'est pas une demande d'aérogommage.");
+    }
+    const items = [...(request.aerogommage ?? [])];
+    if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex >= items.length) {
+      throw new Error("Objet introuvable.");
+    }
+    const item = items[itemIndex];
+    items[itemIndex] = {
+      ...item,
+      photos: [...(item.photos ?? []), ...storageIds],
+    };
+    await ctx.db.patch(requestId, { aerogommage: items, updatedAt: Date.now() });
+  },
+});
+
+export const addMyCollecteCategoryPhotos = mutation({
+  args: {
+    requestId: v.id("requests"),
+    category: v.string(),
+    storageIds: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, { requestId, category, storageIds }) => {
+    const request = await requireOwnedRequest(ctx, requestId);
+    if (request.type !== "collecte") {
+      throw new Error("Cette demande n'est pas une demande de collecte.");
+    }
+    const details = request.collecte ?? {};
+    const categoryPhotos = [...(details.categoryPhotos ?? [])];
+    const existingIndex = categoryPhotos.findIndex((entry) => entry.category === category);
+    if (existingIndex >= 0) {
+      const existing = categoryPhotos[existingIndex];
+      categoryPhotos[existingIndex] = {
+        ...existing,
+        photos: [...existing.photos, ...storageIds],
+      };
+    } else {
+      categoryPhotos.push({ category, photos: storageIds });
+    }
+    await ctx.db.patch(requestId, {
+      collecte: { ...details, categoryPhotos },
+      updatedAt: Date.now(),
+    });
   },
 });

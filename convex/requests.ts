@@ -29,6 +29,19 @@ const customerArg = v.object({
   city: v.optional(v.string()),
 });
 
+const addressArg = v.object({
+  address: v.optional(v.string()),
+  postalCode: v.optional(v.string()),
+  city: v.optional(v.string()),
+});
+
+const aerogommageOptionsArg = v.object({
+  pickupAtHome: v.optional(v.boolean()),
+  deliveryAtHome: v.optional(v.boolean()),
+  pickupAddress: v.optional(addressArg),
+  deliveryAddress: v.optional(addressArg),
+});
+
 async function createNewRequestNotification(
   ctx: MutationCtx,
   args: {
@@ -76,8 +89,9 @@ export const submitAerogommage = mutation({
     comment: v.optional(v.string()),
     photos: v.array(v.id("_storage")),
     items: v.array(aerogommageItem),
+    options: v.optional(aerogommageOptionsArg),
   },
-  handler: async (ctx, { customer, comment, photos, items }) => {
+  handler: async (ctx, { customer, comment, photos, items, options }) => {
     customer = normalizeCustomer(customer);
     const now = Date.now();
     const reference = await generateReference(ctx);
@@ -95,6 +109,7 @@ export const submitAerogommage = mutation({
       comment,
       photos,
       aerogommage: items,
+      aerogommageOptions: options,
       createdAt: now,
       updatedAt: now,
       reference,
@@ -851,6 +866,7 @@ export const createInternal = mutation({
     comment: v.optional(v.string()),
     // Aérogommage
     items: v.optional(v.array(aerogommageItem)),
+    aerogommageOptions: v.optional(aerogommageOptionsArg),
     // Collecte
     collecteDetails: v.optional(
       v.object({
@@ -910,6 +926,7 @@ export const createInternal = mutation({
         comment: args.comment,
         photos: [],
         aerogommage: items,
+        aerogommageOptions: args.aerogommageOptions,
         createdAt: now,
         updatedAt: now,
         reference,

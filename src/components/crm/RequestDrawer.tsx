@@ -27,11 +27,13 @@ import { Lightbox } from "../ui/Lightbox";
 import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { UnderlineTabs } from "../ui/UnderlineTabs";
 import { MessageThread } from "../MessageThread";
+import { RequestDocumentsPanel } from "../RequestDocumentsPanel";
 import { Modal } from "../ui/Modal";
 import { TypeBadge } from "./TypeBadge";
 import { PhoneInput } from "../ui/PhoneInput";
 import { RequestOriginBadge } from "./RequestOriginBadge";
 import { C3QuoteCalculator } from "./C3QuoteCalculator";
+import { AeroQuoteCalculator } from "./AeroQuoteCalculator";
 import {
   OUTCOME_LABELS,
   COLLECTE_TYPE_OPTIONS,
@@ -47,11 +49,12 @@ import { formatDateTime, formatPrice } from "../../lib/format";
 import { cn } from "../../lib/cn";
 
 type RequestDoc = NonNullable<ReturnType<typeof useQuery<typeof api.requests.get>>>;
-type Tab = "demande" | "gestion" | "calculDevis" | "client" | "messages";
+type Tab = "demande" | "gestion" | "calculDevis" | "documents" | "client" | "messages";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "demande", label: "Demande" },
   { key: "gestion", label: "Gestion" },
+  { key: "documents", label: "Documents" },
   { key: "client", label: "Client" },
   { key: "messages", label: "Messages" },
 ];
@@ -90,11 +93,14 @@ export function RequestDrawer({
   const collecteUndefined =
     request?.type === "collecte" &&
     (request.collecteType ?? "indefini") === "indefini";
+  const hasQuoteCalculator =
+    request?.type === "aerogommage" ||
+    (request?.type === "collecte" && request.collecteType === "C3");
   const isC3Collecte = request?.type === "collecte" && request.collecteType === "C3";
-  const visibleTabs = isC3Collecte
-    ? [TABS[0], TABS[1], C3_QUOTE_TAB, TABS[2], TABS[3]]
+  const visibleTabs = hasQuoteCalculator
+    ? [TABS[0], TABS[1], C3_QUOTE_TAB, TABS[2], TABS[3], TABS[4]]
     : TABS;
-  const activeTab = isC3Collecte || tab !== "calculDevis" ? tab : "gestion";
+  const activeTab = hasQuoteCalculator || tab !== "calculDevis" ? tab : "gestion";
 
   return (
     <Drawer
@@ -204,8 +210,14 @@ export function RequestDrawer({
           {activeTab === "gestion" && (
             <GestionTab request={request} collecteUndefined={!!collecteUndefined} />
           )}
+          {activeTab === "calculDevis" && request.type === "aerogommage" && (
+            <AeroQuoteCalculator key={request._id} request={request} />
+          )}
           {activeTab === "calculDevis" && isC3Collecte && (
             <C3QuoteCalculator key={request._id} request={request} />
+          )}
+          {activeTab === "documents" && (
+            <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
           )}
           {activeTab === "client" && (
             <ClientTab key={request._id} request={request} />
@@ -1357,6 +1369,8 @@ function RequestDetails({ request }: { request: RequestDoc }) {
       <AerogommageDetails
         items={request.aerogommage ?? []}
         photosByItem={request.aerogommagePhotos ?? []}
+        options={request.aerogommageOptions}
+        customerCity={request.customer.city}
       />
     );
   }
@@ -1723,9 +1737,13 @@ function ArticleRequestPreview({
 function AerogommageDetails({
   items,
   photosByItem,
+  options,
+  customerCity,
 }: {
   items: NonNullable<RequestDoc["aerogommage"]>;
   photosByItem: string[][];
+  options?: RequestDoc["aerogommageOptions"];
+  customerCity?: string;
 }) {
   const [sel, setSel] = useState(0);
   const [lb, setLb] = useState<number | null>(null);
@@ -1733,10 +1751,31 @@ function AerogommageDetails({
   const idx = Math.min(sel, items.length - 1);
   const a = items[idx];
   const photos = photosByItem[idx] ?? [];
+  const legacyPickup = items.some((item) => item.retrieval);
+  const legacyDelivery = items.some((item) => item.delivery);
+  const pickupAtHome = options?.pickupAtHome ?? legacyPickup;
+  const deliveryAtHome = options?.deliveryAtHome ?? legacyDelivery;
+  const pickupCity = options?.pickupAddress?.city ?? customerCity;
+  const deliveryCity = options?.deliveryAddress?.city ?? customerCity;
 
   return (
-    <section>
-      <SectionTitle>Objets à aérogommer ({items.length})</SectionTitle>
+    <div className="space-y-5">
+      <section>
+        <SectionTitle>Transport</SectionTitle>
+        <div className="text-sm">
+          <Row
+            label="Retrait à domicile"
+            value={pickupAtHome ? `Oui${pickupCity ? ` · ${pickupCity}` : ""}` : "Non"}
+          />
+          <Row
+            label="Livraison à domicile"
+            value={deliveryAtHome ? `Oui${deliveryCity ? ` · ${deliveryCity}` : ""}` : "Non"}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>Objets à aérogommer ({items.length})</SectionTitle>
       {items.length > 1 && (
         <UnderlineTabs
           items={items.map((it, i) => ({
@@ -1774,11 +1813,9 @@ function AerogommageDetails({
           value={
             a.coating === "Autre (précisez)"
               ? a.coatingOther || a.coating
-              : a.coating
+            : a.coating
           }
         />
-        <Row label="Livraison à domicile" value={yesNo(a.delivery)} />
-        <Row label="Retrait à domicile" value={yesNo(a.retrieval)} />
         {a.comment && <Row label="Commentaire" value={a.comment} />}
       </div>
 
@@ -1791,6 +1828,7 @@ function AerogommageDetails({
       {lb !== null && (
         <Lightbox images={photos} startIndex={lb} onClose={() => setLb(null)} />
       )}
-    </section>
+      </section>
+    </div>
   );
 }

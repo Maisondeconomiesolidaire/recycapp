@@ -131,7 +131,7 @@ function ArticleCard({
     <>
     <Link
       to={`/boutique/${article._id}`}
-      className={`group relative flex h-full flex-col overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.08)] transition-shadow duration-300 hover:shadow-[0_24px_56px_rgba(24,24,27,0.16)] ${
+      className={`cv-auto group relative flex h-full flex-col overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.08)] transition-shadow duration-300 hover:shadow-[0_24px_56px_rgba(24,24,27,0.16)] ${
         article.isLot ? "ring-2 ring-brand-500/20" : ""
       }`}
     >
