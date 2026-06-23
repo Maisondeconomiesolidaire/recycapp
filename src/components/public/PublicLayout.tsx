@@ -20,6 +20,7 @@ import { Input } from "../ui/Field";
 import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
 import { AccountMenu } from "./AccountMenu";
+import { PageSwitcher, PAGE_HEADERS } from "./PageSwitcher";
 
 const PUBLIC_CONTAINER = "mx-auto w-full max-w-[92rem] px-5 sm:px-7 lg:px-8";
 const BRAND = "#f1104f";
@@ -60,9 +61,38 @@ export function PublicLayout() {
       )}
       {!embed && <Header />}
       <main className="relative z-10 flex-1">
-        <Outlet />
+        {/* `key` = pathname : le contenu se remonte et « balaie » à chaque page. */}
+        <div key={location.pathname} className="animate-page-sweep">
+          <PageHeaderBand pathname={location.pathname} />
+          <Outlet />
+        </div>
       </main>
       {!embed && <Footer />}
+    </div>
+  );
+}
+
+/** Petit en-tête (pictogramme + nom de page) pour les pages hors boutique. */
+function PageHeaderBand({ pathname }: { pathname: string }) {
+  const header = PAGE_HEADERS[pathname];
+  if (!header) return null;
+  const Icon = header.icon;
+  return (
+    <div className={`${PUBLIC_CONTAINER} pt-7 sm:pt-9`}>
+      <div className="flex items-center gap-4 rounded-[26px] border border-white/70 bg-white/80 px-5 py-4 shadow-[0_18px_50px_rgba(24,24,27,0.08)] backdrop-blur sm:px-7 sm:py-5">
+        <span
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-[0_10px_26px_rgba(241,16,79,0.28)] sm:h-14 sm:w-14"
+          style={{ backgroundColor: BRAND }}
+        >
+          <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight text-zinc-950 sm:text-2xl">
+            {header.title}
+          </h1>
+          <p className="mt-0.5 truncate text-sm text-zinc-500">{header.subtitle}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -70,7 +100,10 @@ export function PublicLayout() {
 function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isBoutiqueArea = location.pathname.startsWith("/boutique");
+  // « Shop-like » = barre complète (recherche, panier, catégories) : boutique
+  // et Cycle en Bray. Collecte/Aérogommage gardent une barre minimale.
+  const isBoutiqueArea =
+    location.pathname.startsWith("/boutique") || location.pathname === "/velo";
   const isBoutiqueListing =
     location.pathname === "/boutique" ||
     location.pathname.startsWith("/boutique/categorie/");
@@ -175,6 +208,7 @@ function Header() {
               <img src="/recyclerie-logo.png" alt="Recyclerie" className="h-12 w-auto object-contain" />
             </Link>
             <div className="flex items-center gap-2">
+              <PageSwitcher />
               <AccountMenu />
               {isBoutiqueArea ? (
                 <button
@@ -195,7 +229,7 @@ function Header() {
             </Link>
 
             {isBoutiqueArea ? (
-              <div ref={searchRef} className="relative min-w-0 flex-1">
+              <div ref={searchRef} className="animate-navbar-sweep relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                 <Input
                   value={query}
@@ -357,6 +391,7 @@ function Header() {
             )}
 
             <AccountMenu />
+            <PageSwitcher />
           </div>
 
           {isBoutiqueArea && menuOpen && (
@@ -449,7 +484,7 @@ function Header() {
           )}
 
           {isBoutiqueArea && (
-            <nav className="hidden gap-2 overflow-x-auto px-5 sm:mx-0 sm:flex sm:flex-wrap sm:overflow-visible sm:px-0">
+            <nav className="animate-navbar-sweep hidden gap-2 overflow-x-auto px-5 sm:mx-0 sm:flex sm:flex-wrap sm:overflow-visible sm:px-0">
               <NavLink to="/boutique" end className={link}>Tout</NavLink>
               {ARTICLE_CATEGORIES.map((category) => (
                 <NavLink key={category} to={`/boutique/categorie/${ARTICLE_CATEGORY_SLUGS[category]}`} className={link}>

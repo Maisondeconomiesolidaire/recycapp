@@ -248,6 +248,26 @@ body {
   animation: scan-line 1.6s ease-in-out infinite;
 }
 
+/* Transition de page « balayée » : le nouveau contenu glisse vers la gauche
+   (depuis la droite) en fondu — effet premium à chaque changement de page. */
+@keyframes page-sweep-in {
+  0% { transform: translate3d(48px, 0, 0); opacity: 0; }
+  100% { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+.animate-page-sweep {
+  animation: page-sweep-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+/* La barre de navigation balaie aussi ses infos qui changent. */
+@keyframes navbar-sweep-in {
+  0% { transform: translate3d(32px, 0, 0); opacity: 0; }
+  100% { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+.animate-navbar-sweep {
+  animation: navbar-sweep-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @theme inline {
   --font-heading: "Inter Variable", var(--font-sans);
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
