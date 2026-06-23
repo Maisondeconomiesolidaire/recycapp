@@ -419,10 +419,15 @@ Règles IMPÉRATIVES :
 });
 
 export const analyzeArticleImage = action({
-  args: { storageId: v.id("_storage") },
-  handler: async (ctx, { storageId }): Promise<ArticleAIAnalysis> => {
+  args: { storageId: v.id("_storage"), extraDetails: v.optional(v.string()) },
+  handler: async (ctx, { storageId, extraDetails }): Promise<ArticleAIAnalysis> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Non authentifié.");
+
+    const details = extraDetails?.trim();
+    const detailsBlock = details
+      ? `\n\nPrécisions fournies par l'équipe (informations fiables qui priment sur la photo, ex. modèle exact, RAM, capacité, année, options) :\n${details}`
+      : "";
 
     const imageUrl = await ctx.storage.getUrl(storageId);
     if (!imageUrl) throw new Error("Image introuvable en stockage.");
@@ -444,7 +449,7 @@ export const analyzeArticleImage = action({
           role: "user",
           content: [
             { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
-            { type: "text", text: "Identifie cet article." },
+            { type: "text", text: `Identifie cet article.${detailsBlock}` },
           ],
         },
       ],
@@ -463,7 +468,7 @@ Recherche sur Leboncoin, Vinted, eBay France et Amazon France les prix actuels p
 2. "${identification.searchQueries[1] ?? identification.searchQueries[0]} occasion prix"
 3. "${identification.searchQueries[2] ?? identification.name} prix neuf"
 
-IMPORTANT : applique toutes les décotes selon l'état "${identification.estimatedCondition}" et les défauts constatés. Ne sois pas généreux.
+IMPORTANT : applique toutes les décotes selon l'état "${identification.estimatedCondition}" et les défauts constatés. Ne sois pas généreux.${detailsBlock}
 
 Produis l'évaluation JSON complète basée sur les résultats trouvés.`;
 

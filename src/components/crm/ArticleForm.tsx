@@ -196,6 +196,7 @@ export function ArticleForm({
     article?.weightKg !== undefined ? String(article.weightKg) : "",
   );
   const [location, setLocation] = useState(article?.location ?? "");
+  const [aiDetails, setAiDetails] = useState("");
   const [originalPrice, setOriginalPrice] = useState(
     article?.originalPrice !== undefined ? String(article.originalPrice) : "",
   );
@@ -301,7 +302,10 @@ export function ArticleForm({
     setError("");
     setGeneratingStep("analyse");
     try {
-      const result = await analyzeImage({ storageId: photos[0].id });
+      const result = await analyzeImage({
+        storageId: photos[0].id,
+        extraDetails: aiDetails.trim() || undefined,
+      });
       setTitle(result.title);
       setDescription(result.description);
       setPrice(String(result.price));
@@ -619,6 +623,19 @@ export function ArticleForm({
         </div>
 
         {/* ── Actions IA séparées ─────────────────────────────── */}
+        {photos.length > 0 && (
+          <Field
+            label="Détails supplémentaires pour l'IA (facultatif)"
+            hint="Infos non visibles sur la photo : modèle exact, RAM, capacité, année, options… Elles priment sur la photo."
+          >
+            <Textarea
+              value={aiDetails}
+              onChange={(e) => setAiDetails(e.target.value)}
+              placeholder="Ex : MacBook Pro 14&quot; M5 Pro, 32 Go RAM, 1 To SSD, 2025"
+              rows={2}
+            />
+          </Field>
+        )}
         {photos.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2">
             <button
