@@ -7,5 +7,6 @@ export default defineApp({
     MAPBOX_ACCESS_TOKEN: v.optional(v.string()),
     STAFF_EMAILS: v.optional(v.string()),
     ADMIN_EMAILS: v.optional(v.string()),
+    CLERK_SECRET_KEY: v.optional(v.string()),
   },
 });

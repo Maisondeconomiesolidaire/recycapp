@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Check,
   CircleDashed,
@@ -25,6 +25,37 @@ import {
   CrmGrant,
   CrmPageDefinition,
 } from "../../lib/crmPermissions";
+
+type ClerkUser = {
+  clerkId: string;
+  email: string;
+  name: string;
+  imageUrl: string | null;
+  createdAt: number | null;
+  lastSignInAt: number | null;
+};
+
+type PermissionPerson = {
+  email: string;
+  name?: string;
+  permissionActive?: boolean;
+  grants: CrmGrant[];
+  updatedAt?: number;
+};
+
+type ManagedPerson = PermissionPerson & {
+  clerkId?: string;
+  imageUrl?: string | null;
+  createdAt?: number | null;
+  lastSignInAt?: number | null;
+  source: "clerk" | "manual";
+};
+
+type ClerkUsersState = {
+  users: ClerkUser[];
+  totalCount: number;
+  setupError: string | null;
+};
 
 function emptyGrants() {
   return CRM_PAGES.filter((page) => !page.adminOnly).map((page) => ({
@@ -63,11 +94,48 @@ function setPageAll(grants: CrmGrant[], page: CrmPageDefinition, checked: boolea
   );
 }
 
+function mergeUsers(clerkUsers: ClerkUser[], permissionPeople: PermissionPerson[]) {
+  const people = new Map<string, ManagedPerson>();
+
+  for (const user of clerkUsers) {
+    people.set(user.email, {
+      email: user.email,
+      name: user.name,
+      clerkId: user.clerkId,
+      imageUrl: user.imageUrl,
+      createdAt: user.createdAt,
+      lastSignInAt: user.lastSignInAt,
+      permissionActive: undefined,
+      grants: [],
+      source: "clerk",
+    });
+  }
+
+  for (const permission of permissionPeople) {
+    const existing = people.get(permission.email);
+    people.set(permission.email, {
+      ...existing,
+      email: permission.email,
+      name: existing?.name ?? permission.name,
+      permissionActive: permission.permissionActive,
+      grants: permission.grants,
+      updatedAt: permission.updatedAt,
+      source: existing ? "clerk" : "manual",
+    });
+  }
+
+  return Array.from(people.values()).sort((a, b) =>
+    (a.name ?? a.email).localeCompare(b.name ?? b.email, "fr"),
+  );
+}
+
 export function Admin() {
-  const data = useQuery(api.permissions.listManaged);
+  const permissionsData = useQuery(api.permissions.listManaged);
+  const listClerkUsers = useAction(api.permissions.listClerkUsers);
   const upsert = useMutation(api.permissions.upsert);
   const remove = useMutation(api.permissions.remove);
   const [search, setSearch] = useState("");
+  const [clerkData, setClerkData] = useState<ClerkUsersState | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
@@ -75,12 +143,37 @@ export function Admin() {
   const [grants, setGrants] = useState<CrmGrant[]>(emptyGrants);
   const [saving, setSaving] = useState(false);
 
-  const people = data?.people ?? [];
+  useEffect(() => {
+    let cancelled = false;
+    setClerkData(null);
+    listClerkUsers({ limit: 300 })
+      .then((result) => {
+        if (cancelled) return;
+        setClerkData(result as ClerkUsersState);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setClerkData({
+          users: [],
+          totalCount: 0,
+          setupError: "clerk_api_error",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listClerkUsers]);
+
+  const people = useMemo(
+    () => mergeUsers(clerkData?.users ?? [], permissionsData?.people ?? []),
+    [clerkData?.users, permissionsData?.people],
+  );
   const filteredPeople = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return people;
     return people.filter((person) =>
-      [person.name, person.email, person.teamRole]
+      [person.name, person.email]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(needle)),
     );
@@ -89,10 +182,10 @@ export function Admin() {
   const selectedPerson = people.find((person) => person.email === selectedEmail) ?? null;
 
   useEffect(() => {
-    if (!data) return;
+    if (!permissionsData || clerkData === null) return;
     if (selectedEmail && people.some((person) => person.email === selectedEmail)) return;
     setSelectedEmail(people[0]?.email ?? null);
-  }, [data, people, selectedEmail]);
+  }, [permissionsData, clerkData, people, selectedEmail]);
 
   useEffect(() => {
     if (!selectedPerson) {
@@ -161,8 +254,8 @@ export function Admin() {
       />
 
       <div className="space-y-5 p-4 sm:p-6">
-        {data === undefined ? (
-          <FullSpinner label="Chargement des accès…" />
+        {permissionsData === undefined || clerkData === null ? (
+          <FullSpinner label="Chargement des utilisateurs Clerk…" />
         ) : (
           <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
             <aside className="overflow-hidden rounded-[28px] border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_24px_70px_rgba(0,0,0,0.22)]">
@@ -172,10 +265,17 @@ export function Admin() {
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Rechercher un membre…"
+                    placeholder="Rechercher un utilisateur…"
                     className="pl-9"
                   />
                 </div>
+                {clerkData.setupError && (
+                  <div className="mt-3 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-200">
+                    {clerkData.setupError === "missing_clerk_secret_key"
+                      ? "Ajoute CLERK_SECRET_KEY dans les variables Convex pour afficher tous les utilisateurs Clerk."
+                      : "Impossible de charger les utilisateurs Clerk pour le moment."}
+                  </div>
+                )}
               </div>
 
               <div className="max-h-[640px] overflow-y-auto p-2">
@@ -183,8 +283,8 @@ export function Admin() {
                   <div className="p-4">
                     <EmptyState
                       icon={<Mail className="h-8 w-8" />}
-                      title="Aucun accès"
-                      description="Ajoutez un membre dans Équipe avec un email ou créez un accès manuel."
+                      title="Aucun utilisateur Clerk"
+                      description="Les utilisateurs Clerk apparaîtront ici dès que la clé serveur Clerk sera configurée."
                     />
                   </div>
                 ) : (
@@ -197,11 +297,19 @@ export function Admin() {
                         "mb-1 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition",
                         selectedEmail === person.email
                           ? "bg-brand-500/14 text-zinc-100 ring-1 ring-brand-400/35"
-                          : "text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
+                        : "text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
                       )}
                     >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--crm-surface-2)] text-sm font-black text-zinc-300">
-                        {(person.name ?? person.email).slice(0, 2).toUpperCase()}
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--crm-surface-2)] text-sm font-black text-zinc-300">
+                        {person.imageUrl ? (
+                          <img
+                            src={person.imageUrl}
+                            alt={person.name ?? person.email}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          (person.name ?? person.email).slice(0, 2).toUpperCase()
+                        )}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">
@@ -210,6 +318,11 @@ export function Admin() {
                         <span className="block truncate text-xs text-zinc-500">
                           {person.email}
                         </span>
+                        {person.source === "manual" && (
+                          <span className="mt-0.5 block text-[11px] text-amber-300/80">
+                            Accès manuel hors liste Clerk
+                          </span>
+                        )}
                       </span>
                       {person.permissionActive === false ? (
                         <ShieldOff className="h-4 w-4 text-red-400" />

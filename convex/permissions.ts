@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { action, env, mutation, query } from "./_generated/server";
 import {
   getCrmAccessForIdentity,
   isAdminIdentity,
@@ -49,60 +49,140 @@ export const listManaged = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const [members, permissionRecords] = await Promise.all([
-      ctx.db.query("teamMembers").order("desc").take(200),
-      ctx.db.query("crmPermissions").order("desc").take(200),
-    ]);
-    const recordsByEmail = new Map(
-      permissionRecords.map((record) => [record.email, record]),
-    );
-    const people = new Map<
-      string,
-      {
-        email: string;
-        name?: string;
-        teamMemberId?: string;
-        teamRole?: string;
-        site?: "60" | "76";
-        teamActive?: boolean;
-        permissionActive?: boolean;
-        grants: { pageKey: string; actions: string[] }[];
-        updatedAt?: number;
-      }
-    >();
-
-    for (const member of members) {
-      const email = member.email ? normalizeEmail(member.email) : "";
-      if (!email) continue;
-      const record = recordsByEmail.get(email);
-      people.set(email, {
-        email,
-        name: record?.name ?? member.name,
-        teamMemberId: member._id,
-        teamRole: member.role,
-        site: member.site,
-        teamActive: member.active,
-        permissionActive: record?.active,
-        grants: record?.grants ?? [],
-        updatedAt: record?.updatedAt,
-      });
-    }
-
-    for (const record of permissionRecords) {
-      if (people.has(record.email)) continue;
-      people.set(record.email, {
-        email: record.email,
-        name: record.name,
-        permissionActive: record.active,
-        grants: record.grants,
-        updatedAt: record.updatedAt,
-      });
-    }
+    const permissionRecords = await ctx.db
+      .query("crmPermissions")
+      .order("desc")
+      .take(300);
 
     return {
-      people: Array.from(people.values()).sort((a, b) =>
-        (a.name ?? a.email).localeCompare(b.name ?? b.email, "fr"),
-      ),
+      people: permissionRecords
+        .map((record) => ({
+          email: record.email,
+          name: record.name,
+          permissionActive: record.active,
+          grants: record.grants,
+          updatedAt: record.updatedAt,
+        }))
+        .sort((a, b) =>
+          (a.name ?? a.email).localeCompare(b.name ?? b.email, "fr"),
+        ),
+    };
+  },
+});
+
+type ClerkEmailAddress = {
+  id?: unknown;
+  email_address?: unknown;
+};
+
+type ClerkUserPayload = {
+  id?: unknown;
+  first_name?: unknown;
+  last_name?: unknown;
+  username?: unknown;
+  image_url?: unknown;
+  primary_email_address_id?: unknown;
+  email_addresses?: unknown;
+  created_at?: unknown;
+  last_sign_in_at?: unknown;
+};
+
+function stringOrNull(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function numberOrNull(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function clerkPrimaryEmail(user: ClerkUserPayload) {
+  const emails = Array.isArray(user.email_addresses)
+    ? (user.email_addresses as ClerkEmailAddress[])
+    : [];
+  const primaryId = stringOrNull(user.primary_email_address_id);
+  const primary = emails.find((email) => email.id === primaryId) ?? emails[0];
+  return stringOrNull(primary?.email_address)?.toLowerCase() ?? null;
+}
+
+function normalizeClerkUser(user: ClerkUserPayload) {
+  const email = clerkPrimaryEmail(user);
+  if (!email) return null;
+  const firstName = stringOrNull(user.first_name);
+  const lastName = stringOrNull(user.last_name);
+  const name = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+  return {
+    clerkId: stringOrNull(user.id) ?? email,
+    email,
+    name: name || stringOrNull(user.username) || email,
+    imageUrl: stringOrNull(user.image_url),
+    createdAt: numberOrNull(user.created_at),
+    lastSignInAt: numberOrNull(user.last_sign_in_at),
+  };
+}
+
+export const listClerkUsers = action({
+  args: {
+    limit: v.optional(v.number()),
+    query: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const secretKey = env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+      return {
+        users: [],
+        totalCount: 0,
+        setupError: "missing_clerk_secret_key",
+      };
+    }
+
+    const limit = Math.min(Math.max(Math.floor(args.limit ?? 200), 1), 500);
+    const url = new URL("https://api.clerk.com/v1/users");
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", "0");
+    url.searchParams.set("order_by", "-created_at");
+    if (args.query?.trim()) {
+      url.searchParams.set("query", args.query.trim());
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        users: [],
+        totalCount: 0,
+        setupError: `clerk_api_${response.status}`,
+      };
+    }
+
+    const payload: unknown = await response.json();
+    const rawUsers = Array.isArray(payload)
+      ? payload
+      : Array.isArray((payload as { data?: unknown }).data)
+        ? (payload as { data: unknown[] }).data
+        : [];
+    const totalCount = Array.isArray(payload)
+      ? rawUsers.length
+      : typeof (payload as { total_count?: unknown }).total_count === "number"
+        ? (payload as { total_count: number }).total_count
+        : typeof (payload as { totalCount?: unknown }).totalCount === "number"
+          ? (payload as { totalCount: number }).totalCount
+          : rawUsers.length;
+
+    return {
+      users: rawUsers
+        .map((user) => normalizeClerkUser(user as ClerkUserPayload))
+        .filter((user): user is NonNullable<ReturnType<typeof normalizeClerkUser>> =>
+          Boolean(user),
+        ),
+      totalCount,
+      setupError: null,
     };
   },
 });

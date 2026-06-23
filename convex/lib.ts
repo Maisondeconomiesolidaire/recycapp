@@ -93,7 +93,7 @@ export async function requireStaff(ctx: QueryCtx | MutationCtx | ActionCtx) {
 }
 
 /** Vérifie qu'une session Clerk admin est présente. */
-export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
+export async function requireAdmin(ctx: QueryCtx | MutationCtx | ActionCtx) {
   const identity = await requireUser(ctx);
   if (!isAdminIdentity(identity)) {
     throw new Error("Accès réservé aux administrateurs.");

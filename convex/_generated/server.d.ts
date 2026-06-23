@@ -26,6 +26,7 @@ import type { DataModel } from "./dataModel.js";
  */
 type Env = {
   readonly ADMIN_EMAILS: string | undefined;
+  readonly CLERK_SECRET_KEY: string | undefined;
   readonly MAPBOX_ACCESS_TOKEN: string | undefined;
   readonly STAFF_EMAILS: string | undefined;
   readonly STRIPE_SECRET_KEY: string | undefined;
