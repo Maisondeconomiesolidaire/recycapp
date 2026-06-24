@@ -146,7 +146,7 @@ export function C3QuoteCalculator({ request }: { request: C3QuoteRequest }) {
               Les erreurs Excel connues sont corrigées ici, notamment l'inversion GEB et la catégorie meuble LCP.
             </p>
           </div>
-          <div className="rounded-2xl border border-brand-500/30 bg-brand-500/10 px-5 py-3 text-right">
+          <div className="text-right">
             <p className="text-xs uppercase tracking-[0.18em] text-brand-300">Total TTC</p>
             <p className="mt-1 text-3xl font-semibold text-zinc-100">{formatPrice(result.totalTtc)}</p>
           </div>
