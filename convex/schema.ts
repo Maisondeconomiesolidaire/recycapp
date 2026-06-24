@@ -441,9 +441,13 @@ export default defineSchema({
     reference: v.string(),
     articleId: v.optional(v.id("articles")),
     createdAt: v.number(),
+    // Sortie de stock : motif + date quand l'article quitte la recyclerie.
+    exitedAt: v.optional(v.number()),
+    exitMotif: v.optional(v.string()),
   })
     .index("by_arrivage", ["arrivageId"])
     .index("by_depot", ["depotId"])
+    .index("by_reference", ["reference"])
     .index("by_date", ["date"]),
 
   /** GDR Ateliers — suivi de valorisation article par article. */

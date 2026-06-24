@@ -310,3 +310,144 @@ export const historyStats = query({
     };
   },
 });
+
+// ─── Sorties d'articles arrivés ────────────────────────────────────────────────
+
+/** Motifs de sortie d'un article du stock. */
+export const EXIT_MOTIFS = [
+  "Vente",
+  "Don",
+  "Déchèterie",
+  "Recyclage / Filière",
+  "Casse / Perte",
+  "Autre",
+] as const;
+
+function itemDisplayName(item: {
+  labelInfo?: string;
+  category: string;
+  subcategory?: string;
+}) {
+  return (
+    item.labelInfo?.trim() ||
+    [item.category, item.subcategory].filter(Boolean).join(" – ")
+  );
+}
+
+/** Recherche d'articles arrivés et non encore sortis (réf., nom, catégorie). */
+export const searchItemsForExit = query({
+  args: { searchText: v.string() },
+  handler: async (ctx, { searchText }) => {
+    await requireCrmPermission(ctx, "caisse", "read");
+    const q = searchText.trim().toLowerCase();
+    if (q.length < 2) return [];
+
+    const items = await ctx.db
+      .query("arrivageItems")
+      .withIndex("by_date")
+      .order("desc")
+      .take(800);
+
+    return items
+      .filter((i) => !i.exitedAt)
+      .filter((i) =>
+        [i.reference, i.labelInfo, i.category, i.subcategory]
+          .filter(Boolean)
+          .some((v) => v!.toLowerCase().includes(q)),
+      )
+      .slice(0, 25)
+      .map((i) => ({
+        _id: i._id,
+        reference: i.reference,
+        name: itemDisplayName(i),
+        category: i.category,
+        subcategory: i.subcategory ?? null,
+        weightKg: i.weightKg ?? null,
+        quantity: i.quantity,
+        date: i.date,
+      }));
+  },
+});
+
+/** Récupère un article arrivé non sorti par sa référence exacte (scan). */
+export const getItemByReference = query({
+  args: { reference: v.string() },
+  handler: async (ctx, { reference }) => {
+    await requireCrmPermission(ctx, "caisse", "read");
+    const item = await ctx.db
+      .query("arrivageItems")
+      .withIndex("by_reference", (q) => q.eq("reference", reference.trim()))
+      .first();
+    if (!item || item.exitedAt) return null;
+    return {
+      _id: item._id,
+      reference: item.reference,
+      name: itemDisplayName(item),
+      category: item.category,
+      subcategory: item.subcategory ?? null,
+      weightKg: item.weightKg ?? null,
+      quantity: item.quantity,
+      date: item.date,
+    };
+  },
+});
+
+/** Enregistre la sortie d'un article arrivé (motif + date). */
+export const recordExit = mutation({
+  args: { itemId: v.id("arrivageItems"), motif: v.string() },
+  handler: async (ctx, { itemId, motif }) => {
+    await requireCrmPermission(ctx, "caisse", "checkout");
+    const item = await ctx.db.get(itemId);
+    if (!item) throw new Error("Article introuvable.");
+    if (item.exitedAt) throw new Error("Cet article est déjà sorti.");
+    await ctx.db.patch(itemId, {
+      exitedAt: Date.now(),
+      exitMotif: motif.trim() || "Autre",
+    });
+  },
+});
+
+/** Annule une sortie (remet l'article en stock). */
+export const undoExit = mutation({
+  args: { itemId: v.id("arrivageItems") },
+  handler: async (ctx, { itemId }) => {
+    await requireCrmPermission(ctx, "caisse", "checkout");
+    await ctx.db.patch(itemId, { exitedAt: undefined, exitMotif: undefined });
+  },
+});
+
+/** Sorties récentes + compteurs (articles + poids total) sur une période. */
+export const listExits = query({
+  args: { startDate: v.number(), endDate: v.number() },
+  handler: async (ctx, { startDate, endDate }) => {
+    await requireCrmPermission(ctx, "caisse", "read");
+    const items = (
+      await ctx.db.query("arrivageItems").withIndex("by_date").order("desc").take(2000)
+    ).filter(
+      (i) => i.exitedAt && i.exitedAt >= startDate && i.exitedAt <= endDate,
+    );
+
+    const totalArticles = items.reduce((s, i) => s + i.quantity, 0);
+    const totalWeight = items.reduce((s, i) => s + (i.weightKg ?? 0) * i.quantity, 0);
+    const byMotif: Record<string, number> = {};
+    for (const i of items) {
+      const m = i.exitMotif ?? "Autre";
+      byMotif[m] = (byMotif[m] ?? 0) + i.quantity;
+    }
+
+    return {
+      totalArticles,
+      totalWeight: Math.round(totalWeight * 10) / 10,
+      byMotif: Object.entries(byMotif).map(([label, count]) => ({ label, count })),
+      recent: items.slice(0, 60).map((i) => ({
+        _id: i._id,
+        reference: i.reference,
+        name: itemDisplayName(i),
+        motif: i.exitMotif ?? "Autre",
+        weightKg: i.weightKg ?? null,
+        quantity: i.quantity,
+        exitedAt: i.exitedAt!,
+      })),
+    };
+  },
+});
