@@ -159,17 +159,6 @@ export function Dashboard() {
               </div>
 
               <Panel flat>
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">
-                      Santé
-                    </p>
-                  </div>
-                  <div className="px-1 py-1 text-xs text-zinc-400">
-                    {stats.total} demandes
-                  </div>
-                </div>
-
                 <div className="grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
                   <div className="mx-auto h-40 w-40 lg:h-44 lg:w-44">
                     <ResponsiveContainer width="100%" height="100%">
