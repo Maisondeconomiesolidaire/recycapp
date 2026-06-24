@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useQuery } from "convex/react";
-import { ArrowRight, Check, Flame, PackageOpen, ShoppingCart, X } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { useClerk, useUser } from "@clerk/clerk-react";
+import { ArrowRight, Check, Flame, Heart, PackageOpen, ShoppingCart, Sparkles, X } from "lucide-react";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
 import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
@@ -21,6 +23,25 @@ function truncateDescription(value: string, max = 88) {
   return `${trimmed.slice(0, max).trimEnd()}…`;
 }
 
+/** État partagé des favoris : ids sauvegardés + bascule (avec connexion si besoin). */
+function useWishlist() {
+  const { isSignedIn } = useUser();
+  const clerk = useClerk();
+  const ids = useQuery(api.articles.myWishlistIds, isSignedIn ? {} : "skip");
+  const toggleMutation = useMutation(api.articles.toggleWishlist);
+  const idSet = useMemo(() => new Set((ids ?? []).map(String)), [ids]);
+
+  const toggle = (articleId: string) => {
+    if (!isSignedIn) {
+      clerk.openSignIn({});
+      return;
+    }
+    void toggleMutation({ articleId: articleId as Id<"articles"> });
+  };
+
+  return { idSet, toggle, isSignedIn: Boolean(isSignedIn) };
+}
+
 export function Boutique() {
   const { slug } = useParams<{ slug?: string }>();
   const [searchParams] = useSearchParams();
@@ -30,6 +51,15 @@ export function Boutique() {
   const articles = useQuery(api.articles.listPublic, {
     categories: activeCategory ? [activeCategory] : undefined,
   });
+  const productOfDay = useQuery(api.articles.getProductOfDay, {});
+  const { isSignedIn } = useUser();
+  const recommendations = useQuery(
+    api.articles.recommendations,
+    isSignedIn ? {} : "skip",
+  );
+  const wishlist = useWishlist();
+  // On masque le produit du jour quand on filtre par catégorie ou qu'on recherche.
+  const showFeatured = !activeCategory && !search.trim();
 
   const filteredArticles = useMemo(() => {
     if (!articles) return articles;
@@ -57,6 +87,21 @@ export function Boutique() {
           </div>
         </div>
       </section>
+
+      {showFeatured && productOfDay && (
+        <ProductOfDayHero
+          product={productOfDay}
+          wishlisted={wishlist.idSet.has(String(productOfDay._id))}
+          onToggleWishlist={() => wishlist.toggle(productOfDay._id)}
+        />
+      )}
+
+      {showFeatured && recommendations && recommendations.length > 0 && (
+        <RecommendationRow
+          articles={recommendations}
+          wishlist={wishlist}
+        />
+      )}
 
       <section className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 lg:px-8">
         <div>
@@ -88,7 +133,12 @@ export function Boutique() {
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {filteredArticles.map((article) => (
-                  <ArticleCard key={article._id} article={article} />
+                  <ArticleCard
+                    key={article._id}
+                    article={article}
+                    wishlisted={wishlist.idSet.has(String(article._id))}
+                    onToggleWishlist={() => wishlist.toggle(article._id)}
+                  />
                 ))}
               </div>
             )}
@@ -100,6 +150,8 @@ export function Boutique() {
 
 function ArticleCard({
   article,
+  wishlisted = false,
+  onToggleWishlist,
 }: {
   article: {
     _id: string;
@@ -116,6 +168,8 @@ function ArticleCard({
     imageUrls: string[];
     weightKg?: number;
   };
+  wishlisted?: boolean;
+  onToggleWishlist?: () => void;
 }) {
   const bundleCount = article.bundledArticleIds?.length ?? 0;
   const cart = useCart();
@@ -157,14 +211,26 @@ function ArticleCard({
           </div>
         )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
-          <span className="rounded-full bg-white/92 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-700 shadow-sm">
-            {article.isLot ? "Lot" : article.category}
-          </span>
-          {article.isLot && bundleCount > 0 ? (
-            <span className="rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white shadow-sm">
-              {bundleCount} articles
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full bg-white/92 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-700 shadow-sm">
+              {article.isLot ? "Lot" : article.category}
             </span>
-          ) : null}
+            {article.isLot && bundleCount > 0 ? (
+              <span className="rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white shadow-sm">
+                {bundleCount} articles
+              </span>
+            ) : null}
+          </div>
+          {onToggleWishlist && (
+            <HeartButton
+              active={wishlisted}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleWishlist();
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -320,5 +386,192 @@ function ArticleCard({
       </div>
     )}
   </>
+  );
+}
+
+// ─── Produit du jour & recommandations ────────────────────────────────────────
+
+type ShopArticle = {
+  _id: string;
+  title: string;
+  description: string;
+  category: string;
+  subcategory?: string;
+  condition: string;
+  price: number;
+  originalPrice?: number;
+  status: string;
+  imageUrls: string[];
+};
+
+function HeartButton({
+  active,
+  onClick,
+  className = "",
+}: {
+  active: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={active ? "Retirer des favoris" : "Sauvegarder l'article"}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm backdrop-blur transition hover:scale-105 ${
+        active ? "bg-white text-brand-600" : "bg-white/90 text-zinc-500 hover:text-brand-600"
+      } ${className}`}
+    >
+      <Heart className={`h-5 w-5 ${active ? "fill-current" : ""}`} />
+    </button>
+  );
+}
+
+function ProductOfDayHero({
+  product,
+  wishlisted,
+  onToggleWishlist,
+}: {
+  product: ShopArticle;
+  wishlisted: boolean;
+  onToggleWishlist: () => void;
+}) {
+  return (
+    <section className="mx-auto w-full max-w-[92rem] px-5 pt-8 sm:px-7 lg:px-8">
+      <div className="overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white to-[#fff4ea] shadow-[0_30px_90px_rgba(24,24,27,0.10)]">
+        <div className="grid items-stretch md:grid-cols-2">
+          <Link
+            to={`/boutique/${product._id}`}
+            className="group relative block aspect-[4/3] overflow-hidden bg-[#f2eee7]"
+          >
+            {product.imageUrls[0] ? (
+              <img
+                src={product.imageUrls[0]}
+                alt={product.title}
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                <PackageOpen className="h-14 w-14" />
+              </div>
+            )}
+            <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white shadow-lg">
+              <Sparkles className="h-3.5 w-3.5" />
+              Produit du jour
+            </span>
+            <HeartButton
+              active={wishlisted}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleWishlist();
+              }}
+              className="absolute right-4 top-4"
+            />
+          </Link>
+
+          <div className="flex flex-col justify-center gap-4 p-7 sm:p-10">
+            <span className="inline-flex w-fit items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">
+              <Sparkles className="h-3.5 w-3.5" />
+              La pépite du moment
+            </span>
+            <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-zinc-950">
+              {product.title}
+            </h2>
+            <p className="max-w-prose text-sm leading-6 text-zinc-600">
+              {truncateDescription(product.description, 220)}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {product.originalPrice && product.originalPrice > product.price ? (
+                <>
+                  <span className="text-3xl font-extrabold" style={{ color: BRAND }}>
+                    {formatPrice(product.price)}
+                  </span>
+                  <span className="text-base font-semibold text-zinc-400 line-through">
+                    {formatPrice(product.originalPrice)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-3xl font-extrabold" style={{ color: BRAND }}>
+                  {formatPrice(product.price)}
+                </span>
+              )}
+              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600">
+                {product.condition}
+              </span>
+            </div>
+            <Link
+              to={`/boutique/${product._id}`}
+              className="inline-flex w-fit items-center gap-2 rounded-full px-6 py-3.5 text-sm font-bold text-white shadow-[0_12px_30px_rgba(241,16,79,0.3)] transition hover:-translate-y-0.5"
+              style={{ backgroundColor: BRAND }}
+            >
+              Découvrir l'article
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RecommendationRow({
+  articles,
+  wishlist,
+}: {
+  articles: ShopArticle[];
+  wishlist: { idSet: Set<string>; toggle: (id: string) => void };
+}) {
+  return (
+    <section className="mx-auto w-full max-w-[92rem] px-5 pt-8 sm:px-7 lg:px-8">
+      <div className="mb-4 flex items-center gap-2">
+        <Sparkles className="h-5 w-5 text-brand-600" />
+        <h2 className="text-xl font-bold tracking-tight text-zinc-950">
+          Produits susceptibles de vous intéresser
+        </h2>
+      </div>
+      <div className="-mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-4">
+        {articles.map((a) => (
+          <Link
+            key={a._id}
+            to={`/boutique/${a._id}`}
+            className="group relative flex w-[210px] shrink-0 snap-start flex-col overflow-hidden rounded-3xl border border-white/80 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.08)] transition-shadow hover:shadow-[0_24px_56px_rgba(24,24,27,0.16)]"
+          >
+            <div className="relative aspect-square overflow-hidden bg-[#f2eee7]">
+              {a.imageUrls[0] ? (
+                <img
+                  src={a.imageUrls[0]}
+                  alt={a.title}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                  <PackageOpen className="h-10 w-10" />
+                </div>
+              )}
+              <HeartButton
+                active={wishlist.idSet.has(String(a._id))}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  wishlist.toggle(a._id);
+                }}
+                className="absolute right-2.5 top-2.5"
+              />
+            </div>
+            <div className="flex flex-1 flex-col gap-1 p-3">
+              <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-950">
+                {a.title}
+              </h3>
+              <span className="mt-auto text-base font-bold" style={{ color: BRAND }}>
+                {formatPrice(a.price)}
+              </span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

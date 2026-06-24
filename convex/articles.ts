@@ -627,3 +627,165 @@ export const remove = mutation({
     await ctx.db.delete(id);
   },
 });
+
+// ─── Produit du jour ────────────────────────────────────────────────────────
+
+/** CRM : bascule l'article en "Produit du jour" (un seul à la fois). */
+export const toggleProductOfDay = mutation({
+  args: { articleId: v.id("articles") },
+  handler: async (ctx, { articleId }) => {
+    await requireCrmPermission(ctx, "articles", "update");
+    const target = await ctx.db.get(articleId);
+    if (!target) throw new Error("Article introuvable.");
+    const willEnable = !target.productOfDay;
+
+    const current = await ctx.db
+      .query("articles")
+      .withIndex("by_productOfDay", (q) => q.eq("productOfDay", true))
+      .collect();
+    await Promise.all(
+      current
+        .filter((a) => a._id !== articleId)
+        .map((a) => ctx.db.patch(a._id, { productOfDay: undefined })),
+    );
+
+    await ctx.db.patch(articleId, { productOfDay: willEnable ? true : undefined });
+    return willEnable;
+  },
+});
+
+/** Public : article mis en avant (ou null). */
+export const getProductOfDay = query({
+  args: {},
+  handler: async (ctx) => {
+    const featured = await ctx.db
+      .query("articles")
+      .withIndex("by_productOfDay", (q) => q.eq("productOfDay", true))
+      .first();
+    if (!featured) return null;
+    if (featured.status === "vendu" || featured.status === "attente" || featured.status === "lot") {
+      return null;
+    }
+    return withImageUrls(ctx, featured);
+  },
+});
+
+// ─── Wishlist (favoris clients) ───────────────────────────────────────────────
+
+/** Ajoute/retire un article des favoris du client connecté. Renvoie l'état final. */
+export const toggleWishlist = mutation({
+  args: { articleId: v.id("articles") },
+  handler: async (ctx, { articleId }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Connexion requise pour sauvegarder un article.");
+    const existing = await ctx.db
+      .query("wishlists")
+      .withIndex("by_user_article", (q) =>
+        q.eq("userId", identity.subject).eq("articleId", articleId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      return false;
+    }
+    await ctx.db.insert("wishlists", {
+      userId: identity.subject,
+      articleId,
+      createdAt: Date.now(),
+    });
+    return true;
+  },
+});
+
+/** IDs des favoris du client connecté (pour l'état des cœurs). */
+export const myWishlistIds = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const rows = await ctx.db
+      .query("wishlists")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+    return rows.map((r) => r.articleId);
+  },
+});
+
+/** Favoris du client connecté (articles disponibles). */
+export const myWishlist = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const rows = await ctx.db
+      .query("wishlists")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .order("desc")
+      .collect();
+    const out = [];
+    for (const r of rows) {
+      const a = await ctx.db.get(r.articleId);
+      if (a && a.status !== "vendu" && a.status !== "attente" && a.status !== "lot") {
+        out.push(await withCoverImageUrl(ctx, a));
+      }
+    }
+    return out;
+  },
+});
+
+/**
+ * Recommandations "Produits susceptibles de vous intéresser".
+ * Renvoie jusqu'à 10 articles seulement si le client a plus de 5 favoris,
+ * scorés par mots-clés / catégorie / sous-catégorie des favoris.
+ */
+export const recommendations = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const rows = await ctx.db
+      .query("wishlists")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+    if (rows.length <= 5) return [];
+
+    const savedIds = new Set(rows.map((r) => String(r.articleId)));
+    const saved: Doc<"articles">[] = [];
+    for (const r of rows) {
+      const a = await ctx.db.get(r.articleId);
+      if (a) saved.push(a);
+    }
+
+    const profileKeywords = new Set<string>();
+    const categories = new Set<string>();
+    const subcategories = new Set<string>();
+    for (const a of saved) {
+      for (const k of deriveKeywords(a)) profileKeywords.add(k);
+      categories.add(a.category);
+      if (a.subcategory) subcategories.add(a.subcategory);
+    }
+    const keywordList = [...profileKeywords];
+
+    const pool = await ctx.db.query("articles").order("desc").take(160);
+    const scored = pool
+      .filter(
+        (c) =>
+          !savedIds.has(String(c._id)) &&
+          !c.isLot &&
+          c.status !== "vendu" &&
+          c.status !== "attente" &&
+          c.status !== "lot",
+      )
+      .map((c) => {
+        const overlap = keywordOverlap(deriveKeywords(c), keywordList).length;
+        const catScore = categories.has(c.category) ? 2 : 0;
+        const subScore = c.subcategory && subcategories.has(c.subcategory) ? 3 : 0;
+        return { c, score: overlap + catScore + subScore };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
+    return Promise.all(scored.map((x) => withCoverImageUrl(ctx, x.c)));
+  },
+});

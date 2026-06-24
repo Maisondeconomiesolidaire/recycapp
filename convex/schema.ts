@@ -180,11 +180,24 @@ export default defineSchema({
     bundledArticleIds: v.optional(v.array(v.id("articles"))),
     bundleKey: v.optional(v.string()),
     bundleReason: v.optional(v.string()),
+    // Article mis en avant "Produit du jour" (un seul à la fois).
+    productOfDay: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_status", ["status"])
     .index("by_internalReference", ["internalReference"])
-    .index("by_gdrReference", ["gdrReference"]),
+    .index("by_gdrReference", ["gdrReference"])
+    .index("by_productOfDay", ["productOfDay"]),
+
+  /** Articles sauvegardés (wishlist) par les clients connectés. */
+  wishlists: defineTable({
+    userId: v.string(),
+    articleId: v.id("articles"),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_article", ["userId", "articleId"])
+    .index("by_article", ["articleId"]),
 
   requests: defineTable({
     type: requestType,

@@ -169,6 +169,7 @@ export function Articles() {
   const articles = useQuery(api.articles.listAll, {});
   const remove = useMutation(api.articles.remove);
   const publishLot = useMutation(api.articles.publishLot);
+  const toggleProductOfDay = useMutation(api.articles.toggleProductOfDay);
   const analyzePotentialLots = useAction(api.ai.analyzePotentialLots);
   const [editing, setEditing] = useState<ArticleDoc | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -460,6 +461,19 @@ export function Articles() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
+                            {canUpdate && (
+                              <button
+                                onClick={() => toggleProductOfDay({ articleId: a._id })}
+                                className={`rounded-lg p-2 transition ${
+                                  a.productOfDay
+                                    ? "text-brand-400"
+                                    : "text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
+                                }`}
+                                title={a.productOfDay ? "Retirer le produit du jour" : "Définir comme produit du jour"}
+                              >
+                                <Sparkles className={`h-4 w-4 ${a.productOfDay ? "fill-current" : ""}`} />
+                              </button>
+                            )}
                             {canPrint && (
                               <button
                                 onClick={() => setPrintArticles([a])}

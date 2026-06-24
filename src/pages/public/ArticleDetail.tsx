@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import {
   ArrowLeft,
   BadgeCheck,
   Check,
   Eye,
+  Heart,
   PackageOpen,
   ShieldCheck,
   ShoppingCart,
@@ -40,6 +42,18 @@ export function ArticleDetail() {
   );
   const heartbeatView = useMutation(api.articles.heartbeatView);
   const leaveView = useMutation(api.articles.leaveView);
+  const { isSignedIn } = useUser();
+  const clerk = useClerk();
+  const wishlistIds = useQuery(api.articles.myWishlistIds, isSignedIn ? {} : "skip");
+  const toggleWishlist = useMutation(api.articles.toggleWishlist);
+  const wishlisted = Boolean(wishlistIds?.some((wid) => String(wid) === id));
+  function handleToggleWishlist() {
+    if (!isSignedIn) {
+      clerk.openSignIn({});
+      return;
+    }
+    if (id) void toggleWishlist({ articleId: id as Id<"articles"> });
+  }
   const [activeImage, setActiveImage] = useState(0);
   const [selectedBundledId, setSelectedBundledId] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -232,9 +246,23 @@ export function ArticleDetail() {
                 )}
               </div>
 
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">
-                {currentArticle.title}
-              </h1>
+              <div className="mt-4 flex items-start justify-between gap-3">
+                <h1 className="text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">
+                  {currentArticle.title}
+                </h1>
+                <button
+                  type="button"
+                  onClick={handleToggleWishlist}
+                  aria-label={wishlisted ? "Retirer des favoris" : "Sauvegarder l'article"}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition hover:scale-105 ${
+                    wishlisted
+                      ? "border-brand-200 bg-brand-50 text-brand-600"
+                      : "border-zinc-200 bg-white text-zinc-400 hover:text-brand-600"
+                  }`}
+                >
+                  <Heart className={`h-5 w-5 ${wishlisted ? "fill-current" : ""}`} />
+                </button>
+              </div>
               {currentArticle.isLot && bundledArticles.length > 0 && (
                 <p className="mt-2 inline-flex rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">
                   Lot de {bundledArticles.length} articles
