@@ -30,6 +30,9 @@ import {
 } from "./Wizard";
 import {
   AERO_OBJECT_TYPES,
+  ARTICLE_CATEGORIES,
+  ARTICLE_CONDITIONS,
+  ARTICLE_SUBCATEGORIES,
   WOOD_TYPES,
   STRIPPING_OPTIONS,
   COATING_OPTIONS,
@@ -129,6 +132,12 @@ const articleSchema = z.object({
 
 const livraisonSchema = z.object({
   customer: customerSchema,
+  articleTitle: z.string().optional(),
+  category: z.string().optional(),
+  subcategory: z.string().optional(),
+  condition: z.string().optional(),
+  reference: z.string().optional(),
+  articlePrice: z.preprocess(pre, z.number().nonnegative().optional()),
   deliveryAddress: z
     .object({
       address: z.string().optional(),
@@ -1062,11 +1071,23 @@ function LivraisonForm({
         postalCode: "",
         city: "",
       },
+      articleTitle: "",
+      category: "",
+      subcategory: "",
+      condition: "",
+      reference: "",
+      articlePrice: undefined,
       comment: "",
     },
   });
 
   const deliveryAddress = watch("deliveryAddress");
+  const manualCategory = watch("category") ?? "";
+  const manualArticleTitle = watch("articleTitle") ?? "";
+  const manualSubcategory = watch("subcategory") ?? "";
+  const manualCondition = watch("condition") ?? "";
+  const manualReference = watch("reference") ?? "";
+  const manualArticlePrice = watch("articlePrice");
   const photoSignature = `${articlePhotos[0] ?? ""}:${referencePhotos[0] ?? ""}`;
   const addressSignature = [
     deliveryAddress?.address ?? "",
@@ -1076,7 +1097,15 @@ function LivraisonForm({
     .map((value) => value.trim())
     .join("|");
 
-  const articlePrice = analysis?.articlePrice ?? null;
+  const resolvedArticleTitle = manualArticleTitle.trim() || analysis?.articleTitle || "";
+  const resolvedCategory = manualCategory.trim() || analysis?.category || "";
+  const resolvedSubcategory = manualSubcategory.trim() || analysis?.subcategory || "";
+  const resolvedCondition = manualCondition.trim() || analysis?.condition || "";
+  const resolvedReference = manualReference.trim() || analysis?.reference || "";
+  const articlePrice =
+    typeof manualArticlePrice === "number" && Number.isFinite(manualArticlePrice)
+      ? manualArticlePrice
+      : analysis?.articlePrice ?? null;
   const baseDeliveryFee = fee?.deliveryFee ?? null;
   const baseTotal =
     articlePrice !== null && baseDeliveryFee !== null
@@ -1223,13 +1252,13 @@ function LivraisonForm({
       setSlots(result);
       setSelectedSlot((current) => {
         if (!result.slots.length) return null;
-        if (!current) return result.slots[0];
+        if (!current) return null;
         return (
           result.slots.find(
             (slot) =>
               slot.requestReference === current.requestReference &&
               slot.scheduledDate === current.scheduledDate,
-          ) ?? result.slots[0]
+          ) ?? null
         );
       });
     } catch (e) {
@@ -1245,6 +1274,21 @@ function LivraisonForm({
     setAnalysis(null);
     void runAnalysis(photoSignature);
   }, [analyzing, articlePhotos, lastAnalyzedPhotos, photoSignature, referencePhotos]);
+
+  useEffect(() => {
+    if (!analysis) return;
+    if (!getValues("articleTitle")?.trim()) setValue("articleTitle", analysis.articleTitle);
+    if (!getValues("category")?.trim()) setValue("category", analysis.category);
+    if (!getValues("subcategory")?.trim()) setValue("subcategory", analysis.subcategory);
+    if (!getValues("condition")?.trim()) setValue("condition", analysis.condition);
+    if (!getValues("reference")?.trim()) setValue("reference", analysis.reference);
+    if (
+      analysis.articlePrice !== null &&
+      (getValues("articlePrice") === undefined || getValues("articlePrice") === null)
+    ) {
+      setValue("articlePrice", analysis.articlePrice);
+    }
+  }, [analysis, getValues, setValue]);
 
   useEffect(() => {
     if (!deliveryAddress?.address?.trim()) {
@@ -1295,11 +1339,11 @@ function LivraisonForm({
           sameAsBilling: sameAddress,
           articlePhoto: articlePhotos[0],
           referencePhoto: referencePhotos[0],
-          articleTitle: analysis?.articleTitle,
-          category: analysis?.category,
-          subcategory: analysis?.subcategory,
-          condition: analysis?.condition,
-          reference: analysis?.reference,
+          articleTitle: resolvedArticleTitle || undefined,
+          category: resolvedCategory || undefined,
+          subcategory: resolvedSubcategory || undefined,
+          condition: resolvedCondition || undefined,
+          reference: resolvedReference || undefined,
           referenceFromBarcode: analysis?.referenceFromBarcode,
           articlePrice: articlePrice ?? undefined,
           acompte: (selectedSlot ? reducedAcompte : baseAcompte) ?? undefined,
@@ -1392,8 +1436,8 @@ function LivraisonForm({
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {analysis?.articleTitle && <SummaryPill label="Article" value={analysis.articleTitle} />}
-                {analysis?.reference && <SummaryPill label="Référence" value={analysis.reference} />}
+                {resolvedArticleTitle && <SummaryPill label="Article" value={resolvedArticleTitle} />}
+                {resolvedReference && <SummaryPill label="Référence" value={resolvedReference} />}
                 {articlePrice !== null && <SummaryPill label="Prix article" value={formatPrice(articlePrice)} />}
               </div>
 
@@ -1413,17 +1457,17 @@ function LivraisonForm({
                 )}
                 {analysis && (
                   <div className="mt-3 space-y-1 text-zinc-400">
-                    <p className="font-semibold text-zinc-100">{analysis.articleTitle}</p>
+                    <p className="font-semibold text-zinc-100">{resolvedArticleTitle || analysis.articleTitle}</p>
                     <p>
-                      Catégorie : <span className="text-zinc-200">{analysis.category}</span>
+                      Catégorie : <span className="text-zinc-200">{resolvedCategory || analysis.category}</span>
                       {" · "}
-                      <span className="text-zinc-200">{analysis.subcategory}</span>
+                      <span className="text-zinc-200">{resolvedSubcategory || analysis.subcategory}</span>
                     </p>
                     <p>
-                      État : <span className="text-zinc-200">{analysis.condition}</span>
+                      État : <span className="text-zinc-200">{resolvedCondition || analysis.condition}</span>
                     </p>
                     <p>
-                      Référence : <span className="font-mono text-zinc-200">{analysis.reference}</span>
+                      Référence : <span className="font-mono text-zinc-200">{resolvedReference || analysis.reference}</span>
                       {" "}
                       <span className="text-zinc-500">
                         ({analysis.referenceFromBarcode ? "code-barres" : "générée"})
@@ -1437,6 +1481,61 @@ function LivraisonForm({
                     </p>
                   </div>
                 )}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+                <p className="text-sm font-semibold text-zinc-100">Compléter ou corriger manuellement</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Utilisez ces champs si l'IA n'a pas trouvé toutes les informations.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <Field label="Nom de l'article">
+                    <Input {...register("articleTitle")} placeholder="Ex : Table basse scandinave" />
+                  </Field>
+                  <Field label="Référence">
+                    <Input {...register("reference")} placeholder="Ex : 123456" />
+                  </Field>
+                  <Field label="Catégorie">
+                    <Select
+                      {...register("category")}
+                      value={manualCategory}
+                      onChange={(e) => {
+                        setValue("category", e.target.value);
+                        setValue("subcategory", "");
+                      }}
+                    >
+                      <option value="">Sélectionner…</option>
+                      {ARTICLE_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Sous-catégorie">
+                    <Select {...register("subcategory")} value={manualSubcategory}>
+                      <option value="">Sélectionner…</option>
+                      {(ARTICLE_SUBCATEGORIES[manualCategory] ?? []).map((subcategory) => (
+                        <option key={subcategory} value={subcategory}>
+                          {subcategory}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="État">
+                    <Select {...register("condition")} value={manualCondition}>
+                      <option value="">Sélectionner…</option>
+                      {ARTICLE_CONDITIONS.map((condition) => (
+                        <option key={condition} value={condition}>
+                          {condition}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Prix article">
+                    <Input type="number" min="0" step="0.01" {...register("articlePrice")} placeholder="Ex : 49" />
+                  </Field>
+                </div>
               </div>
             </WizardStepIntro>
           </div>
@@ -1513,10 +1612,17 @@ function LivraisonForm({
             >
               <div className="grid gap-4 xl:grid-cols-2">
                 <div className="rounded-3xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Tarif standard</p>
-                  <p className="mt-2 text-lg font-semibold text-zinc-100">
-                    {analysis?.articleTitle ?? "Article en attente d'analyse"}
-                  </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Tarif standard</p>
+                      <p className="mt-2 text-lg font-semibold text-zinc-100">
+                        {resolvedArticleTitle || "Article en attente d'analyse"}
+                      </p>
+                    </div>
+                    <Button type="button" variant={selectedSlot ? "outline" : "secondary"} size="sm" onClick={() => setSelectedSlot(null)}>
+                      {selectedSlot ? "Choisir standard" : "Standard choisi"}
+                    </Button>
+                  </div>
                   <div className="mt-4 space-y-3 text-sm">
                     <PriceRow label="Prix article" value={articlePrice !== null ? formatPrice(articlePrice) : "En attente"} />
                     <PriceRow label="Livraison" value={baseDeliveryFee !== null ? formatPrice(baseDeliveryFee) : "En attente"} />
@@ -1527,6 +1633,9 @@ function LivraisonForm({
 
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/8 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Option groupée ≤ 5 km</p>
+                  <p className="mt-2 text-xs text-zinc-400">
+                    Sélectionnez cette option uniquement si vous souhaitez appliquer la livraison groupée.
+                  </p>
                   {!slots && !slotsError && (
                     <p className="mt-4 text-sm text-zinc-400">Recherche automatique des collectes planifiées à proximité…</p>
                   )}
@@ -1572,6 +1681,16 @@ function LivraisonForm({
                                     −{formatPrice(slot.discount)}
                                   </span>
                                 )}
+                              </div>
+                              <div className="mt-3 flex justify-end">
+                                <span className={cn(
+                                  "rounded-full px-2.5 py-1 text-xs font-semibold",
+                                  active
+                                    ? "bg-emerald-400/20 text-emerald-200"
+                                    : "bg-[var(--crm-surface-2)] text-zinc-300",
+                                )}>
+                                  {active ? "Groupée choisie" : "Choisir cette option"}
+                                </span>
                               </div>
                             </button>
                           );
