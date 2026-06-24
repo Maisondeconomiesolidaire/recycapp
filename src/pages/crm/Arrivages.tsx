@@ -5,6 +5,7 @@ import { ArrowLeft, BarChart3, Check, PackageCheck, Plus, Printer, Trash2, Weigh
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Barcode } from "../../components/ui/Barcode";
+import { WeightField } from "../../components/crm/WeightField";
 import { COLLECTE_CATEGORIES, COLLECTE_SUBCATEGORIES } from "../../lib/constants";
 
 // ─── Référentiels ───────────────────────────────────────────────────────────
@@ -600,7 +601,9 @@ function ArrivalWizard({
               <SummaryPill label="Destination" value={ORIENTATION_LABELS[orientation] ?? orientation} />
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_130px_110px]">
+            <WeightField value={weightKg} onChange={setWeightKg} autoFocus />
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]">
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Désignation</label>
                 <input
@@ -608,18 +611,6 @@ function ArrivalWizard({
                   value={designation}
                   onChange={(e) => setDesignation(e.target.value)}
                   placeholder="Description courte (optionnel)"
-                  className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Poids (kg)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={weightKg}
-                  onChange={(e) => setWeightKg(e.target.value)}
-                  placeholder="0.0"
                   className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
               </div>
@@ -688,6 +679,8 @@ function RollArrivalForm({
       </p>
 
       <div className="mt-6 space-y-6">
+        <WeightField label="Poids reçu" value={weightKg} onChange={setWeightKg} placeholder="50" autoFocus />
+
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Provenance</p>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -727,29 +720,15 @@ function RollArrivalForm({
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Poids reçu (kg)</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={weightKg}
-              onChange={(e) => setWeightKg(e.target.value)}
-              placeholder="50"
-              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Ex : roll livres scolaires, papier blanc, textile mélangé..."
-              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-          </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Ex : roll livres scolaires, papier blanc, textile mélangé..."
+            className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
         </div>
 
         <button

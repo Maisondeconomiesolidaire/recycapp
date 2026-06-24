@@ -6,6 +6,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
+import { WeightField } from "../../components/crm/WeightField";
 import { COLLECTE_CATEGORIES } from "../../lib/constants";
 
 const CameraScanner = lazy(() =>
@@ -453,6 +454,8 @@ function FlowExitForm({
       </p>
 
       <div className="mt-5 space-y-5">
+        <WeightField label="Poids sorti" value={weightKg} onChange={setWeightKg} placeholder="50" autoFocus />
+
         <FlowChoiceGroup title="Provenance">
           {ORIGINS.map((o) => (
             <ChoiceButton key={o.key} selected={origin === o.key} onClick={() => setOrigin(o.key)}>
@@ -498,29 +501,15 @@ function FlowExitForm({
           ))}
         </FlowChoiceGroup>
 
-        <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Poids sorti (kg)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={weightKg}
-              onChange={(e) => setWeightKg(e.target.value)}
-              placeholder="50"
-              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Ex : enlèvement filière papier, textile trié, roll déchèterie..."
-              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-          </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Ex : enlèvement filière papier, textile trié, roll déchèterie..."
+            className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
         </div>
 
         <button

@@ -638,6 +638,10 @@ function renderInlineMarkdown(
     const reference = part.startsWith("#") ? part.slice(1) : "";
     const request = reference ? byReference.get(reference) : undefined;
     if (request) {
+      const fullName = [request.customer.lastName, request.customer.firstName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
       return (
         <button
           key={`${part}-${index}`}
@@ -645,6 +649,7 @@ function renderInlineMarkdown(
           onClick={() => onOpenRequest(request._id)}
           className="mx-0.5 rounded-full border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 text-xs font-bold text-brand-300 transition hover:bg-brand-500/20"
         >
+          {fullName && <span className="font-semibold">{fullName} </span>}
           {part}
         </button>
       );
