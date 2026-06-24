@@ -405,7 +405,9 @@ function RequestsAnalysisDrawer({
     setLoading(true);
     setError(null);
     try {
-      const result = await runChat({ messages: nextMessages });
+      const result = await runChat({
+        messages: nextMessages.map(({ role, content }) => ({ role, content })),
+      });
       setMessages([...nextMessages, { role: "assistant", content: result.answer }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "L'analyse IA a échoué.");

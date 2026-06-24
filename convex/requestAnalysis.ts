@@ -121,6 +121,71 @@ export const snapshot = query({
   },
 });
 
+const OUTCOME_LABELS: Record<string, string> = {
+  open: "En cours",
+  gagnee: "Terminée",
+  perdue: "Annulée",
+};
+
+/** Date ISO courte (AAAA-MM-JJ), lisible et non ambiguë pour le modèle. */
+function isoDay(timestamp: number) {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+/** Convertit le snapshot technique en données métier en français (aucune clé ou valeur technique). */
+function humanizeSnapshot(snapshotData: AnalysisSnapshot) {
+  return {
+    genere_le: isoDay(snapshotData.generatedAt),
+    encadrants: snapshotData.team.map((member) => member.name),
+    demandes: snapshotData.requests.map((request) => ({
+      reference: `#${request.reference}`,
+      type: request.type,
+      ...(request.collecteType ? { type_collecte: request.collecteType } : {}),
+      etape: request.displayedStage,
+      statut: OUTCOME_LABELS[request.outcome] ?? request.outcome,
+      traitement: request.complete ? "Traitée" : "À traiter",
+      planifiee_le: request.scheduledDate ? isoDay(request.scheduledDate) : "Non planifiée",
+      encadrant: request.assignedName ?? "Non assigné",
+      ville: request.city ?? "—",
+      code_postal: request.postalCode ?? "—",
+      client: request.customerName,
+      creee_le: isoDay(request.createdAt),
+    })),
+  };
+}
+
+/** Nettoie la réponse : retire les symboles de mise en forme non gérés (backticks, astérisques parasites). */
+function sanitizeAnswer(text: string) {
+  return text
+    .replace(/`+/g, "") // pas de code inline
+    .replace(/\*{3,}/g, "**") // *** -> **
+    .replace(/(^|\n)\s*\*\s+/g, "$1- ") // puces "* " -> "- "
+    .replace(/(^|[^*])\*(?!\*)([^*\n]+?)\*(?!\*)/g, "$1$2") // *italique* -> texte simple
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
+const SYSTEM_PROMPT = [
+  "Tu es l'assistant manager CRM de Recycapp (recyclerie). Tu aides à organiser collectes, planning, encadrants et priorités à partir des demandes.",
+  "",
+  "LANGAGE :",
+  "- Réponds en français courant, clair et opérationnel, comme à un responsable d'équipe.",
+  "- N'emploie JAMAIS de termes informatiques, de noms de champs ou d'expressions techniques (par ex. n'écris jamais « complete = false », « outcome », « stage », « request.x », « true/false », « null »). Dis plutôt « à planifier », « non assignée », « terminée », « en cours »…",
+  "- Ne décris jamais la structure des données ni le JSON reçu.",
+  "",
+  "MISE EN FORME (à respecter strictement) :",
+  "- Titres de section : une courte ligne entièrement en **gras** (doubles astérisques).",
+  "- Listes : une puce par ligne commençant par « - ».",
+  "- Pour mettre un mot en valeur : **gras** uniquement.",
+  "- N'utilise AUCUN autre symbole : pas de tableaux, pas de titres Markdown avec #, pas d'astérisque simple, pas de triple astérisque, pas de backticks, pas d'émojis.",
+  "",
+  "CONTENU :",
+  "- Va à l'essentiel, sections courtes et actions concrètes.",
+  "- Quand tu cites une demande, utilise sa référence au format #000123.",
+  "- Limite la première réponse à 450 mots maximum.",
+  "- Ne prétends jamais avoir modifié les données : tu analyses et proposes seulement.",
+].join("\n");
+
 export const chat = action({
   args: {
     messages: v.array(
@@ -151,14 +216,13 @@ export const chat = action({
         input: [
           {
             role: "system",
-            content:
-              "Tu es l'assistant manager CRM de Recycapp. Analyse les demandes pour aider à organiser collectes, planning, encadrants et priorités. Réponds en français, directement, avec sections courtes et listes actionnables. Limite la première réponse à 450 mots maximum. Quand tu cites une demande, utilise sa référence au format #000123. Ne prétends jamais avoir modifié les données.",
+            content: SYSTEM_PROMPT,
           },
           {
             role: "user",
             content:
-              "Snapshot CRM compact. Dates en timestamps Unix millisecondes. Priorise : demandes à planifier, journées chargées, regroupements ville/date/type, assignations, risques, prochaines actions.\n\n" +
-              JSON.stringify(snapshotData),
+              "Voici les demandes du CRM (données métier, dates au format AAAA-MM-JJ). Priorise : demandes à planifier, journées chargées, regroupements par ville/date/type, assignations d'encadrants, risques et prochaines actions.\n\n" +
+              JSON.stringify(humanizeSnapshot(snapshotData)),
           },
           ...compactMessages.map((message) => ({
             role: message.role,
@@ -176,7 +240,7 @@ export const chat = action({
     }
 
     const data = await response.json();
-    const answer = responseText(data);
+    const answer = sanitizeAnswer(responseText(data));
     if (!answer) throw new Error("OpenAI n'a pas renvoyé de réponse exploitable.");
 
     return {
