@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
 import {
@@ -29,37 +29,31 @@ type NavItem = (typeof CRM_PAGES)[number];
 const NAV_GROUPS: Array<{
   key: string;
   label: string;
-  description: string;
   items: CrmPageKey[];
 }> = [
   {
     key: "pilotage",
     label: "Pilotage",
-    description: "Vue d'ensemble et échanges",
     items: ["dashboard", "notifications", "messages"],
   },
   {
     key: "demandes",
     label: "Demandes & planning",
-    description: "Clients, demandes et tournées",
     items: ["demandes", "calendrier", "clients", "tournees"],
   },
   {
     key: "stock",
     label: "Boutique & stock",
-    description: "Articles, caisse et flux",
     items: ["articles", "caisse", "arrivages", "sorties", "ateliers"],
   },
   {
     key: "documents",
     label: "Documents",
-    description: "Fichiers, devis et factures",
     items: ["documents"],
   },
   {
     key: "admin",
     label: "Administration",
-    description: "Équipe et accès",
     items: ["equipe", "admin"],
   },
 ];
@@ -267,35 +261,35 @@ function GroupedNav({
   itemClassName?: string;
 }) {
   const location = useLocation();
+  const lastNavigationSync = useRef<string | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(NAV_GROUPS.map((group) => [group.key, true])),
+    Object.fromEntries(NAV_GROUPS.map((group) => [group.key, false])),
   );
 
-  const navByKey = new Map(nav.map((item) => [item.key, item]));
-  const groups = NAV_GROUPS.map((group) => ({
-    ...group,
-    navItems: group.items
-      .map((key) => navByKey.get(key))
-      .filter((item): item is NavItem => Boolean(item)),
-  })).filter((group) => group.navItems.length > 0);
+  const groups = useMemo(() => {
+    const navByKey = new Map(nav.map((item) => [item.key, item]));
+    return NAV_GROUPS.map((group) => ({
+      ...group,
+      navItems: group.items
+        .map((key) => navByKey.get(key))
+        .filter((item): item is NavItem => Boolean(item)),
+    })).filter((group) => group.navItems.length > 0);
+  }, [nav]);
+
+  const activeGroupKey = groups.find((group) =>
+    group.navItems.some((item) => isPathActive(location.pathname, item)),
+  )?.key;
+  const groupsSignature = groups.map((group) => group.key).join("|");
 
   useEffect(() => {
-    const activeGroupKeys = groups
-      .filter((group) => group.navItems.some((item) => isPathActive(location.pathname, item)))
-      .map((group) => group.key);
-    if (activeGroupKeys.length === 0) return;
-    setOpenGroups((current) => {
-      let changed = false;
-      const next = { ...current };
-      for (const key of activeGroupKeys) {
-        if (!next[key]) {
-          next[key] = true;
-          changed = true;
-        }
-      }
-      return changed ? next : current;
-    });
-  }, [groups, location.pathname]);
+    if (!activeGroupKey) return;
+    const syncKey = `${location.pathname}:${groupsSignature}`;
+    if (lastNavigationSync.current === syncKey) return;
+    lastNavigationSync.current = syncKey;
+    setOpenGroups(
+      Object.fromEntries(groups.map((group) => [group.key, group.key === activeGroupKey])),
+    );
+  }, [activeGroupKey, groups, groupsSignature, location.pathname]);
 
   return (
     <>
@@ -309,7 +303,7 @@ function GroupedNav({
               type="button"
               onClick={() => setOpenGroups((current) => ({ ...current, [group.key]: !isOpen }))}
               className={cn(
-                "grid w-full grid-cols-[minmax(0,1fr)_20px] items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors",
+                "grid w-full grid-cols-[minmax(0,1fr)_20px] items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
                 hasActiveItem
                   ? "bg-[var(--crm-surface-2)] text-zinc-100"
                   : "text-zinc-500 hover:bg-[var(--crm-surface-2)] hover:text-zinc-200",
@@ -319,9 +313,6 @@ function GroupedNav({
               <span className="min-w-0">
                 <span className="block truncate text-[11px] font-bold uppercase tracking-[0.16em]">
                   {group.label}
-                </span>
-                <span className="mt-0.5 block truncate text-[11px] font-medium text-zinc-500">
-                  {group.description}
                 </span>
               </span>
               <ChevronDown
