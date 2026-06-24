@@ -275,8 +275,8 @@ export const COLLECTE_CATEGORY_BY_KEY: Record<
 
 /**
  * Sous-catégories rattachées à chacune de nos 12 catégories principales
- * (clé = clé de COLLECTE_CATEGORIES). Curation grand public des désignations
- * GDR, utilisée par les pages Arrivages / Sorties.
+ * (clé = clé de COLLECTE_CATEGORIES). Curation grand public des désignations,
+ * utilisée par les pages Arrivages / Sorties.
  */
 export const COLLECTE_SUBCATEGORIES: Record<string, string[]> = {
   mobilier: [
