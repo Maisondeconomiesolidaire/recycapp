@@ -933,6 +933,8 @@ export const createInternal = mutation({
         condition: v.optional(v.string()),
         reference: v.optional(v.string()),
         referenceFromBarcode: v.optional(v.boolean()),
+        articlePrice: v.optional(v.number()),
+        acompte: v.optional(v.number()),
         distanceKm: v.optional(v.number()),
         deliveryFee: v.optional(v.number()),
         suggestedSlot: v.optional(
@@ -942,6 +944,7 @@ export const createInternal = mutation({
             distanceKm: v.optional(v.number()),
             city: v.optional(v.string()),
             discount: v.optional(v.number()),
+            reducedDeliveryFee: v.optional(v.number()),
           }),
         ),
       }),

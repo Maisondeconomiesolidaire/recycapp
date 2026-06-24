@@ -197,6 +197,29 @@ export const usedLivraisonReferences = internalQuery({
   },
 });
 
+/** Prix et titre d'un article identifié par sa référence (code-barres scanné). */
+export const articleByReference = internalQuery({
+  args: { reference: v.string() },
+  handler: async (
+    ctx,
+    { reference },
+  ): Promise<{ price: number; title: string } | null> => {
+    const ref = reference.replace(/\D/g, "");
+    if (!ref) return null;
+    const byGdr = await ctx.db
+      .query("articles")
+      .withIndex("by_gdrReference", (q) => q.eq("gdrReference", ref))
+      .first();
+    if (byGdr) return { price: byGdr.price, title: byGdr.title };
+    const byInternal = await ctx.db
+      .query("articles")
+      .withIndex("by_internalReference", (q) => q.eq("internalReference", ref))
+      .first();
+    if (byInternal) return { price: byInternal.price, title: byInternal.title };
+    return null;
+  },
+});
+
 export const analyzePhotos = action({
   args: {
     articlePhotoId: v.id("_storage"),
@@ -212,6 +235,7 @@ export const analyzePhotos = action({
     condition: string;
     reference: string;
     referenceFromBarcode: boolean;
+    articlePrice: number | null;
   }> => {
     const access = await ctx.runQuery(api.permissions.myAccess, {});
     if (!accessAllows(access, "demandes", "create")) {
@@ -264,6 +288,20 @@ export const analyzePhotos = action({
       }
     }
 
+    // Prix de l'article : si le code-barres correspond à un article connu, on
+    // reprend son prix réel ; sinon le prix reste à renseigner manuellement.
+    let articlePrice: number | null = null;
+    let matchedTitle: string | null = null;
+    if (barcode) {
+      const match = await ctx.runQuery(internal.livraison.articleByReference, {
+        reference: barcode,
+      });
+      if (match) {
+        articlePrice = match.price;
+        matchedTitle = match.title;
+      }
+    }
+
     const used = new Set(
       await ctx.runQuery(internal.livraison.usedLivraisonReferences, {}),
     );
@@ -285,12 +323,13 @@ export const analyzePhotos = action({
     }
 
     return {
-      articleTitle: vision.title?.slice(0, 80) ?? "Article",
+      articleTitle: matchedTitle ?? vision.title?.slice(0, 80) ?? "Article",
       category,
       subcategory,
       condition: vision.condition ?? "Bon état",
       reference,
       referenceFromBarcode,
+      articlePrice,
     };
   },
 });
@@ -394,6 +433,7 @@ export const advantageousSlots = action({
       distanceKm: number;
       city: string | null;
       discount: number;
+      reducedDeliveryFee: number;
     }>;
     message: string;
   }> => {
@@ -422,6 +462,7 @@ export const advantageousSlots = action({
       distanceKm: number;
       city: string | null;
       discount: number;
+      reducedDeliveryFee: number;
     }> = [];
 
     // Limite le nombre de géocodages pour rester sous les quotas Mapbox.
@@ -434,13 +475,18 @@ export const advantageousSlots = action({
       }
       const km = haversineKm(target, point);
       if (km <= ADVANTAGEOUS_RADIUS_KM) {
+        const groupedKm = await drivingDistanceKm(point, target, accessToken);
+        const reducedDeliveryFee = Math.max(0, Math.round(groupedKm));
+        if (reducedDeliveryFee > ADVANTAGEOUS_RADIUS_KM) {
+          continue;
+        }
         slots.push({
           requestReference: candidate.reference,
           scheduledDate: candidate.scheduledDate,
           distanceKm: Math.round(km * 10) / 10,
           city: candidate.city,
-          // Réduction : la moitié des frais de livraison (au moins 5 €).
-          discount: fee > 0 ? Math.max(5, Math.round(fee * 0.5)) : 0,
+          reducedDeliveryFee,
+          discount: fee > 0 ? Math.max(0, fee - reducedDeliveryFee) : 0,
         });
       }
     }

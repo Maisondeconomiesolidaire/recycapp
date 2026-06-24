@@ -1609,12 +1609,20 @@ function RequestDetails({ request }: { request: RequestDoc }) {
           <SectionTitle>Frais de livraison</SectionTitle>
           <div className="text-sm">
             <Row
+              label="Prix article"
+              value={l.articlePrice !== undefined ? formatPrice(l.articlePrice) : undefined}
+            />
+            <Row
               label="Distance (dépôt → livraison)"
               value={l.distanceKm !== undefined ? `${l.distanceKm} km` : undefined}
             />
             <Row
               label="Frais (1 € / km)"
               value={l.deliveryFee !== undefined ? formatPrice(l.deliveryFee) : undefined}
+            />
+            <Row
+              label="Acompte demandé"
+              value={l.acompte !== undefined ? formatPrice(l.acompte) : undefined}
             />
           </div>
         </section>
@@ -1634,6 +1642,9 @@ function RequestDetails({ request }: { request: RequestDoc }) {
                   </p>
                 )}
                 {slot.distanceKm !== undefined && <p>À {slot.distanceKm} km de la livraison</p>}
+                {slot.reducedDeliveryFee !== undefined && (
+                  <p>Livraison groupée : {formatPrice(slot.reducedDeliveryFee)}</p>
+                )}
                 {slot.discount !== undefined && slot.discount > 0 && (
                   <p className="font-semibold text-emerald-300">
                     Réduction proposée : −{formatPrice(slot.discount)}

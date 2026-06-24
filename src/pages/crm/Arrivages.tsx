@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 import { BarChart3, Check, PackageCheck, Plus, Printer, Trash2, Weight, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -64,6 +65,7 @@ type StatEntry = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function Arrivages() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const addItem = useMutation(api.arrivages.addItem);
   const removeItem = useMutation(api.arrivages.removeItem);
   const history = useQuery(api.arrivages.listRecentArrivals);
@@ -94,6 +96,16 @@ export function Arrivages() {
 
   const canSubmit = Boolean(origin && orientation && category) && !saving;
   const canSubmitRoll = Boolean(rollOrigin && rollCategory && rollOrientation && parseFloat(rollWeightKg) > 0) && !saving;
+
+  useEffect(() => {
+    if (searchParams.get("action") !== "new") return;
+    setTab("new");
+    setArrivalMode(searchParams.get("mode") === "roll" ? "roll" : "unique");
+    const next = new URLSearchParams(searchParams);
+    next.delete("action");
+    next.delete("mode");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function addObject() {
     if (!canSubmit) return;

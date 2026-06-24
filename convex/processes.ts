@@ -11,6 +11,8 @@ export const STEP = {
   prestaTerminee: "Prestation terminée",
   factureEditee: "Facture éditée",
   factureReglee: "Facture réglée",
+  // Livraison
+  acompteVerse: "Acompte versé",
 } as const;
 
 /** Process complet à 7 étapes (aérogommage, collecte C2/C3, vélo par défaut). */
@@ -51,12 +53,7 @@ export function resolveProcess(
     case "article":
       return [STEP.contact, STEP.factureReglee];
     case "livraison":
-      return [
-        STEP.contact,
-        STEP.prestaPlanifiee,
-        STEP.prestaTerminee,
-        STEP.factureReglee,
-      ];
+      return [STEP.acompteVerse, STEP.prestaPlanifiee, STEP.prestaTerminee];
     case "collecte":
       switch (collecteType) {
         case "C1":

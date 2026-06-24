@@ -20,6 +20,7 @@ import {
   ScanLine,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
@@ -157,6 +158,7 @@ function normalizeDigits(value: string) {
 }
 
 export function Articles() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const access = useCrmAccess();
   const canCreate = canAccess(access, "articles", "create");
   const canUpdate = canAccess(access, "articles", "update");
@@ -239,6 +241,14 @@ export function Articles() {
       setSearchText(ref);
     }
   }
+
+  useEffect(() => {
+    if (searchParams.get("action") !== "new") return;
+    openNew();
+    const next = new URLSearchParams(searchParams);
+    next.delete("action");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function handleAnalyzeLots() {
     if (!canAnalyze) return;

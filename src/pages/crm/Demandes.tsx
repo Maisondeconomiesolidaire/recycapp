@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAction, useQuery } from "convex/react";
 import { BrainCircuit, Inbox, Loader2, Plus, Send } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
@@ -47,6 +48,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export function Demandes() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>("complete");
   const [typeFilter, setTypeFilter] = useState<RequestType | null>(null);
   const [openId, setOpenId] = useState<Id<"requests"> | null>(null);
@@ -72,6 +74,14 @@ export function Demandes() {
         ? b.createdAt - a.createdAt
         : a.createdAt - b.createdAt,
     );
+
+  useEffect(() => {
+    if (searchParams.get("action") !== "new") return;
+    setNewOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("action");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col lg:h-[calc(100vh)]">

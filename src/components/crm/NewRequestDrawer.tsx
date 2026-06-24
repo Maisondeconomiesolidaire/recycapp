@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   ArrowLeft,
-  CalendarClock,
   PackageOpen,
   Plus,
   Search,
@@ -23,6 +22,12 @@ import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { PhotoUpload } from "../ui/PhotoUpload";
 import { formatPrice, formatDate } from "../../lib/format";
 import { cn } from "../../lib/cn";
+import {
+  SummaryPill,
+  WizardShell,
+  WizardStepIntro,
+  type SlideDirection,
+} from "./Wizard";
 import {
   AERO_OBJECT_TYPES,
   WOOD_TYPES,
@@ -200,7 +205,7 @@ export function NewRequestDrawer({
       title={titleNode}
       bodyClassName="p-0 flex flex-col overflow-hidden"
       footer={
-        type !== null ? (
+        type !== null && type !== "livraison" ? (
           <div className="flex items-center justify-end gap-3">
             <Button variant="outline" onClick={() => setType(null)}>
               ← Retour
@@ -981,6 +986,7 @@ type AnalysisResult = {
   condition: string;
   reference: string;
   referenceFromBarcode: boolean;
+  articlePrice: number | null;
 };
 
 type SlotResult = {
@@ -990,6 +996,7 @@ type SlotResult = {
     distanceKm: number;
     city: string | null;
     discount: number;
+    reducedDeliveryFee: number;
   }[];
   message: string;
 };
@@ -1006,6 +1013,8 @@ function LivraisonForm({
   const computeFee = useAction(api.livraison.computeDeliveryFee);
   const findSlots = useAction(api.livraison.advantageousSlots);
 
+  const [step, setStep] = useState(0);
+  const [direction, setDirection] = useState<SlideDirection>("forward");
   const [sameAddress, setSameAddress] = useState(false);
   const [articlePhotos, setArticlePhotos] = useState<Id<"_storage">[]>([]);
   const [referencePhotos, setReferencePhotos] = useState<Id<"_storage">[]>([]);
@@ -1013,15 +1022,18 @@ function LivraisonForm({
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [lastAnalyzedPhotos, setLastAnalyzedPhotos] = useState("");
 
   const [fee, setFee] = useState<{ distanceKm: number; deliveryFee: number } | null>(null);
   const [computingFee, setComputingFee] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
+  const [lastFeeAddress, setLastFeeAddress] = useState("");
 
   const [slots, setSlots] = useState<SlotResult | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SlotResult["slots"][number] | null>(null);
+  const [lastSlotsAddress, setLastSlotsAddress] = useState("");
 
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -1031,10 +1043,75 @@ function LivraisonForm({
     setValue,
     handleSubmit,
     getValues,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<LivraisonData>({
     resolver: zodResolver(livraisonSchema),
+    defaultValues: {
+      customer: {
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        address: "",
+        postalCode: "",
+        city: "",
+      },
+      deliveryAddress: {
+        address: "",
+        postalCode: "",
+        city: "",
+      },
+      comment: "",
+    },
   });
+
+  const deliveryAddress = watch("deliveryAddress");
+  const photoSignature = `${articlePhotos[0] ?? ""}:${referencePhotos[0] ?? ""}`;
+  const addressSignature = [
+    deliveryAddress?.address ?? "",
+    deliveryAddress?.postalCode ?? "",
+    deliveryAddress?.city ?? "",
+  ]
+    .map((value) => value.trim())
+    .join("|");
+
+  const articlePrice = analysis?.articlePrice ?? null;
+  const baseDeliveryFee = fee?.deliveryFee ?? null;
+  const baseTotal =
+    articlePrice !== null && baseDeliveryFee !== null
+      ? articlePrice + baseDeliveryFee
+      : null;
+  const baseAcompte = baseTotal !== null ? Math.round(baseTotal * 0.2 * 100) / 100 : null;
+  const reducedTotal =
+    articlePrice !== null && selectedSlot
+      ? articlePrice + selectedSlot.reducedDeliveryFee
+      : null;
+  const reducedAcompte =
+    reducedTotal !== null ? Math.round(reducedTotal * 0.2 * 100) / 100 : null;
+
+  const steps = [
+    {
+      eyebrow: "Livraison",
+      title: "Informations client",
+      helper: "Commencez par le client et son adresse de facturation.",
+    },
+    {
+      eyebrow: "Livraison",
+      title: "Article et référence",
+      helper: "Ajoutez les photos. L'analyse IA et la récupération du prix se lancent automatiquement.",
+    },
+    {
+      eyebrow: "Livraison",
+      title: "Adresse de livraison",
+      helper: "Indiquez l'adresse du client. Les frais se recalculent en direct.",
+    },
+    {
+      eyebrow: "Livraison",
+      title: "Validation et acompte",
+      helper: "Comparez le coût standard et, si disponible, l'option groupée à moins de 5 km.",
+    },
+  ] as const;
 
   function copyBilling() {
     const next = !sameAddress;
@@ -1055,11 +1132,42 @@ function LivraisonForm({
     };
   }
 
-  async function runAnalysis() {
+  function goTo(nextStep: number) {
+    setDirection(nextStep > step ? "forward" : "back");
+    setStep(nextStep);
+  }
+
+  async function next() {
+    if (step === 0) {
+      const valid = await trigger([
+        "customer.firstName",
+        "customer.lastName",
+        "customer.email",
+        "customer.phone",
+      ]);
+      if (!valid) return;
+    }
+    if (step === 1 && !articlePhotos[0]) {
+      setAnalysisError("Ajoutez d'abord la photo de l'article.");
+      return;
+    }
+    if (step === 2) {
+      const valid = await trigger("deliveryAddress.address");
+      if (!valid) return;
+    }
+    if (step < steps.length - 1) goTo(step + 1);
+  }
+
+  function back() {
+    if (step > 0) goTo(step - 1);
+  }
+
+  async function runAnalysis(signature = photoSignature) {
     if (!articlePhotos[0]) {
       setAnalysisError("Ajoutez d'abord la photo de l'article.");
       return;
     }
+    setLastAnalyzedPhotos(signature);
     setAnalyzing(true);
     setAnalysisError(null);
     try {
@@ -1075,12 +1183,17 @@ function LivraisonForm({
     }
   }
 
-  async function runComputeFee() {
+  async function runComputeFee(signature = addressSignature) {
     const da = deliveryAddressArgs();
     if (!da.address) {
+      setFee(null);
+      setSlots(null);
+      setSelectedSlot(null);
+      setLastFeeAddress("");
       setFeeError("Renseignez l'adresse de livraison.");
       return;
     }
+    setLastFeeAddress(signature);
     setComputingFee(true);
     setFeeError(null);
     try {
@@ -1093,23 +1206,73 @@ function LivraisonForm({
     }
   }
 
-  async function runFindSlots() {
+  async function runFindSlots(signature = addressSignature) {
     const da = deliveryAddressArgs();
     if (!da.address) {
+      setSlots(null);
+      setSelectedSlot(null);
+      setLastSlotsAddress("");
       setSlotsError("Renseignez l'adresse de livraison.");
       return;
     }
+    setLastSlotsAddress(signature);
     setLoadingSlots(true);
     setSlotsError(null);
     try {
       const result = await findSlots({ ...da, deliveryFee: fee?.deliveryFee });
       setSlots(result);
+      setSelectedSlot((current) => {
+        if (!result.slots.length) return null;
+        if (!current) return result.slots[0];
+        return (
+          result.slots.find(
+            (slot) =>
+              slot.requestReference === current.requestReference &&
+              slot.scheduledDate === current.scheduledDate,
+          ) ?? result.slots[0]
+        );
+      });
     } catch (e) {
       setSlotsError(e instanceof Error ? e.message : "Recherche impossible.");
     } finally {
       setLoadingSlots(false);
     }
   }
+
+  useEffect(() => {
+    if (!articlePhotos[0] || analyzing || photoSignature === lastAnalyzedPhotos) return;
+    setAnalysisError(null);
+    setAnalysis(null);
+    void runAnalysis(photoSignature);
+  }, [analyzing, articlePhotos, lastAnalyzedPhotos, photoSignature, referencePhotos]);
+
+  useEffect(() => {
+    if (!deliveryAddress?.address?.trim()) {
+      setFee(null);
+      setSlots(null);
+      setSelectedSlot(null);
+      setFeeError(null);
+      setSlotsError(null);
+      setLastFeeAddress("");
+      setLastSlotsAddress("");
+      return;
+    }
+    if (computingFee || addressSignature === lastFeeAddress) return;
+    const timer = window.setTimeout(() => {
+      void runComputeFee(addressSignature);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [addressSignature, computingFee, deliveryAddress, lastFeeAddress]);
+
+  useEffect(() => {
+    if (!deliveryAddress?.address?.trim() || !fee || loadingSlots || addressSignature === lastSlotsAddress) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void runFindSlots(addressSignature);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [addressSignature, deliveryAddress, fee, lastSlotsAddress, loadingSlots]);
 
   async function onSubmit(data: LivraisonData) {
     setFormError(null);
@@ -1138,8 +1301,10 @@ function LivraisonForm({
           condition: analysis?.condition,
           reference: analysis?.reference,
           referenceFromBarcode: analysis?.referenceFromBarcode,
+          articlePrice: articlePrice ?? undefined,
+          acompte: (selectedSlot ? reducedAcompte : baseAcompte) ?? undefined,
           distanceKm: fee?.distanceKm,
-          deliveryFee: fee?.deliveryFee,
+          deliveryFee: selectedSlot?.reducedDeliveryFee ?? fee?.deliveryFee,
           suggestedSlot: selectedSlot
             ? {
                 requestReference: selectedSlot.requestReference,
@@ -1147,6 +1312,7 @@ function LivraisonForm({
                 distanceKm: selectedSlot.distanceKm,
                 city: selectedSlot.city ?? undefined,
                 discount: selectedSlot.discount,
+                reducedDeliveryFee: selectedSlot.reducedDeliveryFee,
               }
             : undefined,
         },
@@ -1160,211 +1326,319 @@ function LivraisonForm({
   }
 
   return (
-    <form id="new-request-form" onSubmit={handleSubmit(onSubmit)} className="space-y-2">
-      <ClientSearch
-        onSelect={(c) => {
-          setValue("customer.firstName", c.firstName);
-          setValue("customer.lastName", c.lastName);
-          setValue("customer.email", c.email);
-          setValue("customer.phone", c.phone);
-          if (c.address) setValue("customer.address", c.address);
-          if (c.postalCode) setValue("customer.postalCode", c.postalCode);
-          if (c.city) setValue("customer.city", c.city);
-        }}
-      />
-
-      <SectionHeader>Informations client</SectionHeader>
-      <CustomerSection
-        register={register as Parameters<typeof CustomerSection>[0]["register"]}
-        errors={errors}
-        watch={watch as Parameters<typeof CustomerSection>[0]["watch"]}
-        setValue={setValue as Parameters<typeof CustomerSection>[0]["setValue"]}
-      />
-
-      <SectionHeader>Adresse de livraison</SectionHeader>
-      <div className="space-y-3">
-        <Checkbox
-          label="Identique à l'adresse de facturation"
-          checked={sameAddress}
-          onChange={copyBilling}
-        />
-        <Field label="Adresse">
-          <AddressAutocomplete
-            value={watch("deliveryAddress.address") ?? ""}
-            onValueChange={(v) => setValue("deliveryAddress.address", v)}
-            onSelect={(a) => {
-              setValue("deliveryAddress.address", a.address);
-              setValue("deliveryAddress.postalCode", a.postalCode);
-              setValue("deliveryAddress.city", a.city);
-            }}
-            placeholder="Lieu de livraison"
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Code postal">
-            <Input {...register("deliveryAddress.postalCode")} />
-          </Field>
-          <Field label="Ville">
-            <Input {...register("deliveryAddress.city")} />
-          </Field>
-        </div>
-      </div>
-
-      <SectionHeader>Photos</SectionHeader>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Photo de l'article <span className="text-red-400">*</span>
-          </p>
-          <PhotoUpload value={articlePhotos} onChange={setArticlePhotos} />
-          <p className="mt-1.5 text-[11px] text-zinc-600">
-            Sert à catégoriser l'article par IA.
-          </p>
-        </div>
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Photo de la référence / code-barres
-          </p>
-          <PhotoUpload value={referencePhotos} onChange={setReferencePhotos} />
-          <p className="mt-1.5 text-[11px] text-zinc-600">
-            Optionnel. Si présente, la référence interne reprend ce numéro ; sinon une
-            nouvelle référence est générée.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={runAnalysis}
-          disabled={analyzing}
-        >
-          <Sparkles className="h-4 w-4" />
-          {analyzing ? "Analyse IA en cours…" : "Analyser les photos"}
-        </Button>
-        {analysisError && (
-          <p className="mt-2 text-sm text-red-400">{analysisError}</p>
-        )}
-        {analysis && (
-          <div className="mt-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm">
-            <p className="font-semibold text-zinc-100">{analysis.articleTitle}</p>
-            <div className="mt-2 space-y-1 text-zinc-400">
-              <p>
-                Catégorie : <span className="text-zinc-200">{analysis.category}</span>
-                {" · "}
-                <span className="text-zinc-200">{analysis.subcategory}</span>
-              </p>
-              <p>
-                État : <span className="text-zinc-200">{analysis.condition}</span>
-              </p>
-              <p>
-                Référence interne :{" "}
-                <span className="font-mono text-zinc-200">{analysis.reference}</span>{" "}
-                <span className="text-zinc-500">
-                  ({analysis.referenceFromBarcode
-                    ? "reprise du code-barres"
-                    : "générée"})
-                </span>
-              </p>
-            </div>
+    <form id="new-request-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <WizardShell
+        eyebrow={steps[step].eyebrow}
+        title={steps[step].title}
+        stepIndex={step}
+        stepCount={steps.length}
+        direction={direction}
+        onBack={back}
+      >
+        {step === 0 && (
+          <div>
+            <WizardStepIntro
+              eyebrow="Étape 1"
+              title="Client"
+              helper="On récupère ici l'identité, le contact et l'adresse de facturation."
+            >
+              <ClientSearch
+                onSelect={(c) => {
+                  setValue("customer.firstName", c.firstName);
+                  setValue("customer.lastName", c.lastName);
+                  setValue("customer.email", c.email);
+                  setValue("customer.phone", c.phone);
+                  if (c.address) setValue("customer.address", c.address);
+                  if (c.postalCode) setValue("customer.postalCode", c.postalCode);
+                  if (c.city) setValue("customer.city", c.city);
+                }}
+              />
+              <CustomerSection
+                register={register as Parameters<typeof CustomerSection>[0]["register"]}
+                errors={errors}
+                watch={watch as Parameters<typeof CustomerSection>[0]["watch"]}
+                setValue={setValue as Parameters<typeof CustomerSection>[0]["setValue"]}
+              />
+            </WizardStepIntro>
           </div>
         )}
-      </div>
 
-      <SectionHeader>Frais de livraison</SectionHeader>
-      <div>
-        <p className="text-xs text-zinc-500">
-          Calcul automatique : 1 € / km entre le dépôt (4 rue de la prairie, Lachapelle-aux-Pots)
-          et l'adresse de livraison.
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          className="mt-3 w-full"
-          onClick={runComputeFee}
-          disabled={computingFee}
-        >
-          {computingFee ? "Calcul en cours…" : "Calculer les frais de livraison"}
-        </Button>
-        {feeError && <p className="mt-2 text-sm text-red-400">{feeError}</p>}
-        {fee && (
-          <div className="mt-3 flex items-center justify-between rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3 text-sm">
-            <span className="text-zinc-400">
-              Distance : <span className="text-zinc-200">{fee.distanceKm} km</span>
-            </span>
-            <span className="text-base font-bold text-brand-400">
-              {formatPrice(fee.deliveryFee)}
-            </span>
-          </div>
-        )}
-      </div>
+        {step === 1 && (
+          <div>
+            <WizardStepIntro
+              eyebrow="Étape 2"
+              title="Photos article + référence"
+              helper="L'article est analysé automatiquement dès qu'une photo est disponible."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Photo de l'article <span className="text-red-400">*</span>
+                  </p>
+                  <PhotoUpload value={articlePhotos} onChange={setArticlePhotos} />
+                  <p className="mt-1.5 text-[11px] text-zinc-600">
+                    Sert à catégoriser l'article et à vérifier sa désignation.
+                  </p>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Photo de la référence / code-barres
+                  </p>
+                  <PhotoUpload value={referencePhotos} onChange={setReferencePhotos} />
+                  <p className="mt-1.5 text-[11px] text-zinc-600">
+                    Permet de reprendre la référence et le prix de l'article en temps réel.
+                  </p>
+                </div>
+              </div>
 
-      <SectionHeader>Créneaux avantageux</SectionHeader>
-      <div>
-        <p className="text-xs text-zinc-500">
-          Vérifie si une collecte est déjà planifiée à moins de 5 km de la livraison : on peut
-          alors grouper et offrir une réduction au client.
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          className="mt-3 w-full"
-          onClick={runFindSlots}
-          disabled={loadingSlots}
-        >
-          <CalendarClock className="h-4 w-4" />
-          {loadingSlots ? "Recherche en cours…" : "Voir les créneaux avantageux"}
-        </Button>
-        {slotsError && <p className="mt-2 text-sm text-red-400">{slotsError}</p>}
-        {slots && (
-          <div className="mt-3 space-y-3">
-            <p className="text-xs text-zinc-400">{slots.message}</p>
-            {slots.slots.map((slot) => {
-              const active = selectedSlot?.requestReference === slot.requestReference;
-              return (
-                <button
-                  key={slot.requestReference + slot.scheduledDate}
-                  type="button"
-                  onClick={() => setSelectedSlot(active ? null : slot)}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition",
-                    active
-                      ? "border-brand-500 ring-1 ring-brand-500/40 bg-brand-500/8"
-                      : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] hover:border-zinc-600",
-                  )}
-                >
-                  <div>
-                    <p className="font-semibold text-zinc-100">
-                      {formatDate(slot.scheduledDate)}
-                      {slot.city ? ` · ${slot.city}` : ""}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {analysis?.articleTitle && <SummaryPill label="Article" value={analysis.articleTitle} />}
+                {analysis?.reference && <SummaryPill label="Référence" value={analysis.reference} />}
+                {articlePrice !== null && <SummaryPill label="Prix article" value={formatPrice(articlePrice)} />}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-zinc-100">Analyse IA</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void runAnalysis()} disabled={analyzing || !articlePhotos[0]}>
+                    <Sparkles className="h-4 w-4" />
+                    {analyzing ? "Analyse…" : "Relancer"}
+                  </Button>
+                </div>
+                {analysisError && <p className="mt-3 text-sm text-red-400">{analysisError}</p>}
+                {!analysis && !analysisError && (
+                  <p className="mt-3 text-zinc-500">
+                    {analyzing ? "Analyse de l'article et du code-barres en cours…" : "Ajoutez les photos pour lancer l'analyse."}
+                  </p>
+                )}
+                {analysis && (
+                  <div className="mt-3 space-y-1 text-zinc-400">
+                    <p className="font-semibold text-zinc-100">{analysis.articleTitle}</p>
+                    <p>
+                      Catégorie : <span className="text-zinc-200">{analysis.category}</span>
+                      {" · "}
+                      <span className="text-zinc-200">{analysis.subcategory}</span>
                     </p>
-                    <p className="text-xs text-zinc-500">
-                      Demande #{slot.requestReference} · à {slot.distanceKm} km
+                    <p>
+                      État : <span className="text-zinc-200">{analysis.condition}</span>
+                    </p>
+                    <p>
+                      Référence : <span className="font-mono text-zinc-200">{analysis.reference}</span>
+                      {" "}
+                      <span className="text-zinc-500">
+                        ({analysis.referenceFromBarcode ? "code-barres" : "générée"})
+                      </span>
+                    </p>
+                    <p>
+                      Prix article :{" "}
+                      <span className="text-zinc-200">
+                        {articlePrice !== null ? formatPrice(articlePrice) : "non trouvé"}
+                      </span>
                     </p>
                   </div>
-                  {slot.discount > 0 && (
-                    <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-                      −{formatPrice(slot.discount)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                )}
+              </div>
+            </WizardStepIntro>
           </div>
         )}
-      </div>
 
-      <SectionHeader>Commentaire</SectionHeader>
-      <Field label="Commentaire">
-        <Textarea {...register("comment")} placeholder="Précisions sur la livraison…" />
-      </Field>
+        {step === 2 && (
+          <div>
+            <WizardStepIntro
+              eyebrow="Étape 3"
+              title="Adresse de livraison"
+              helper="Les frais de livraison se recalculent automatiquement dès que l'adresse est connue."
+            >
+              <div className="space-y-3">
+                <Checkbox
+                  label="Identique à l'adresse de facturation"
+                  checked={sameAddress}
+                  onChange={copyBilling}
+                />
+                <Field label="Adresse" error={errors.deliveryAddress?.address?.message}>
+                  <AddressAutocomplete
+                    value={watch("deliveryAddress.address") ?? ""}
+                    onValueChange={(v) => setValue("deliveryAddress.address", v)}
+                    onSelect={(a) => {
+                      setValue("deliveryAddress.address", a.address);
+                      setValue("deliveryAddress.postalCode", a.postalCode);
+                      setValue("deliveryAddress.city", a.city);
+                    }}
+                    placeholder="Lieu de livraison"
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Code postal">
+                    <Input {...register("deliveryAddress.postalCode")} />
+                  </Field>
+                  <Field label="Ville">
+                    <Input {...register("deliveryAddress.city")} />
+                  </Field>
+                </div>
+              </div>
 
-      {formError && <p className="mt-2 text-sm text-red-400">{formError}</p>}
+              <div className="mt-4 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-100">Frais de livraison</p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      1 € / km depuis le dépôt de Lachapelle-aux-Pots.
+                    </p>
+                  </div>
+                  {(computingFee || loadingSlots) && (
+                    <span className="text-xs text-zinc-500">
+                      {computingFee ? "Calcul…" : "Recherche créneaux…"}
+                    </span>
+                  )}
+                </div>
+                {feeError && <p className="mt-3 text-sm text-red-400">{feeError}</p>}
+                {fee && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <SummaryPill label="Distance" value={`${fee.distanceKm} km`} />
+                    <SummaryPill label="Livraison" value={formatPrice(fee.deliveryFee)} />
+                    {baseAcompte !== null && <SummaryPill label="Acompte 20%" value={formatPrice(baseAcompte)} />}
+                  </div>
+                )}
+              </div>
+            </WizardStepIntro>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div>
+            <WizardStepIntro
+              eyebrow="Étape 4"
+              title="Validation du montant"
+              helper="Le tarif standard apparaît à gauche. Si une collecte planifiée est à 5 km ou moins, l'offre groupée apparaît à droite."
+            >
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-3xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Tarif standard</p>
+                  <p className="mt-2 text-lg font-semibold text-zinc-100">
+                    {analysis?.articleTitle ?? "Article en attente d'analyse"}
+                  </p>
+                  <div className="mt-4 space-y-3 text-sm">
+                    <PriceRow label="Prix article" value={articlePrice !== null ? formatPrice(articlePrice) : "En attente"} />
+                    <PriceRow label="Livraison" value={baseDeliveryFee !== null ? formatPrice(baseDeliveryFee) : "En attente"} />
+                    <PriceRow label="Total" value={baseTotal !== null ? formatPrice(baseTotal) : "En attente"} strong />
+                    <PriceRow label="Acompte 20%" value={baseAcompte !== null ? formatPrice(baseAcompte) : "En attente"} strong />
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/8 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Option groupée ≤ 5 km</p>
+                  {!slots && !slotsError && (
+                    <p className="mt-4 text-sm text-zinc-400">Recherche automatique des collectes planifiées à proximité…</p>
+                  )}
+                  {slotsError && <p className="mt-4 text-sm text-red-300">{slotsError}</p>}
+                  {slots && slots.slots.length === 0 && (
+                    <p className="mt-4 text-sm text-zinc-400">{slots.message}</p>
+                  )}
+                  {slots && slots.slots.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-sm text-zinc-300">{slots.message}</p>
+                      <div className="space-y-2">
+                        {slots.slots.map((slot) => {
+                          const active =
+                            selectedSlot?.requestReference === slot.requestReference &&
+                            selectedSlot?.scheduledDate === slot.scheduledDate;
+                          return (
+                            <button
+                              key={slot.requestReference + slot.scheduledDate}
+                              type="button"
+                              onClick={() => setSelectedSlot(slot)}
+                              className={cn(
+                                "w-full rounded-2xl border px-4 py-3 text-left transition",
+                                active
+                                  ? "border-emerald-400 bg-emerald-500/12 ring-1 ring-emerald-400/30"
+                                  : "border-[var(--crm-border)] bg-[var(--crm-surface)] hover:border-emerald-400/40",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-semibold text-zinc-100">
+                                    {formatDate(slot.scheduledDate)}
+                                    {slot.city ? ` · ${slot.city}` : ""}
+                                  </p>
+                                  <p className="mt-1 text-xs text-zinc-500">
+                                    Demande #{slot.requestReference} · {slot.distanceKm} km à vol d'oiseau
+                                  </p>
+                                  <p className="mt-1 text-xs text-zinc-500">
+                                    Livraison groupée : {formatPrice(slot.reducedDeliveryFee)}
+                                  </p>
+                                </div>
+                                {slot.discount > 0 && (
+                                  <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                                    −{formatPrice(slot.discount)}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedSlot && (
+                        <div className="rounded-2xl border border-emerald-500/20 bg-[var(--crm-surface)] p-4 text-sm">
+                          <PriceRow label="Prix article" value={articlePrice !== null ? formatPrice(articlePrice) : "En attente"} />
+                          <PriceRow label="Livraison groupée" value={formatPrice(selectedSlot.reducedDeliveryFee)} />
+                          <PriceRow label="Total réduit" value={reducedTotal !== null ? formatPrice(reducedTotal) : "En attente"} strong />
+                          <PriceRow label="Acompte 20%" value={reducedAcompte !== null ? formatPrice(reducedAcompte) : "En attente"} strong />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <Field label="Commentaire">
+                  <Textarea {...register("comment")} placeholder="Précisions sur la livraison…" />
+                </Field>
+              </div>
+            </WizardStepIntro>
+          </div>
+        )}
+
+        {formError && <p className="mt-4 text-sm text-red-400">{formError}</p>}
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" onClick={step === 0 ? onDone : back}>
+            {step === 0 ? "Fermer" : "Retour"}
+          </Button>
+          {step < steps.length - 1 ? (
+            <Button type="button" onClick={() => void next()}>
+              Continuer
+            </Button>
+          ) : (
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Création en cours…" : "Créer la demande"}
+            </Button>
+          )}
+        </div>
+      </WizardShell>
 
       <button type="submit" className="hidden" aria-hidden disabled={isSubmitting} />
     </form>
+  );
+}
+
+function PriceRow({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--crm-border)] pb-3 last:border-b-0 last:pb-0">
+      <span className="text-zinc-400">{label}</span>
+      <span className={strong ? "text-base font-semibold text-zinc-100" : "text-zinc-200"}>
+        {value}
+      </span>
+    </div>
   );
 }
 

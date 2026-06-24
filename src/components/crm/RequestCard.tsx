@@ -157,6 +157,14 @@ function summary(r: Doc<"requests">): string {
         [r.velo?.bikeType, r.velo?.service].filter(Boolean).join(" · ") ||
         "Atelier vélo"
       );
+    case "livraison":
+      return (
+        r.livraison?.articleTitle ||
+        [r.livraison?.deliveryAddress?.postalCode, r.livraison?.deliveryAddress?.city]
+          .filter(Boolean)
+          .join(" ") ||
+        "Livraison article"
+      );
     default:
       return "";
   }

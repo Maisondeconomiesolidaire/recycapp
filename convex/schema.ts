@@ -169,6 +169,9 @@ const livraisonDetails = v.object({
   // sinon générée automatiquement.
   reference: v.optional(v.string()),
   referenceFromBarcode: v.optional(v.boolean()),
+  // Prix de l'article (issu du code-barres scanné) et acompte de 20 %.
+  articlePrice: v.optional(v.number()),
+  acompte: v.optional(v.number()),
   // Calcul des frais de livraison (Mapbox : dépôt → adresse de livraison).
   distanceKm: v.optional(v.number()),
   deliveryFee: v.optional(v.number()),
@@ -180,6 +183,8 @@ const livraisonDetails = v.object({
       distanceKm: v.optional(v.number()),
       city: v.optional(v.string()),
       discount: v.optional(v.number()),
+      // Frais réduits : 1 €/km entre l'adresse de collecte et le client.
+      reducedDeliveryFee: v.optional(v.number()),
     }),
   ),
 });

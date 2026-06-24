@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { useThemeContext } from "../../components/crm/CrmLayout";
 import { useQuery } from "convex/react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -23,10 +23,14 @@ import {
   AlertTriangle,
   ArrowRight,
   Inbox,
+  PackagePlus,
+  ClipboardPlus,
+  Layers3,
   Trophy,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { PageHeader } from "../../components/crm/PageHeader";
+import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
 import {
   REQUEST_TYPES,
@@ -59,6 +63,7 @@ function StatsTypeSelect({
 }
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const [statsType, setStatsType] = useState<StatsType>(null);
   const stats = useQuery(api.dashboard.stats, statsType ? { type: statsType } : {});
   const isDark = useThemeContext();
@@ -123,6 +128,22 @@ export function Dashboard() {
     <div>
       <PageHeader
         title="Tableau de bord"
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/crm/demandes?action=new")}>
+              <ClipboardPlus className="h-4 w-4" />
+              Nouvelle demande
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/crm/articles?action=new")}>
+              <PackagePlus className="h-4 w-4" />
+              Nouvel article
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/crm/arrivages?action=new&mode=unique")}>
+              <Layers3 className="h-4 w-4" />
+              Nouvel arrivage
+            </Button>
+          </>
+        }
       />
 
       <div className="p-4 sm:p-6">

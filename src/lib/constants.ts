@@ -24,7 +24,7 @@ export const TYPE_COLORS: Record<RequestType, string> = {
   collecte: "#317fa0",
   article: "#a0315a",
   velo: "#196b24",
-  livraison: "#b8702a",
+  livraison: "#16a34a",
 };
 
 export const REQUEST_TYPES: RequestType[] = [
