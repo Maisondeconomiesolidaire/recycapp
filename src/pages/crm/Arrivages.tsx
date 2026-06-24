@@ -22,30 +22,19 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
+import { COLLECTE_CATEGORIES, COLLECTE_SUBCATEGORIES } from "../../lib/constants";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const GDR_CATEGORIES: Record<string, string[]> = {
-  "Mobilier": ["Armoire / Dressing", "Bureau", "Canapé / Fauteuil", "Chaise / Tabouret", "Lit / Sommier / Matelas", "Table / Étagère", "Rangement", "Autre"],
-  "Électroménager": ["Gros électroménager", "Petit électroménager", "Hors froid", "Autre"],
-  "Informatique & TV": ["Ordinateur", "Écran / TV", "Téléphone / Tablette", "Périphérique", "Autre"],
-  "Culture": ["Livres", "CD / DVD / K7", "Vinyl", "Jeux vidéo", "Instruments", "Autre"],
-  "Décoration": ["Bibelots / Déco", "Cadres / Miroirs", "Luminaires", "Tableaux", "Autre"],
-  "Loisirs & Jouets": ["Jeux & Jouets", "Jeux de société", "Sport", "Plein air", "Autre"],
-  "Vaisselle & Cuisine": ["Vaisselle", "Verres", "Couverts", "Ustensiles", "Autre"],
-  "Textile": ["Vêtements Homme", "Vêtements Femme", "Vêtements Enfant", "Linge", "Chaussures", "Autre"],
-  "Puériculture": ["Poussette", "Siège auto", "Lit bébé", "Jeux bébé", "Autre"],
-  "Outillage": ["Outillage manuel", "Outillage électrique", "Jardin", "Autre"],
-  "Vélo & Cycle": ["Vélo adulte", "Vélo enfant", "Trottinette", "Accessoires", "Autre"],
-  "Divers": ["Bagagerie", "Métaux / Ferraille", "Bois", "Papier / Carton", "Autre"],
-};
+// Catégories = nos 12 catégories principales (pictogrammes icônes collecte),
+// avec leurs sous-catégories curées. Clé d'affichage = libellé.
+const GDR_CATEGORIES: Record<string, string[]> = Object.fromEntries(
+  COLLECTE_CATEGORIES.map((c) => [c.label, COLLECTE_SUBCATEGORIES[c.key] ?? []]),
+);
 
-const CATEGORY_INITIALS: Record<string, string> = {
-  "Mobilier": "MOB", "Électroménager": "ELM", "Informatique & TV": "INF",
-  "Culture": "CUL", "Décoration": "DEC", "Loisirs & Jouets": "LOI",
-  "Vaisselle & Cuisine": "VAI", "Textile": "TEX", "Puériculture": "PUE",
-  "Outillage": "OUT", "Vélo & Cycle": "VEL", "Divers": "DIV",
-};
+const CATEGORY_IMAGE: Record<string, string> = Object.fromEntries(
+  COLLECTE_CATEGORIES.map((c) => [c.label, c.image]),
+);
 
 const GDR_FLUX = [
   "Réemploi", "DEA", "DEEE", "Textile", "Papier / Carton",
@@ -1093,7 +1082,7 @@ function ItemFormCard({
                   : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              <span className="font-mono text-[10px] font-bold tracking-wide opacity-60">{CATEGORY_INITIALS[cat]}</span>
+              <img src={CATEGORY_IMAGE[cat]} alt="" className="h-10 w-10 object-contain" />
               <span className="text-center leading-tight">{cat}</span>
             </button>
           ))}
