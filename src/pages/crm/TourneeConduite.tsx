@@ -87,6 +87,10 @@ function DriverMode() {
     accuracy?: number;
     speedKmh?: number;
   } | null>(null);
+  // Limite les écritures GPS en base : le suivi public se rafraîchit toutes les
+  // 20 s, inutile d'écrire à chaque micro-déplacement (coût Convex).
+  const lastPublishAtRef = useRef(0);
+  const MIN_PUBLISH_INTERVAL_MS = 10_000;
 
   const isActive = tournee?.status === "en_cours";
 
@@ -109,9 +113,17 @@ function DriverMode() {
     };
   }
 
-  function publishVehicleLocation(payload: NonNullable<typeof latestPayloadRef.current>) {
+  function publishVehicleLocation(
+    payload: NonNullable<typeof latestPayloadRef.current>,
+    { force = false } = {},
+  ) {
     if (!tourneeId) return;
+    // Position locale toujours à jour pour la carte du chauffeur.
     setPosition({ latitude: payload.latitude, longitude: payload.longitude });
+    // Écriture en base limitée (sauf diffusion garantie toutes les 20 s).
+    const now = Date.now();
+    if (!force && now - lastPublishAtRef.current < MIN_PUBLISH_INTERVAL_MS) return;
+    lastPublishAtRef.current = now;
     void updateVehicleLocation({
       tourneeId: tourneeId as Id<"tournees">,
       latitude: payload.latitude,
@@ -163,11 +175,11 @@ function DriverMode() {
         (pos) => {
           setGpsError(null);
           latestPayloadRef.current = payloadFromPosition(pos);
-          publishVehicleLocation(latestPayloadRef.current);
+          publishVehicleLocation(latestPayloadRef.current, { force: true });
         },
         () => {
           if (latestPayloadRef.current) {
-            publishVehicleLocation(latestPayloadRef.current);
+            publishVehicleLocation(latestPayloadRef.current, { force: true });
           }
         },
         { enableHighAccuracy: true, maximumAge: 15_000, timeout: 15_000 },

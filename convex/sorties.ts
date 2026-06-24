@@ -727,10 +727,6 @@ export const listTournees = query({
     return await Promise.all(
       tournees.map(async (t) => {
         const driver = t.driverId ? await ctx.db.get(t.driverId) : null;
-        const vehicleLocation = await ctx.db
-          .query("tourneeVehicleLocations")
-          .withIndex("by_tourneeId", (q) => q.eq("tourneeId", t._id))
-          .unique();
         const stops = await Promise.all(
           t.stops.map(async (stop) => {
             const request = stop.requestId ? await ctx.db.get(stop.requestId) : null;
@@ -740,18 +736,15 @@ export const listTournees = query({
             };
           }),
         );
+        // On n'inclut PAS la position GPS (live) ni la géométrie d'itinéraire :
+        // la liste CRM ne les affiche pas, et lire la position ferait
+        // re-exécuter cette requête à chaque mise à jour GPS (coût Convex).
+        const { routeCoordinates, ...rest } = t;
+        void routeCoordinates;
         return {
-          ...t,
+          ...rest,
           stops,
           driverName: driver?.name ?? null,
-          vehicleLocation: vehicleLocation
-            ? {
-                latitude: vehicleLocation.latitude,
-                longitude: vehicleLocation.longitude,
-                heading: vehicleLocation.heading ?? null,
-                updatedAt: vehicleLocation.updatedAt,
-              }
-            : null,
         };
       }),
     );
