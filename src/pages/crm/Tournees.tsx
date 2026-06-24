@@ -143,7 +143,7 @@ export function Tournees() {
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">GDR Tournées</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Tournées</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-100">Tournées de collecte</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Planifiez les passages à domicile et suivez leur avancement en temps réel.

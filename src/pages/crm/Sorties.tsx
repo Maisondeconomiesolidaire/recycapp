@@ -80,7 +80,7 @@ export function Sorties() {
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">GDR Sorties</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Sorties</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-100">Nouvelle sortie</h1>
         <p className="mt-1 text-sm text-zinc-500">Scannez ou recherchez un article arrivé, puis indiquez la raison de sa sortie.</p>
       </div>

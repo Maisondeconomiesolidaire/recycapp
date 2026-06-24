@@ -638,7 +638,7 @@ function GestionTab({
   }
   if (request.type === "article" && linkedArticle && !linkedArticle.gdrReference) {
     stepBlockers[STEP.factureReglee] =
-      "Renseignez la référence GDR de l'article avant de clôturer la vente.";
+      "Renseignez la référence externe de l'article avant de clôturer la vente.";
   }
 
   return (
@@ -1717,7 +1717,7 @@ function ArticleRequestPreview({
           )}
           {article.gdrReference && (
             <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
-              GDR {article.gdrReference}
+              Réf. {article.gdrReference}
             </span>
           )}
           {article.weightKg !== undefined && (

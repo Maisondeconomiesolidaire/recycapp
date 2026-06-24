@@ -351,7 +351,7 @@ export function Articles() {
                 <Input
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  placeholder="Rechercher par titre, réf. interne ou réf. GDR…"
+                  placeholder="Rechercher par titre, réf. interne ou réf. externe…"
                   className="pl-9 dark:bg-zinc-950"
                 />
               </div>
@@ -431,7 +431,7 @@ export function Articles() {
                         <td className="px-4 py-3 text-zinc-400">
                           <div className="space-y-0.5">
                             <p>Interne : {a.internalReference ?? "—"}</p>
-                            <p>GDR : {a.gdrReference ?? "—"}</p>
+                            <p>Réf. ext. : {a.gdrReference ?? "—"}</p>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-zinc-400">

@@ -89,7 +89,7 @@ export function Caisse() {
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">GDR Magasin</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Magasin</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-100">Caisse</h1>
       </div>
 

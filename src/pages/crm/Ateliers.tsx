@@ -29,7 +29,7 @@ export function Ateliers() {
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">GDR Ateliers</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Ateliers</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-100">Suivi valorisation</h1>
         <p className="mt-1 text-sm text-zinc-500">Enregistrez le temps de valorisation et marquez les articles comme prêts à la vente.</p>
       </div>

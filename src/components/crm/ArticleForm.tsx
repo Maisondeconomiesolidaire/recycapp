@@ -437,7 +437,7 @@ export function ArticleForm({
         "La référence interne doit contenir exactement 6 chiffres.",
       );
     if (gdrReference.trim() !== "" && !/^\d{15}$/.test(gdrReference))
-      return setError("La référence GDR doit contenir exactement 15 chiffres.");
+      return setError("La référence externe doit contenir exactement 15 chiffres.");
 
     setError("");
     setSaving(true);
@@ -868,7 +868,7 @@ export function ArticleForm({
               className={!article ? "cursor-not-allowed opacity-70" : undefined}
             />
           </Field>
-          <Field label="Référence GDR" hint="15 chiffres, facultatif.">
+          <Field label="Référence externe" hint="15 chiffres, facultatif.">
             <Input
               inputMode="numeric"
               maxLength={15}

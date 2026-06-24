@@ -451,3 +451,29 @@ export const listExits = query({
     };
   },
 });
+
+/** Historique des dernières arrivées (objets entrants récents). */
+export const listRecentArrivals = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, "arrivages", "read");
+    const items = await ctx.db
+      .query("arrivageItems")
+      .withIndex("by_date")
+      .order("desc")
+      .take(15);
+    return items.map((i) => ({
+      _id: i._id,
+      reference: i.reference,
+      name:
+        i.labelInfo?.trim() ||
+        [i.category, i.subcategory].filter(Boolean).join(" – "),
+      origin: i.origin,
+      orientation: i.orientation,
+      weightKg: i.weightKg ?? null,
+      quantity: i.quantity,
+      createdAt: i.createdAt,
+      exited: Boolean(i.exitedAt),
+    }));
+  },
+});

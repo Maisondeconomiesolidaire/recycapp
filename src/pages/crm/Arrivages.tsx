@@ -1,21 +1,22 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { createPortal } from "react-dom";
-import { Plus, Printer, X } from "lucide-react";
+import { Plus, Printer, X, Check, Trash2 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { Barcode } from "../../components/ui/Barcode";
 import { COLLECTE_CATEGORIES, COLLECTE_SUBCATEGORIES } from "../../lib/constants";
 
 // ─── Référentiels ───────────────────────────────────────────────────────────
 
-const GDR_ORIGINS = [
+const ORIGINS = [
   { key: "decheterie", label: "Déchèterie" },
   { key: "domicile", label: "Rendez-vous" },
   { key: "apport", label: "Apport volontaire" },
   { key: "tournee", label: "Tournée" },
 ] as const;
 
-const GDR_ORIENTATIONS = [
+const ORIENTATIONS = [
   { key: "boutique", label: "Boutique", active: "bg-emerald-500 text-white", bg: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" },
   { key: "atelier", label: "Atelier", active: "bg-blue-500 text-white", bg: "bg-blue-500/15 text-blue-300 ring-blue-500/30" },
   { key: "dons", label: "Dons", active: "bg-violet-500 text-white", bg: "bg-violet-500/15 text-violet-300 ring-violet-500/30" },
@@ -37,6 +38,7 @@ const ORIENTATION_LABELS: Record<string, string> = {
 };
 
 type Ticket = {
+  itemId?: Id<"arrivageItems">;
   reference: string;
   designation: string;
   origin: string;
@@ -49,6 +51,8 @@ type Ticket = {
 
 export function Arrivages() {
   const addItem = useMutation(api.arrivages.addItem);
+  const removeItem = useMutation(api.arrivages.removeItem);
+  const history = useQuery(api.arrivages.listRecentArrivals);
 
   const [origin, setOrigin] = useState("");
   const [orientation, setOrientation] = useState("boutique");
@@ -59,17 +63,17 @@ export function Arrivages() {
   const [quantity, setQuantity] = useState("1");
   const [saving, setSaving] = useState(false);
 
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [recent, setRecent] = useState<Ticket[]>([]);
+  const [pending, setPending] = useState<Ticket[]>([]);
+  const [printTickets, setPrintTickets] = useState<Ticket[] | null>(null);
 
   const subs = category ? CATEGORIES.find((c) => c.key === category)?.subs ?? [] : [];
   const canSubmit = Boolean(origin && orientation && category) && !saving;
 
-  async function submit() {
+  async function addObject() {
     if (!canSubmit) return;
     setSaving(true);
     try {
-      const { reference } = await addItem({
+      const { itemId, reference } = await addItem({
         date: Date.now(),
         origin: origin as "decheterie" | "domicile" | "apport" | "tournee",
         orientation,
@@ -80,6 +84,7 @@ export function Arrivages() {
         labelInfo: designation || undefined,
       });
       const t: Ticket = {
+        itemId,
         reference,
         designation: designation || (subcategory ? `${category} – ${subcategory}` : category),
         origin,
@@ -87,8 +92,7 @@ export function Arrivages() {
         weightKg,
         quantity: parseInt(quantity) || 1,
       };
-      setTicket(t);
-      setRecent((r) => [t, ...r].slice(0, 8));
+      setPending((p) => [t, ...p]);
       // On garde provenance + destination pour enchaîner les saisies.
       setCategory("");
       setSubcategory("");
@@ -100,20 +104,31 @@ export function Arrivages() {
     }
   }
 
+  async function removePending(t: Ticket) {
+    if (t.itemId) await removeItem({ itemId: t.itemId });
+    setPending((p) => p.filter((x) => x.reference !== t.reference));
+  }
+
+  function validate() {
+    if (pending.length === 0) return;
+    setPrintTickets([...pending]);
+    setPending([]);
+  }
+
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">GDR Collecte</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Collecte</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-100">Nouvelle arrivée</h1>
-        <p className="mt-1 text-sm text-zinc-500">Renseignez l'objet entrant, puis imprimez son ticket code-barres.</p>
+        <p className="mt-1 text-sm text-zinc-500">Ajoutez les objets entrants, puis validez l'arrivage pour imprimer les tickets code-barres.</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         {/* Formulaire */}
         <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 space-y-5">
           <Field label="Provenance *">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {GDR_ORIGINS.map((o) => (
+              {ORIGINS.map((o) => (
                 <Choice key={o.key} active={origin === o.key} onClick={() => setOrigin(o.key)}>
                   {o.label}
                 </Choice>
@@ -164,7 +179,7 @@ export function Arrivages() {
 
           <Field label="Destination *">
             <div className="flex flex-wrap gap-1.5">
-              {GDR_ORIENTATIONS.map((o) => (
+              {ORIENTATIONS.map((o) => (
                 <button
                   key={o.key}
                   type="button"
@@ -216,53 +231,110 @@ export function Arrivages() {
 
           <button
             type="button"
-            onClick={submit}
+            onClick={addObject}
             disabled={!canSubmit}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 text-sm font-bold text-white disabled:opacity-40 shadow-[0_4px_14px_rgba(241,16,79,0.3)] hover:shadow-[0_6px_20px_rgba(241,16,79,0.4)] transition"
           >
-            {saving ? (
-              "Enregistrement…"
-            ) : (
-              <>
-                <Plus className="h-4 w-4" />
-                Enregistrer &amp; imprimer le ticket
-              </>
-            )}
+            {saving ? "Ajout…" : <><Plus className="h-4 w-4" /> Ajouter à l'arrivée</>}
           </button>
         </div>
 
-        {/* Arrivées récentes */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-300">Arrivées récentes</h3>
-          {recent.length === 0 ? (
-            <p className="text-xs text-zinc-500">Les objets enregistrés apparaîtront ici.</p>
-          ) : (
-            <div className="space-y-2">
-              {recent.map((t) => (
-                <div
-                  key={t.reference}
-                  className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-zinc-200">{t.designation}</p>
-                    <p className="font-mono text-xs text-zinc-500">{t.reference}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTicket(t)}
-                    title="Réimprimer le ticket"
-                    className="shrink-0 rounded-lg p-2 text-zinc-400 transition hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
+        {/* Colonne droite : objets ajoutés + historique */}
+        <div className="space-y-6">
+          {/* Objets de cette arrivée */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-zinc-300">
+              Objets de cette arrivée{pending.length > 0 ? ` (${pending.length})` : ""}
+            </h3>
+            {pending.length === 0 ? (
+              <p className="text-xs text-zinc-500">Ajoutez des objets via le formulaire.</p>
+            ) : (
+              <div className="space-y-2">
+                {pending.map((t) => (
+                  <div
+                    key={t.reference}
+                    className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
                   >
-                    <Printer className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-zinc-200">{t.designation}</p>
+                      <p className="font-mono text-xs text-zinc-500">{t.reference}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePending(t)}
+                      title="Retirer"
+                      className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Bouton valider — sous la liste des objets ajoutés */}
+            <button
+              type="button"
+              onClick={validate}
+              disabled={pending.length === 0}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 ring-1 ring-emerald-500/30 transition hover:bg-emerald-500/25 disabled:opacity-40"
+            >
+              <Check className="h-4 w-4" />
+              Valider l'arrivage{pending.length > 0 ? ` (${pending.length})` : ""}
+            </button>
+          </div>
+
+          {/* Historique des dernières arrivées */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-zinc-300">Dernières arrivées</h3>
+            {!history || history.length === 0 ? (
+              <p className="text-xs text-zinc-500">Aucune arrivée enregistrée pour le moment.</p>
+            ) : (
+              <div className="space-y-2">
+                {history.map((r) => (
+                  <div
+                    key={r._id}
+                    className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-zinc-200">
+                        {r.name}
+                        {r.exited && <span className="ml-2 text-[10px] font-semibold uppercase text-rose-400">Sorti</span>}
+                      </p>
+                      <p className="font-mono text-xs text-zinc-500">{r.reference}</p>
+                    </div>
+                    <span className="shrink-0 text-xs text-zinc-500">
+                      {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPrintTickets([
+                          {
+                            itemId: r._id,
+                            reference: r.reference,
+                            designation: r.name,
+                            origin: r.origin,
+                            orientation: r.orientation,
+                            weightKg: r.weightKg != null ? String(r.weightKg) : "",
+                            quantity: r.quantity,
+                          },
+                        ])
+                      }
+                      title="Réimprimer le ticket"
+                      className="shrink-0 rounded-lg p-1.5 text-zinc-400 transition hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
+                    >
+                      <Printer className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {ticket && <ArrivalTicket ticket={ticket} onClose={() => setTicket(null)} />}
+      {printTickets && <ArrivalTickets tickets={printTickets} onClose={() => setPrintTickets(null)} />}
     </div>
   );
 }
@@ -294,9 +366,9 @@ function Choice({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-// ─── Ticket code-barres (impression Brother 62 × 29 mm) ───────────────────────
+// ─── Tickets code-barres (impression Brother 62 × 29 mm) ──────────────────────
 
-function ArrivalTicket({ ticket, onClose }: { ticket: Ticket; onClose: () => void }) {
+function ArrivalTickets({ tickets, onClose }: { tickets: Ticket[]; onClose: () => void }) {
   useEffect(() => {
     const style = document.createElement("style");
     style.id = "arrival-ticket-css";
@@ -305,6 +377,7 @@ function ArrivalTicket({ ticket, onClose }: { ticket: Ticket; onClose: () => voi
         body > *:not(#arrival-ticket-root) { display: none !important; }
         #arrival-ticket-root .print-hidden { display: none !important; }
         #arrival-ticket-root .ticket-print { display: block !important; }
+        #arrival-ticket-root .ticket-page { break-after: page; }
         @page { size: 62mm 29mm; margin: 0; }
       }
     `;
@@ -312,19 +385,13 @@ function ArrivalTicket({ ticket, onClose }: { ticket: Ticket; onClose: () => voi
     return () => document.getElementById("arrival-ticket-css")?.remove();
   }, []);
 
-  const meta = [
-    `${ORIGIN_LABELS[ticket.origin] ?? ticket.origin} → ${ORIENTATION_LABELS[ticket.orientation] ?? ticket.orientation}`,
-    ticket.weightKg ? `${ticket.weightKg} kg` : null,
-    ticket.quantity > 1 ? `×${ticket.quantity}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   const content = (
     <div id="arrival-ticket-root" className="fixed inset-0 z-[200] flex flex-col bg-[color:var(--crm-bg)]">
       {/* Barre d'outils */}
       <div className="print-hidden flex items-center justify-between border-b border-[var(--crm-border)] bg-[var(--crm-surface)] px-5 py-3">
-        <h2 className="text-sm font-bold text-zinc-100">Ticket d'arrivage</h2>
+        <h2 className="text-sm font-bold text-zinc-100">
+          {tickets.length > 1 ? `${tickets.length} tickets d'arrivage` : "Ticket d'arrivage"}
+        </h2>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -345,13 +412,19 @@ function ArrivalTicket({ ticket, onClose }: { ticket: Ticket; onClose: () => voi
       </div>
 
       {/* Aperçu écran */}
-      <div className="print-hidden flex flex-1 items-center justify-center p-6">
-        <TicketBody ticket={ticket} meta={meta} />
+      <div className="print-hidden flex flex-1 flex-wrap content-start items-start justify-center gap-4 overflow-auto p-6">
+        {tickets.map((t) => (
+          <TicketBody key={t.reference} ticket={t} />
+        ))}
       </div>
 
       {/* Version imprimée */}
       <div className="ticket-print hidden">
-        <TicketBody ticket={ticket} meta={meta} />
+        {tickets.map((t) => (
+          <div key={t.reference} className="ticket-page">
+            <TicketBody ticket={t} />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -359,7 +432,15 @@ function ArrivalTicket({ ticket, onClose }: { ticket: Ticket; onClose: () => voi
   return createPortal(content, document.body);
 }
 
-function TicketBody({ ticket, meta }: { ticket: Ticket; meta: string }) {
+function TicketBody({ ticket }: { ticket: Ticket }) {
+  const meta = [
+    `${ORIGIN_LABELS[ticket.origin] ?? ticket.origin} → ${ORIENTATION_LABELS[ticket.orientation] ?? ticket.orientation}`,
+    ticket.weightKg ? `${ticket.weightKg} kg` : null,
+    ticket.quantity > 1 ? `×${ticket.quantity}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div
       className="bg-white text-black"
