@@ -6,6 +6,8 @@ import {
   LayoutDashboard,
   MessageSquare,
   Package,
+  PackagePlus,
+  PackageMinus,
   ShieldCheck,
   ShoppingCart,
   UserCog,
@@ -38,6 +40,8 @@ export type CrmPageKey =
   | "articles"
   | "caisse"
   | "ateliers"
+  | "arrivages"
+  | "sorties"
   | "tournees"
   | "equipe"
   | "admin";
@@ -162,6 +166,22 @@ export const CRM_PAGES: CrmPageDefinition[] = [
     to: "/crm/ateliers",
     icon: Wrench,
     actions: ["read", "create", "update", "delete"],
+  },
+  {
+    key: "arrivages",
+    label: "Arrivages",
+    description: "Enregistrement des objets entrants (catégories, poids, étiquettes).",
+    to: "/crm/arrivages",
+    icon: PackagePlus,
+    actions: ["read", "create", "update", "delete"],
+  },
+  {
+    key: "sorties",
+    label: "Sorties",
+    description: "Sorties de stock (vente, don, déchèterie…) et évacuations.",
+    to: "/crm/sorties",
+    icon: PackageMinus,
+    actions: ["read", "create", "delete"],
   },
   {
     key: "tournees",

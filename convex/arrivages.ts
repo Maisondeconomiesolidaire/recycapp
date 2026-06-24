@@ -19,7 +19,7 @@ export const createArrivage = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, "ateliers", "create");
+    await requireCrmPermission(ctx, "arrivages", "create");
     return await ctx.db.insert("arrivages", {
       ...args,
       status: "open",
@@ -31,14 +31,14 @@ export const createArrivage = mutation({
 export const closeArrivage = mutation({
   args: { arrivageId: v.id("arrivages") },
   handler: async (ctx, { arrivageId }) => {
-    await requireCrmPermission(ctx, "ateliers", "update");
+    await requireCrmPermission(ctx, "arrivages", "update");
     await ctx.db.patch(arrivageId, { status: "closed" });
   },
 });
 
 export const listOpenArrivages = query({
   handler: async (ctx) => {
-    await requireCrmPermission(ctx, "ateliers", "read");
+    await requireCrmPermission(ctx, "arrivages", "read");
     return await ctx.db.query("arrivages").withIndex("by_status", (q) => q.eq("status", "open")).order("desc").collect();
   },
 });
@@ -46,7 +46,7 @@ export const listOpenArrivages = query({
 export const getArrivageWithItems = query({
   args: { arrivageId: v.id("arrivages") },
   handler: async (ctx, { arrivageId }) => {
-    await requireCrmPermission(ctx, "ateliers", "read");
+    await requireCrmPermission(ctx, "arrivages", "read");
     const arrivage = await ctx.db.get(arrivageId);
     if (!arrivage) return null;
     const items = await ctx.db
@@ -89,7 +89,7 @@ const itemArgs = {
 export const addItem = mutation({
   args: itemArgs,
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, "ateliers", "create");
+    await requireCrmPermission(ctx, "arrivages", "create");
     const reference = makeReference(args.category);
 
     const itemId = await ctx.db.insert("arrivageItems", {
@@ -111,7 +111,7 @@ export const promoteToArticle = mutation({
     condition: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, "ateliers", "create");
+    await requireCrmPermission(ctx, "arrivages", "create");
     const item = await ctx.db.get(args.itemId);
     if (!item) throw new Error("Item introuvable");
     if (item.articleId) throw new Error("Déjà promu en boutique");
@@ -140,7 +140,7 @@ export const promoteToArticle = mutation({
 export const removeItem = mutation({
   args: { itemId: v.id("arrivageItems") },
   handler: async (ctx, { itemId }) => {
-    await requireCrmPermission(ctx, "ateliers", "delete");
+    await requireCrmPermission(ctx, "arrivages", "delete");
     const item = await ctx.db.get(itemId);
     if (!item) return;
     await ctx.db.delete(itemId);
@@ -162,7 +162,7 @@ export const createDepot = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, "ateliers", "create");
+    await requireCrmPermission(ctx, "arrivages", "create");
     const all = await ctx.db.query("depots").collect();
     const depotNumber = all.length + 1;
     return await ctx.db.insert("depots", {
@@ -176,7 +176,7 @@ export const createDepot = mutation({
 
 export const listPendingDepots = query({
   handler: async (ctx) => {
-    await requireCrmPermission(ctx, "ateliers", "read");
+    await requireCrmPermission(ctx, "arrivages", "read");
     const depots = await ctx.db
       .query("depots")
       .filter((q) => q.neq(q.field("status"), "closed"))
@@ -200,7 +200,7 @@ export const listPendingDepots = query({
 export const getDepotWithItems = query({
   args: { depotId: v.id("depots") },
   handler: async (ctx, { depotId }) => {
-    await requireCrmPermission(ctx, "ateliers", "read");
+    await requireCrmPermission(ctx, "arrivages", "read");
     const depot = await ctx.db.get(depotId);
     if (!depot) return null;
     const items = await ctx.db
@@ -215,7 +215,7 @@ export const getDepotWithItems = query({
 export const closeDepot = mutation({
   args: { depotId: v.id("depots") },
   handler: async (ctx, { depotId }) => {
-    await requireCrmPermission(ctx, "ateliers", "update");
+    await requireCrmPermission(ctx, "arrivages", "update");
     await ctx.db.patch(depotId, { status: "closed", closedAt: Date.now() });
   },
 });
@@ -228,7 +228,7 @@ export const listHistory = query({
     endDate: v.number(),
   },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireCrmPermission(ctx, "ateliers", "read");
+    await requireCrmPermission(ctx, "arrivages", "read");
     const arrivages = await ctx.db
       .query("arrivages")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -264,7 +264,7 @@ export const historyStats = query({
     endDate: v.number(),
   },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireCrmPermission(ctx, "ateliers", "read");
+    await requireCrmPermission(ctx, "arrivages", "read");
 
     const items = await ctx.db
       .query("arrivageItems")
@@ -338,7 +338,7 @@ function itemDisplayName(item: {
 export const searchItemsForExit = query({
   args: { searchText: v.string() },
   handler: async (ctx, { searchText }) => {
-    await requireCrmPermission(ctx, "caisse", "read");
+    await requireCrmPermission(ctx, "sorties", "read");
     const q = searchText.trim().toLowerCase();
     if (q.length < 2) return [];
 
@@ -373,7 +373,7 @@ export const searchItemsForExit = query({
 export const getItemByReference = query({
   args: { reference: v.string() },
   handler: async (ctx, { reference }) => {
-    await requireCrmPermission(ctx, "caisse", "read");
+    await requireCrmPermission(ctx, "sorties", "read");
     const item = await ctx.db
       .query("arrivageItems")
       .withIndex("by_reference", (q) => q.eq("reference", reference.trim()))
@@ -396,7 +396,7 @@ export const getItemByReference = query({
 export const recordExit = mutation({
   args: { itemId: v.id("arrivageItems"), motif: v.string() },
   handler: async (ctx, { itemId, motif }) => {
-    await requireCrmPermission(ctx, "caisse", "checkout");
+    await requireCrmPermission(ctx, "sorties", "create");
     const item = await ctx.db.get(itemId);
     if (!item) throw new Error("Article introuvable.");
     if (item.exitedAt) throw new Error("Cet article est déjà sorti.");
@@ -411,7 +411,7 @@ export const recordExit = mutation({
 export const undoExit = mutation({
   args: { itemId: v.id("arrivageItems") },
   handler: async (ctx, { itemId }) => {
-    await requireCrmPermission(ctx, "caisse", "checkout");
+    await requireCrmPermission(ctx, "sorties", "create");
     await ctx.db.patch(itemId, { exitedAt: undefined, exitMotif: undefined });
   },
 });
@@ -420,7 +420,7 @@ export const undoExit = mutation({
 export const listExits = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireCrmPermission(ctx, "caisse", "read");
+    await requireCrmPermission(ctx, "sorties", "read");
     const items = (
       await ctx.db.query("arrivageItems").withIndex("by_date").order("desc").take(2000)
     ).filter(

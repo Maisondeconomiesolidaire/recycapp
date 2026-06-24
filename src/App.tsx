@@ -71,10 +71,10 @@ export default function App() {
         <Route path="calendrier" element={<RequireCrmPermission page="calendrier"><Calendrier /></RequireCrmPermission>} />
         <Route path="clients" element={<RequireCrmPermission page="clients"><Clients /></RequireCrmPermission>} />
         <Route path="articles" element={<RequireCrmPermission page="articles"><Articles /></RequireCrmPermission>} />
-        <Route path="arrivages" element={<RequireCrmPermission page="ateliers"><Arrivages /></RequireCrmPermission>} />
+        <Route path="arrivages" element={<RequireCrmPermission page="arrivages"><Arrivages /></RequireCrmPermission>} />
         <Route path="caisse" element={<RequireCrmPermission page="caisse"><Caisse /></RequireCrmPermission>} />
         <Route path="ateliers" element={<RequireCrmPermission page="ateliers"><Ateliers /></RequireCrmPermission>} />
-        <Route path="sorties" element={<RequireCrmPermission page="caisse"><Sorties /></RequireCrmPermission>} />
+        <Route path="sorties" element={<RequireCrmPermission page="sorties"><Sorties /></RequireCrmPermission>} />
         <Route path="tournees" element={<RequireCrmPermission page="tournees"><Tournees /></RequireCrmPermission>} />
         <Route path="equipe" element={<RequireCrmPermission page="equipe"><Equipe /></RequireCrmPermission>} />
         <Route path="admin" element={<RequireCrmPermission page="admin"><Admin /></RequireCrmPermission>} />

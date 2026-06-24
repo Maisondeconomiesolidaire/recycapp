@@ -184,7 +184,7 @@ export const createSortieHorsMagasin = mutation({
     date: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, "caisse", "checkout");
+    await requireCrmPermission(ctx, "sorties", "create");
     if (args.articleId) {
       await ctx.db.patch(args.articleId, { status: "vendu" });
     }
@@ -198,7 +198,7 @@ export const createSortieHorsMagasin = mutation({
 export const listSortiesHorsMagasin = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireCrmPermission(ctx, "caisse", "read");
+    await requireCrmPermission(ctx, "sorties", "read");
     return await ctx.db
       .query("sortiesHorsMagasin")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -220,7 +220,7 @@ export const createSortieMatiere = mutation({
     date: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, "caisse", "checkout");
+    await requireCrmPermission(ctx, "sorties", "create");
     return await ctx.db.insert("sortiesMatieres", {
       ...args,
       createdAt: Date.now(),
@@ -231,7 +231,7 @@ export const createSortieMatiere = mutation({
 export const listSortiesMatieres = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireCrmPermission(ctx, "caisse", "read");
+    await requireCrmPermission(ctx, "sorties", "read");
     return await ctx.db
       .query("sortiesMatieres")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -243,7 +243,7 @@ export const listSortiesMatieres = query({
 export const sortiesStats = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireCrmPermission(ctx, "caisse", "read");
+    await requireCrmPermission(ctx, "sorties", "read");
     const [hm, mat] = await Promise.all([
       ctx.db.query("sortiesHorsMagasin").withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate)).collect(),
       ctx.db.query("sortiesMatieres").withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate)).collect(),
