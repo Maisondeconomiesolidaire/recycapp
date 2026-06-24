@@ -324,7 +324,7 @@ export function Sorties() {
 function StatCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3">
-      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--crm-surface-2)] text-zinc-950 dark:text-white">{icon}</span>
+      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--crm-surface-2)] text-black dark:text-white">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs text-zinc-500">{label}</p>
         <p className="truncate text-lg font-bold text-zinc-100">{value}</p>

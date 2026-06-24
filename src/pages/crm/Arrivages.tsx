@@ -154,7 +154,7 @@ export function Arrivages() {
       />
 
       {tab === "new" ? (
-        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+        <div className={`grid gap-6 ${pending.length > 0 ? "lg:grid-cols-[1fr_340px]" : "lg:grid-cols-1"}`}>
           {/* Formulaire */}
           <ArrivalWizard
             origin={origin}
@@ -176,48 +176,43 @@ export function Arrivages() {
             onAddObject={addObject}
           />
 
-          {/* Colonne droite : objets ajoutés */}
-          <div>
+          {pending.length > 0 && (
+            <div>
               <h3 className="mb-2 text-sm font-semibold text-zinc-300">
-                Objets de cette arrivée{pending.length > 0 ? ` (${pending.length})` : ""}
+                Objets de cette arrivée ({pending.length})
               </h3>
-              {pending.length === 0 ? (
-                <p className="text-xs text-zinc-500">Ajoutez des objets via le formulaire.</p>
-              ) : (
-                <div className="space-y-2">
-                  {pending.map((t) => (
-                    <div
-                      key={t.reference}
-                      className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-zinc-200">{t.designation}</p>
-                        <p className="font-mono text-xs text-zinc-500">{t.reference}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removePending(t)}
-                        title="Retirer"
-                        className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition hover:bg-red-500/10 hover:text-red-400"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+              <div className="space-y-2">
+                {pending.map((t) => (
+                  <div
+                    key={t.reference}
+                    className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-zinc-200">{t.designation}</p>
+                      <p className="font-mono text-xs text-zinc-500">{t.reference}</p>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <button
+                      type="button"
+                      onClick={() => removePending(t)}
+                      title="Retirer"
+                      className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
 
-              {pending.length > 0 && (
-                <button
-                  type="button"
-                  onClick={validate}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 ring-1 ring-emerald-500/30 transition hover:bg-emerald-500/25"
-                >
-                  <Check className="h-4 w-4" />
-                  Valider l'arrivage ({pending.length})
-                </button>
-              )}
-          </div>
+              <button
+                type="button"
+                onClick={validate}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 ring-1 ring-emerald-500/30 transition hover:bg-emerald-500/25"
+              >
+                <Check className="h-4 w-4" />
+                Valider l'arrivage ({pending.length})
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-5">
@@ -723,7 +718,7 @@ function MetricCard({
   return (
     <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] text-zinc-950 dark:text-white">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] text-black dark:text-white">
           {icon}
         </span>
         <div className="min-w-0">

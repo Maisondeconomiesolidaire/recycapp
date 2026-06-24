@@ -333,10 +333,10 @@ function GroupedNav({
                     onClick={onNavigate}
                     className={({ isActive }) =>
                       cn(
-                        "grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                        "grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-colors",
                         isActive
-                          ? "bg-brand-600/15 text-brand-300 shadow-[inset_3px_0_0_rgba(255,119,0,0.75)]"
-                          : "text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
+                          ? "border-brand-500 bg-brand-600/15 text-brand-300"
+                          : "border-transparent text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
                         itemClassName,
                       )
                     }
