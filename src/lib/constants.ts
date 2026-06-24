@@ -1,6 +1,11 @@
 import type { CSSProperties } from "react";
 
-export type RequestType = "aerogommage" | "collecte" | "article" | "velo";
+export type RequestType =
+  | "aerogommage"
+  | "collecte"
+  | "article"
+  | "velo"
+  | "livraison";
 export type RequestStage = "nouveau" | "validation" | "planifie";
 export type RequestOutcome = "open" | "gagnee" | "perdue";
 export type RequestOrigin = "internal" | "external";
@@ -10,6 +15,7 @@ export const TYPE_LABELS: Record<RequestType, string> = {
   collecte: "Collecte",
   article: "Boutique",
   velo: "Cycle en Bray",
+  livraison: "Livraison",
 };
 
 /** Couleur officielle (hex) de chaque type de demande — charte Cycle en Bray. */
@@ -18,6 +24,7 @@ export const TYPE_COLORS: Record<RequestType, string> = {
   collecte: "#317fa0",
   article: "#a0315a",
   velo: "#196b24",
+  livraison: "#b8702a",
 };
 
 export const REQUEST_TYPES: RequestType[] = [
@@ -25,6 +32,7 @@ export const REQUEST_TYPES: RequestType[] = [
   "collecte",
   "article",
   "velo",
+  "livraison",
 ];
 
 /** Styles inline pour un badge teinté à la couleur du type. */

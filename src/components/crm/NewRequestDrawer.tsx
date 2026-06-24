@@ -2,8 +2,17 @@ import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, PackageOpen, Plus, Search, Trash2, UserCircle } from "lucide-react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  PackageOpen,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  UserCircle,
+} from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Drawer } from "../ui/Drawer";
@@ -12,7 +21,7 @@ import { Field, Input, Select, Textarea, Checkbox } from "../ui/Field";
 import { PhoneInput } from "../ui/PhoneInput";
 import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { PhotoUpload } from "../ui/PhotoUpload";
-import { formatPrice } from "../../lib/format";
+import { formatPrice, formatDate } from "../../lib/format";
 import { cn } from "../../lib/cn";
 import {
   AERO_OBJECT_TYPES,
@@ -32,7 +41,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type InternalType = "aerogommage" | "collecte" | "article";
+type InternalType = "aerogommage" | "collecte" | "article" | "livraison";
 
 type ClientRow = {
   email: string;
@@ -113,9 +122,22 @@ const articleSchema = z.object({
   comment: z.string().optional(),
 });
 
+const livraisonSchema = z.object({
+  customer: customerSchema,
+  deliveryAddress: z
+    .object({
+      address: z.string().optional(),
+      postalCode: z.string().optional(),
+      city: z.string().optional(),
+    })
+    .optional(),
+  comment: z.string().optional(),
+});
+
 type AeroData = z.infer<typeof aeroSchema>;
 type CollecteData = z.infer<typeof collecteSchema>;
 type ArticleData = z.infer<typeof articleSchema>;
+type LivraisonData = z.infer<typeof livraisonSchema>;
 
 const emptyItem: AeroData["items"][number] = {
   objectType: "",
@@ -215,6 +237,12 @@ export function NewRequestDrawer({
             onSubmittingChange={setIsSubmitting}
           />
         )}
+        {type === "livraison" && (
+          <LivraisonForm
+            onDone={handleClose}
+            onSubmittingChange={setIsSubmitting}
+          />
+        )}
         </div>
       </div>
     </Drawer>
@@ -238,6 +266,11 @@ const TYPE_CHOICES: { key: InternalType; label: string; desc: string }[] = [
     key: "article",
     label: "Boutique",
     desc: "Réservation d'un article disponible en boutique.",
+  },
+  {
+    key: "livraison",
+    label: "Livraison",
+    desc: "Livraison d'un article : analyse IA, frais au km, créneaux groupés.",
   },
 ];
 
@@ -933,6 +966,402 @@ function ArticleForm({
       <Field label="Commentaire">
         <Textarea {...register("comment")} placeholder="Remarques éventuelles…" />
       </Field>
+
+      <button type="submit" className="hidden" aria-hidden disabled={isSubmitting} />
+    </form>
+  );
+}
+
+// ─── Form: Livraison ──────────────────────────────────────────────────────────
+
+type AnalysisResult = {
+  articleTitle: string;
+  category: string;
+  subcategory: string;
+  condition: string;
+  reference: string;
+  referenceFromBarcode: boolean;
+};
+
+type SlotResult = {
+  slots: {
+    requestReference: string;
+    scheduledDate: number;
+    distanceKm: number;
+    city: string | null;
+    discount: number;
+  }[];
+  message: string;
+};
+
+function LivraisonForm({
+  onDone,
+  onSubmittingChange,
+}: {
+  onDone: () => void;
+  onSubmittingChange: (v: boolean) => void;
+}) {
+  const submit = useMutation(api.requests.createInternal);
+  const analyze = useAction(api.livraison.analyzePhotos);
+  const computeFee = useAction(api.livraison.computeDeliveryFee);
+  const findSlots = useAction(api.livraison.advantageousSlots);
+
+  const [sameAddress, setSameAddress] = useState(false);
+  const [articlePhotos, setArticlePhotos] = useState<Id<"_storage">[]>([]);
+  const [referencePhotos, setReferencePhotos] = useState<Id<"_storage">[]>([]);
+
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const [fee, setFee] = useState<{ distanceKm: number; deliveryFee: number } | null>(null);
+  const [computingFee, setComputingFee] = useState(false);
+  const [feeError, setFeeError] = useState<string | null>(null);
+
+  const [slots, setSlots] = useState<SlotResult | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<SlotResult["slots"][number] | null>(null);
+
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const {
+    register,
+    watch,
+    setValue,
+    handleSubmit,
+    getValues,
+    formState: { errors, isSubmitting },
+  } = useForm<LivraisonData>({
+    resolver: zodResolver(livraisonSchema),
+  });
+
+  function copyBilling() {
+    const next = !sameAddress;
+    setSameAddress(next);
+    if (next) {
+      setValue("deliveryAddress.address", watch("customer.address") ?? "");
+      setValue("deliveryAddress.postalCode", watch("customer.postalCode") ?? "");
+      setValue("deliveryAddress.city", watch("customer.city") ?? "");
+    }
+  }
+
+  function deliveryAddressArgs() {
+    const da = getValues("deliveryAddress");
+    return {
+      address: (da?.address ?? "").trim(),
+      postalCode: (da?.postalCode ?? "").trim() || undefined,
+      city: (da?.city ?? "").trim() || undefined,
+    };
+  }
+
+  async function runAnalysis() {
+    if (!articlePhotos[0]) {
+      setAnalysisError("Ajoutez d'abord la photo de l'article.");
+      return;
+    }
+    setAnalyzing(true);
+    setAnalysisError(null);
+    try {
+      const result = await analyze({
+        articlePhotoId: articlePhotos[0],
+        referencePhotoId: referencePhotos[0],
+      });
+      setAnalysis(result);
+    } catch (e) {
+      setAnalysisError(e instanceof Error ? e.message : "Analyse impossible.");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function runComputeFee() {
+    const da = deliveryAddressArgs();
+    if (!da.address) {
+      setFeeError("Renseignez l'adresse de livraison.");
+      return;
+    }
+    setComputingFee(true);
+    setFeeError(null);
+    try {
+      const result = await computeFee(da);
+      setFee(result);
+    } catch (e) {
+      setFeeError(e instanceof Error ? e.message : "Calcul impossible.");
+    } finally {
+      setComputingFee(false);
+    }
+  }
+
+  async function runFindSlots() {
+    const da = deliveryAddressArgs();
+    if (!da.address) {
+      setSlotsError("Renseignez l'adresse de livraison.");
+      return;
+    }
+    setLoadingSlots(true);
+    setSlotsError(null);
+    try {
+      const result = await findSlots({ ...da, deliveryFee: fee?.deliveryFee });
+      setSlots(result);
+    } catch (e) {
+      setSlotsError(e instanceof Error ? e.message : "Recherche impossible.");
+    } finally {
+      setLoadingSlots(false);
+    }
+  }
+
+  async function onSubmit(data: LivraisonData) {
+    setFormError(null);
+    if (!articlePhotos[0]) {
+      setFormError("La photo de l'article est obligatoire.");
+      return;
+    }
+    if (!data.deliveryAddress?.address?.trim()) {
+      setFormError("L'adresse de livraison est obligatoire.");
+      return;
+    }
+    onSubmittingChange(true);
+    try {
+      await submit({
+        type: "livraison",
+        customer: data.customer,
+        comment: data.comment || undefined,
+        livraisonDetails: {
+          deliveryAddress: data.deliveryAddress,
+          sameAsBilling: sameAddress,
+          articlePhoto: articlePhotos[0],
+          referencePhoto: referencePhotos[0],
+          articleTitle: analysis?.articleTitle,
+          category: analysis?.category,
+          subcategory: analysis?.subcategory,
+          condition: analysis?.condition,
+          reference: analysis?.reference,
+          referenceFromBarcode: analysis?.referenceFromBarcode,
+          distanceKm: fee?.distanceKm,
+          deliveryFee: fee?.deliveryFee,
+          suggestedSlot: selectedSlot
+            ? {
+                requestReference: selectedSlot.requestReference,
+                scheduledDate: selectedSlot.scheduledDate,
+                distanceKm: selectedSlot.distanceKm,
+                city: selectedSlot.city ?? undefined,
+                discount: selectedSlot.discount,
+              }
+            : undefined,
+        },
+      });
+      onDone();
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Création impossible.");
+    } finally {
+      onSubmittingChange(false);
+    }
+  }
+
+  return (
+    <form id="new-request-form" onSubmit={handleSubmit(onSubmit)} className="space-y-2">
+      <ClientSearch
+        onSelect={(c) => {
+          setValue("customer.firstName", c.firstName);
+          setValue("customer.lastName", c.lastName);
+          setValue("customer.email", c.email);
+          setValue("customer.phone", c.phone);
+          if (c.address) setValue("customer.address", c.address);
+          if (c.postalCode) setValue("customer.postalCode", c.postalCode);
+          if (c.city) setValue("customer.city", c.city);
+        }}
+      />
+
+      <SectionHeader>Informations client</SectionHeader>
+      <CustomerSection
+        register={register as Parameters<typeof CustomerSection>[0]["register"]}
+        errors={errors}
+        watch={watch as Parameters<typeof CustomerSection>[0]["watch"]}
+        setValue={setValue as Parameters<typeof CustomerSection>[0]["setValue"]}
+      />
+
+      <SectionHeader>Adresse de livraison</SectionHeader>
+      <div className="space-y-3">
+        <Checkbox
+          label="Identique à l'adresse de facturation"
+          checked={sameAddress}
+          onChange={copyBilling}
+        />
+        <Field label="Adresse">
+          <AddressAutocomplete
+            value={watch("deliveryAddress.address") ?? ""}
+            onValueChange={(v) => setValue("deliveryAddress.address", v)}
+            onSelect={(a) => {
+              setValue("deliveryAddress.address", a.address);
+              setValue("deliveryAddress.postalCode", a.postalCode);
+              setValue("deliveryAddress.city", a.city);
+            }}
+            placeholder="Lieu de livraison"
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Code postal">
+            <Input {...register("deliveryAddress.postalCode")} />
+          </Field>
+          <Field label="Ville">
+            <Input {...register("deliveryAddress.city")} />
+          </Field>
+        </div>
+      </div>
+
+      <SectionHeader>Photos</SectionHeader>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Photo de l'article <span className="text-red-400">*</span>
+          </p>
+          <PhotoUpload value={articlePhotos} onChange={setArticlePhotos} />
+          <p className="mt-1.5 text-[11px] text-zinc-600">
+            Sert à catégoriser l'article par IA.
+          </p>
+        </div>
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Photo de la référence / code-barres
+          </p>
+          <PhotoUpload value={referencePhotos} onChange={setReferencePhotos} />
+          <p className="mt-1.5 text-[11px] text-zinc-600">
+            Optionnel. Si présente, la référence interne reprend ce numéro ; sinon une
+            nouvelle référence est générée.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={runAnalysis}
+          disabled={analyzing}
+        >
+          <Sparkles className="h-4 w-4" />
+          {analyzing ? "Analyse IA en cours…" : "Analyser les photos"}
+        </Button>
+        {analysisError && (
+          <p className="mt-2 text-sm text-red-400">{analysisError}</p>
+        )}
+        {analysis && (
+          <div className="mt-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm">
+            <p className="font-semibold text-zinc-100">{analysis.articleTitle}</p>
+            <div className="mt-2 space-y-1 text-zinc-400">
+              <p>
+                Catégorie : <span className="text-zinc-200">{analysis.category}</span>
+                {" · "}
+                <span className="text-zinc-200">{analysis.subcategory}</span>
+              </p>
+              <p>
+                État : <span className="text-zinc-200">{analysis.condition}</span>
+              </p>
+              <p>
+                Référence interne :{" "}
+                <span className="font-mono text-zinc-200">{analysis.reference}</span>{" "}
+                <span className="text-zinc-500">
+                  ({analysis.referenceFromBarcode
+                    ? "reprise du code-barres"
+                    : "générée"})
+                </span>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <SectionHeader>Frais de livraison</SectionHeader>
+      <div>
+        <p className="text-xs text-zinc-500">
+          Calcul automatique : 1 € / km entre le dépôt (4 rue de la prairie, Lachapelle-aux-Pots)
+          et l'adresse de livraison.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-3 w-full"
+          onClick={runComputeFee}
+          disabled={computingFee}
+        >
+          {computingFee ? "Calcul en cours…" : "Calculer les frais de livraison"}
+        </Button>
+        {feeError && <p className="mt-2 text-sm text-red-400">{feeError}</p>}
+        {fee && (
+          <div className="mt-3 flex items-center justify-between rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3 text-sm">
+            <span className="text-zinc-400">
+              Distance : <span className="text-zinc-200">{fee.distanceKm} km</span>
+            </span>
+            <span className="text-base font-bold text-brand-400">
+              {formatPrice(fee.deliveryFee)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <SectionHeader>Créneaux avantageux</SectionHeader>
+      <div>
+        <p className="text-xs text-zinc-500">
+          Vérifie si une collecte est déjà planifiée à moins de 5 km de la livraison : on peut
+          alors grouper et offrir une réduction au client.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-3 w-full"
+          onClick={runFindSlots}
+          disabled={loadingSlots}
+        >
+          <CalendarClock className="h-4 w-4" />
+          {loadingSlots ? "Recherche en cours…" : "Voir les créneaux avantageux"}
+        </Button>
+        {slotsError && <p className="mt-2 text-sm text-red-400">{slotsError}</p>}
+        {slots && (
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-zinc-400">{slots.message}</p>
+            {slots.slots.map((slot) => {
+              const active = selectedSlot?.requestReference === slot.requestReference;
+              return (
+                <button
+                  key={slot.requestReference + slot.scheduledDate}
+                  type="button"
+                  onClick={() => setSelectedSlot(active ? null : slot)}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition",
+                    active
+                      ? "border-brand-500 ring-1 ring-brand-500/40 bg-brand-500/8"
+                      : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] hover:border-zinc-600",
+                  )}
+                >
+                  <div>
+                    <p className="font-semibold text-zinc-100">
+                      {formatDate(slot.scheduledDate)}
+                      {slot.city ? ` · ${slot.city}` : ""}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Demande #{slot.requestReference} · à {slot.distanceKm} km
+                    </p>
+                  </div>
+                  {slot.discount > 0 && (
+                    <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                      −{formatPrice(slot.discount)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <SectionHeader>Commentaire</SectionHeader>
+      <Field label="Commentaire">
+        <Textarea {...register("comment")} placeholder="Précisions sur la livraison…" />
+      </Field>
+
+      {formError && <p className="mt-2 text-sm text-red-400">{formError}</p>}
 
       <button type="submit" className="hidden" aria-hidden disabled={isSubmitting} />
     </form>

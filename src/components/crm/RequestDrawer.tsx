@@ -1518,6 +1518,135 @@ function RequestDetails({ request }: { request: RequestDoc }) {
     );
   }
 
+  if (request.type === "livraison" && request.livraison) {
+    const l = request.livraison;
+    const da = l.deliveryAddress;
+    const slot = l.suggestedSlot;
+    return (
+      <>
+        {da && (da.address || da.city) && (
+          <section>
+            <SectionTitle>Adresse de livraison</SectionTitle>
+            <p className="flex items-start gap-2 text-sm text-zinc-300">
+              <MapPin className="h-4 w-4 mt-0.5 text-zinc-500" />
+              <span>
+                {da.address}
+                {(da.postalCode || da.city) && (
+                  <>
+                    <br />
+                    {da.postalCode} {da.city}
+                  </>
+                )}
+              </span>
+            </p>
+            <CollecteMap address={da} />
+          </section>
+        )}
+
+        <section>
+          <SectionTitle>Article</SectionTitle>
+          <div className="text-sm">
+            <Row label="Désignation" value={l.articleTitle} />
+            <Row label="Catégorie" value={l.category} />
+            <Row label="Sous-catégorie" value={l.subcategory} />
+            <Row label="État" value={l.condition} />
+            <Row
+              label="Référence interne"
+              value={
+                l.reference
+                  ? `${l.reference}${l.referenceFromBarcode ? " (code-barres)" : " (générée)"}`
+                  : undefined
+              }
+            />
+          </div>
+          {(request.livraisonArticleUrl || request.livraisonReferenceUrl) && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {request.livraisonArticleUrl && (
+                <figure>
+                  <a
+                    href={request.livraisonArticleUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block aspect-square overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]"
+                  >
+                    <img
+                      src={request.livraisonArticleUrl}
+                      alt="Article"
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </a>
+                  <figcaption className="mt-1 text-center text-[11px] text-zinc-500">
+                    Article
+                  </figcaption>
+                </figure>
+              )}
+              {request.livraisonReferenceUrl && (
+                <figure>
+                  <a
+                    href={request.livraisonReferenceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block aspect-square overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]"
+                  >
+                    <img
+                      src={request.livraisonReferenceUrl}
+                      alt="Référence"
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </a>
+                  <figcaption className="mt-1 text-center text-[11px] text-zinc-500">
+                    Référence / code-barres
+                  </figcaption>
+                </figure>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <SectionTitle>Frais de livraison</SectionTitle>
+          <div className="text-sm">
+            <Row
+              label="Distance (dépôt → livraison)"
+              value={l.distanceKm !== undefined ? `${l.distanceKm} km` : undefined}
+            />
+            <Row
+              label="Frais (1 € / km)"
+              value={l.deliveryFee !== undefined ? formatPrice(l.deliveryFee) : undefined}
+            />
+          </div>
+        </section>
+
+        {slot && (
+          <section>
+            <SectionTitle>Créneau avantageux retenu</SectionTitle>
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 p-4 text-sm">
+              <p className="text-zinc-200">
+                Livraison groupée avec la demande #{slot.requestReference}
+                {slot.city ? ` · ${slot.city}` : ""}
+              </p>
+              <div className="mt-1 text-zinc-400">
+                {slot.scheduledDate && (
+                  <p>
+                    Date : {format(new Date(slot.scheduledDate), "d MMMM yyyy", { locale: fr })}
+                  </p>
+                )}
+                {slot.distanceKm !== undefined && <p>À {slot.distanceKm} km de la livraison</p>}
+                {slot.discount !== undefined && slot.discount > 0 && (
+                  <p className="font-semibold text-emerald-300">
+                    Réduction proposée : −{formatPrice(slot.discount)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+      </>
+    );
+  }
+
   if (request.type === "velo" && request.velo) {
     const vlo = request.velo;
     return (

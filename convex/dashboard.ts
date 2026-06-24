@@ -33,7 +33,7 @@ export const stats = query({
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const byType = { aerogommage: 0, collecte: 0, article: 0, velo: 0 };
+    const byType = { aerogommage: 0, collecte: 0, article: 0, velo: 0, livraison: 0 };
     const byStage = { nouveau: 0, validation: 0, planifie: 0 };
     let open = 0;
     let won = 0;

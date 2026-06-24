@@ -371,3 +371,25 @@ export function isVeloComplete(customer: CustomerInput, d: VeloInput): boolean {
     Boolean(d.service?.trim())
   );
 }
+
+type LivraisonInput = {
+  deliveryAddress?: {
+    address?: string;
+    postalCode?: string;
+    city?: string;
+  };
+  articlePhoto?: string;
+};
+
+export function isLivraisonComplete(
+  customer: CustomerInput,
+  d: LivraisonInput,
+): boolean {
+  const da = d.deliveryAddress;
+  const hasDeliveryAddress = Boolean(
+    da?.address?.trim() && da?.postalCode?.trim() && da?.city?.trim(),
+  );
+  return (
+    customerComplete(customer) && hasDeliveryAddress && Boolean(d.articlePhoto)
+  );
+}

@@ -7,6 +7,7 @@ export const requestType = v.union(
   v.literal("collecte"),
   v.literal("article"),
   v.literal("velo"),
+  v.literal("livraison"),
 );
 
 /** Étape du pipeline (uniquement pour les demandes ouvertes). */
@@ -151,6 +152,38 @@ const veloDetails = v.object({
   description: v.optional(v.string()),
 });
 
+/** Demande de livraison d'un article (créée depuis le CRM). */
+const livraisonDetails = v.object({
+  // Adresse de livraison (peut être identique à l'adresse de facturation).
+  deliveryAddress: v.optional(address),
+  sameAsBilling: v.optional(v.boolean()),
+  // Photo de l'article (catégorisation IA) et photo de la référence / code-barres.
+  articlePhoto: v.optional(v.id("_storage")),
+  referencePhoto: v.optional(v.id("_storage")),
+  // Résultats de l'analyse IA de la photo article.
+  articleTitle: v.optional(v.string()),
+  category: v.optional(v.string()),
+  subcategory: v.optional(v.string()),
+  condition: v.optional(v.string()),
+  // Référence interne de l'article : reprise du code-barres scanné si présent,
+  // sinon générée automatiquement.
+  reference: v.optional(v.string()),
+  referenceFromBarcode: v.optional(v.boolean()),
+  // Calcul des frais de livraison (Mapbox : dépôt → adresse de livraison).
+  distanceKm: v.optional(v.number()),
+  deliveryFee: v.optional(v.number()),
+  // Créneau avantageux retenu (livraison groupée avec une collecte proche).
+  suggestedSlot: v.optional(
+    v.object({
+      requestReference: v.optional(v.string()),
+      scheduledDate: v.optional(v.number()),
+      distanceKm: v.optional(v.number()),
+      city: v.optional(v.string()),
+      discount: v.optional(v.number()),
+    }),
+  ),
+});
+
 export default defineSchema({
   articles: defineTable({
     title: v.string(),
@@ -250,6 +283,7 @@ export default defineSchema({
     articles: v.optional(v.array(reservedArticleDetails)),
     payment: v.optional(requestPayment),
     velo: v.optional(veloDetails),
+    livraison: v.optional(livraisonDetails),
     createdAt: v.number(),
     updatedAt: v.number(),
     reference: v.optional(v.string()),

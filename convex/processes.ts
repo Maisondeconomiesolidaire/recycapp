@@ -24,7 +24,12 @@ const FULL = [
   STEP.factureReglee,
 ];
 
-export type RequestType = "aerogommage" | "collecte" | "article" | "velo";
+export type RequestType =
+  | "aerogommage"
+  | "collecte"
+  | "article"
+  | "velo"
+  | "livraison";
 
 export type CollecteType = "indefini" | "C1" | "C2" | "C3";
 
@@ -45,6 +50,13 @@ export function resolveProcess(
       return [...FULL];
     case "article":
       return [STEP.contact, STEP.factureReglee];
+    case "livraison":
+      return [
+        STEP.contact,
+        STEP.prestaPlanifiee,
+        STEP.prestaTerminee,
+        STEP.factureReglee,
+      ];
     case "collecte":
       switch (collecteType) {
         case "C1":

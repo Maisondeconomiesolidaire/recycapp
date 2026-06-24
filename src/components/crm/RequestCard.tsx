@@ -3,6 +3,7 @@ import {
   Truck,
   ShoppingBag,
   Bike,
+  PackageCheck,
   CalendarClock,
   User,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const ICONS = {
   collecte: Truck,
   article: ShoppingBag,
   velo: Bike,
+  livraison: PackageCheck,
 } as const;
 
 export function RequestCard({

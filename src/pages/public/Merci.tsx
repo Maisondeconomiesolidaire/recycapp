@@ -12,6 +12,8 @@ const messages: Record<string, string> = {
     "Votre paiement Stripe test a bien été validé. La commande a été enregistrée côté boutique.",
   velo:
     "Votre demande à l'atelier Cycle en Bray est bien reçue. Nous revenons vers vous rapidement.",
+  livraison:
+    "Votre demande de livraison a bien été enregistrée. Nous vous recontactons pour organiser l'acheminement.",
 };
 
 export function Merci() {

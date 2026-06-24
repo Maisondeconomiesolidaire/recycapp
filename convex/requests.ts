@@ -10,6 +10,7 @@ import {
   isCollecteComplete,
   isArticleComplete,
   isVeloComplete,
+  isLivraisonComplete,
   normalizeCustomer,
   titleCaseName,
 } from "./lib";
@@ -49,7 +50,7 @@ async function createNewRequestNotification(
   ctx: MutationCtx,
   args: {
     requestId: Id<"requests">;
-    requestType: "aerogommage" | "collecte" | "article" | "velo";
+    requestType: "aerogommage" | "collecte" | "article" | "velo" | "livraison";
     customerName: string;
   },
 ) {
@@ -546,6 +547,13 @@ export const get = query({
         ).filter((u): u is string => u !== null),
       })),
     );
+    // Photos de la demande de livraison (article + référence, séparées).
+    const livraisonArticleUrl = request.livraison?.articlePhoto
+      ? await ctx.storage.getUrl(request.livraison.articlePhoto)
+      : null;
+    const livraisonReferenceUrl = request.livraison?.referencePhoto
+      ? await ctx.storage.getUrl(request.livraison.referencePhoto)
+      : null;
     return {
       ...request,
       customer: normalizeCustomer(request.customer),
@@ -554,6 +562,8 @@ export const get = query({
       afterPhotoUrls: afterPhotoUrls.filter((u): u is string => u !== null),
       aerogommagePhotos,
       collecteCategoryPhotos,
+      livraisonArticleUrl,
+      livraisonReferenceUrl,
     };
   },
 });
@@ -910,6 +920,32 @@ export const createInternal = mutation({
     ),
     // Article
     articleId: v.optional(v.id("articles")),
+    // Livraison
+    livraisonDetails: v.optional(
+      v.object({
+        deliveryAddress: v.optional(addressArg),
+        sameAsBilling: v.optional(v.boolean()),
+        articlePhoto: v.optional(v.id("_storage")),
+        referencePhoto: v.optional(v.id("_storage")),
+        articleTitle: v.optional(v.string()),
+        category: v.optional(v.string()),
+        subcategory: v.optional(v.string()),
+        condition: v.optional(v.string()),
+        reference: v.optional(v.string()),
+        referenceFromBarcode: v.optional(v.boolean()),
+        distanceKm: v.optional(v.number()),
+        deliveryFee: v.optional(v.number()),
+        suggestedSlot: v.optional(
+          v.object({
+            requestReference: v.optional(v.string()),
+            scheduledDate: v.optional(v.number()),
+            distanceKm: v.optional(v.number()),
+            city: v.optional(v.string()),
+            discount: v.optional(v.number()),
+          }),
+        ),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, "demandes", "create");
@@ -991,6 +1027,31 @@ export const createInternal = mutation({
         reference,
       });
       await createNewRequestNotification(ctx, { requestId: id, requestType: "article", customerName: name });
+      return id;
+    }
+
+    if (args.type === "livraison") {
+      const details = args.livraisonDetails ?? {};
+      const photos = [details.articlePhoto, details.referencePhoto].filter(
+        (p): p is Id<"_storage"> => Boolean(p),
+      );
+      const id = await ctx.db.insert("requests", {
+        type: "livraison",
+        stage: "nouveau",
+        outcome: "open",
+        requestOrigin: "internal",
+        complete: isLivraisonComplete(args.customer, details),
+        processSteps: resolveProcess("livraison"),
+        completedSteps: 0,
+        customer: args.customer,
+        comment: args.comment,
+        photos,
+        livraison: details,
+        createdAt: now,
+        updatedAt: now,
+        reference,
+      });
+      await createNewRequestNotification(ctx, { requestId: id, requestType: "livraison", customerName: name });
       return id;
     }
 

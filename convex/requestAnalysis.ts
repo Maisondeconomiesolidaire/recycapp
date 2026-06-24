@@ -34,6 +34,7 @@ const TYPE_LABELS: Record<string, string> = {
   collecte: "Collecte",
   article: "Boutique",
   velo: "Cycle en Bray",
+  livraison: "Livraison",
 };
 
 function displayedStage(request: {

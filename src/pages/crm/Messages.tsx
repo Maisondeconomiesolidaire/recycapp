@@ -10,6 +10,7 @@ const TYPE_LABELS: Record<string, string> = {
   aerogommage: "Aérogommage",
   collecte: "Collecte",
   velo: "Vélo",
+  livraison: "Livraison",
 };
 
 function formatAgo(ts: number) {
