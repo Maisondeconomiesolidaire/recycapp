@@ -197,6 +197,15 @@ body {
   background-clip: content-box;
 }
 
+/* Masque la scrollbar native (utilisé par le composant HScroll stylé). */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Animation d'apparition pour drawers / modales */
 @keyframes fade-in {
   from {

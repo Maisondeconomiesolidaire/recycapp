@@ -8,6 +8,7 @@ import { api } from "../../../convex/_generated/api";
 import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { HScroll } from "../../components/ui/HScroll";
 import {
   ARTICLE_SLUG_TO_CATEGORY,
 } from "../../lib/constants";
@@ -556,7 +557,7 @@ function RecommendationRow({
           Produits susceptibles de vous intéresser
         </h2>
       </div>
-      <div className="-mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-4">
+      <HScroll contentClassName="px-1">
         {articles.map((a) => (
           <Link
             key={a._id}
@@ -597,7 +598,7 @@ function RecommendationRow({
             </div>
           </Link>
         ))}
-      </div>
+      </HScroll>
     </section>
   );
 }
