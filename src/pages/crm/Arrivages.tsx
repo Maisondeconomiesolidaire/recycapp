@@ -54,6 +54,7 @@ export function Arrivages() {
   const removeItem = useMutation(api.arrivages.removeItem);
   const history = useQuery(api.arrivages.listRecentArrivals);
 
+  const [tab, setTab] = useState<"new" | "history">("new");
   const [origin, setOrigin] = useState("");
   const [orientation, setOrientation] = useState("boutique");
   const [category, setCategory] = useState("");
@@ -119,220 +120,227 @@ export function Arrivages() {
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Collecte</p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-100">Nouvelle arrivée</h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-100">Arrivages</h1>
         <p className="mt-1 text-sm text-zinc-500">Ajoutez les objets entrants, puis validez l'arrivage pour imprimer les tickets code-barres.</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        {/* Formulaire */}
-        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 space-y-5">
-          <Field label="Provenance *">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {ORIGINS.map((o) => (
-                <Choice key={o.key} active={origin === o.key} onClick={() => setOrigin(o.key)}>
-                  {o.label}
-                </Choice>
-              ))}
-            </div>
-          </Field>
+      <div className="mb-6 flex w-fit rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
+        <TabButton active={tab === "new"} onClick={() => setTab("new")}>
+          Nouvelle arrivée
+        </TabButton>
+        <TabButton active={tab === "history"} onClick={() => setTab("history")}>
+          Dernières arrivées
+        </TabButton>
+      </div>
 
-          <Field label="Catégorie *">
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => { setCategory(c.key); setSubcategory(""); }}
-                  className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-medium transition ${
-                    category === c.key
-                      ? "border-brand-500/50 bg-brand-500/15 text-brand-300"
-                      : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  <img src={c.image} alt="" className="h-10 w-10 object-contain" />
-                  <span className="text-center leading-tight">{c.key}</span>
-                </button>
-              ))}
-            </div>
-          </Field>
+      {tab === "new" ? (
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          {/* Formulaire */}
+          <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 space-y-5">
+            <Field label="Provenance *">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {ORIGINS.map((o) => (
+                  <Choice key={o.key} active={origin === o.key} onClick={() => setOrigin(o.key)}>
+                    {o.label}
+                  </Choice>
+                ))}
+              </div>
+            </Field>
 
-          {subs.length > 0 && (
-            <Field label="Sous-catégorie">
-              <div className="flex flex-wrap gap-1.5">
-                {subs.map((s) => (
+            <Field label="Catégorie *">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {CATEGORIES.map((c) => (
                   <button
-                    key={s}
+                    key={c.key}
                     type="button"
-                    onClick={() => setSubcategory(subcategory === s ? "" : s)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ring-1 ${
-                      subcategory === s
-                        ? "bg-brand-500 text-white ring-transparent"
-                        : "ring-[var(--crm-border)] text-zinc-400 hover:text-zinc-200"
+                    onClick={() => { setCategory(c.key); setSubcategory(""); }}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-medium transition ${
+                      category === c.key
+                        ? "border-brand-500/50 bg-brand-500/15 text-brand-300"
+                        : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-400 hover:text-zinc-200"
                     }`}
                   >
-                    {s}
+                    <img src={c.image} alt="" className="h-10 w-10 object-contain" />
+                    <span className="text-center leading-tight">{c.key}</span>
                   </button>
                 ))}
               </div>
             </Field>
-          )}
 
-          <Field label="Destination *">
-            <div className="flex flex-wrap gap-1.5">
-              {ORIENTATIONS.map((o) => (
-                <button
-                  key={o.key}
-                  type="button"
-                  onClick={() => setOrientation(o.key)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ring-1 ${
-                    orientation === o.key ? o.active + " ring-transparent" : o.bg
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_110px] gap-3">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1.5">Désignation</label>
-              <input
-                type="text"
-                value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
-                placeholder="Description courte (optionnel)"
-                className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1.5">Poids (kg)</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={weightKg}
-                onChange={(e) => setWeightKg(e.target.value)}
-                placeholder="0.0"
-                className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1.5">Quantité</label>
-              <input
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={addObject}
-            disabled={!canSubmit}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 text-sm font-bold text-white disabled:opacity-40 shadow-[0_4px_14px_rgba(241,16,79,0.3)] hover:shadow-[0_6px_20px_rgba(241,16,79,0.4)] transition"
-          >
-            {saving ? "Ajout…" : <><Plus className="h-4 w-4" /> Ajouter à l'arrivée</>}
-          </button>
-        </div>
-
-        {/* Colonne droite : objets ajoutés + historique */}
-        <div className="space-y-6">
-          {/* Objets de cette arrivée */}
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-zinc-300">
-              Objets de cette arrivée{pending.length > 0 ? ` (${pending.length})` : ""}
-            </h3>
-            {pending.length === 0 ? (
-              <p className="text-xs text-zinc-500">Ajoutez des objets via le formulaire.</p>
-            ) : (
-              <div className="space-y-2">
-                {pending.map((t) => (
-                  <div
-                    key={t.reference}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-200">{t.designation}</p>
-                      <p className="font-mono text-xs text-zinc-500">{t.reference}</p>
-                    </div>
+            {subs.length > 0 && (
+              <Field label="Sous-catégorie">
+                <div className="flex flex-wrap gap-1.5">
+                  {subs.map((s) => (
                     <button
+                      key={s}
                       type="button"
-                      onClick={() => removePending(t)}
-                      title="Retirer"
-                      className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition hover:bg-red-500/10 hover:text-red-400"
+                      onClick={() => setSubcategory(subcategory === s ? "" : s)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ring-1 ${
+                        subcategory === s
+                          ? "bg-brand-500 text-white ring-transparent"
+                          : "ring-[var(--crm-border)] text-zinc-400 hover:text-zinc-200"
+                      }`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {s}
                     </button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </Field>
             )}
 
-            {/* Bouton valider — sous la liste des objets ajoutés */}
+            <Field label="Destination *">
+              <div className="flex flex-wrap gap-1.5">
+                {ORIENTATIONS.map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setOrientation(o.key)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ring-1 ${
+                      orientation === o.key ? o.active + " ring-transparent" : o.bg
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_110px] gap-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1.5">Désignation</label>
+                <input
+                  type="text"
+                  value={designation}
+                  onChange={(e) => setDesignation(e.target.value)}
+                  placeholder="Description courte (optionnel)"
+                  className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1.5">Poids (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={weightKg}
+                  onChange={(e) => setWeightKg(e.target.value)}
+                  placeholder="0.0"
+                  className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1.5">Quantité</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+
             <button
               type="button"
-              onClick={validate}
-              disabled={pending.length === 0}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 ring-1 ring-emerald-500/30 transition hover:bg-emerald-500/25 disabled:opacity-40"
+              onClick={addObject}
+              disabled={!canSubmit}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 text-sm font-bold text-white disabled:opacity-40 shadow-[0_4px_14px_rgba(241,16,79,0.3)] hover:shadow-[0_6px_20px_rgba(241,16,79,0.4)] transition"
             >
-              <Check className="h-4 w-4" />
-              Valider l'arrivage{pending.length > 0 ? ` (${pending.length})` : ""}
+              {saving ? "Ajout…" : <><Plus className="h-4 w-4" /> Ajouter à l'arrivée</>}
             </button>
           </div>
 
-          {/* Historique des dernières arrivées */}
+          {/* Colonne droite : objets ajoutés */}
           <div>
-            <h3 className="mb-2 text-sm font-semibold text-zinc-300">Dernières arrivées</h3>
-            {!history || history.length === 0 ? (
-              <p className="text-xs text-zinc-500">Aucune arrivée enregistrée pour le moment.</p>
-            ) : (
-              <div className="space-y-2">
-                {history.map((r) => (
-                  <div
-                    key={r._id}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-200">
-                        {r.name}
-                        {r.exited && <span className="ml-2 text-[10px] font-semibold uppercase text-rose-400">Sorti</span>}
-                      </p>
-                      <p className="font-mono text-xs text-zinc-500">{r.reference}</p>
-                    </div>
-                    <span className="shrink-0 text-xs text-zinc-500">
-                      {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPrintTickets([
-                          {
-                            itemId: r._id,
-                            reference: r.reference,
-                            designation: r.name,
-                            origin: r.origin,
-                            orientation: r.orientation,
-                            weightKg: r.weightKg != null ? String(r.weightKg) : "",
-                            quantity: r.quantity,
-                          },
-                        ])
-                      }
-                      title="Réimprimer le ticket"
-                      className="shrink-0 rounded-lg p-1.5 text-zinc-400 transition hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
+              <h3 className="mb-2 text-sm font-semibold text-zinc-300">
+                Objets de cette arrivée{pending.length > 0 ? ` (${pending.length})` : ""}
+              </h3>
+              {pending.length === 0 ? (
+                <p className="text-xs text-zinc-500">Ajoutez des objets via le formulaire.</p>
+              ) : (
+                <div className="space-y-2">
+                  {pending.map((t) => (
+                    <div
+                      key={t.reference}
+                      className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5"
                     >
-                      <Printer className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-zinc-200">{t.designation}</p>
+                        <p className="font-mono text-xs text-zinc-500">{t.reference}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removePending(t)}
+                        title="Retirer"
+                        className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition hover:bg-red-500/10 hover:text-red-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {pending.length > 0 && (
+                <button
+                  type="button"
+                  onClick={validate}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 ring-1 ring-emerald-500/30 transition hover:bg-emerald-500/25"
+                >
+                  <Check className="h-4 w-4" />
+                  Valider l'arrivage ({pending.length})
+                </button>
+              )}
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+          <h3 className="mb-4 text-sm font-semibold text-zinc-300">Dernières arrivées</h3>
+          {!history || history.length === 0 ? (
+            <p className="text-xs text-zinc-500">Aucune arrivée enregistrée pour le moment.</p>
+          ) : (
+            <div className="grid gap-2 lg:grid-cols-2">
+              {history.map((r) => (
+                <div
+                  key={r._id}
+                  className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-zinc-200">
+                      {r.name}
+                      {r.exited && <span className="ml-2 text-[10px] font-semibold uppercase text-rose-400">Sorti</span>}
+                    </p>
+                    <p className="font-mono text-xs text-zinc-500">{r.reference}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-zinc-500">
+                    {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPrintTickets([
+                        {
+                          itemId: r._id,
+                          reference: r.reference,
+                          designation: r.name,
+                          origin: r.origin,
+                          orientation: r.orientation,
+                          weightKg: r.weightKg != null ? String(r.weightKg) : "",
+                          quantity: r.quantity,
+                        },
+                      ])
+                    }
+                    title="Réimprimer le ticket"
+                    className="shrink-0 rounded-lg p-1.5 text-zinc-400 transition hover:bg-[var(--crm-surface)] hover:text-zinc-100"
+                  >
+                    <Printer className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {printTickets && <ArrivalTickets tickets={printTickets} onClose={() => setPrintTickets(null)} />}
     </div>
@@ -359,6 +367,22 @@ function Choice({ active, onClick, children }: { active: boolean; onClick: () =>
         active
           ? "border-brand-500/50 bg-brand-500/15 text-brand-300"
           : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-400 hover:text-zinc-200"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+        active
+          ? "bg-brand-500 text-white shadow-[0_8px_24px_rgba(241,16,79,0.24)]"
+          : "text-zinc-500 hover:bg-[var(--crm-surface-2)] hover:text-zinc-200"
       }`}
     >
       {children}
