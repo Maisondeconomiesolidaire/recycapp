@@ -108,19 +108,17 @@ export function Sorties() {
       <div className="space-y-5">
         {/* Compteurs */}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard icon={<PackageMinus className="h-5 w-5" />} label="Articles sortis (12 mois)" value={String(exits?.totalArticles ?? "…")} color="text-rose-400" />
-          <StatCard icon={<Weight className="h-5 w-5" />} label="Poids total sorti" value={exits ? `${exits.totalWeight} kg` : "…"} color="text-amber-400" />
+          <StatCard icon={<PackageMinus className="h-5 w-5" />} label="Articles sortis (12 mois)" value={String(exits?.totalArticles ?? "…")} />
+          <StatCard icon={<Weight className="h-5 w-5" />} label="Poids total sorti" value={exits ? `${exits.totalWeight} kg` : "…"} />
           <StatCard
             icon={<BarChart3 className="h-5 w-5" />}
             label="Motif principal"
             value={topEntryLabel(exits?.byMotif, {})}
-            color="text-sky-400"
           />
           <StatCard
             icon={<ArrowUpRight className="h-5 w-5" />}
             label="Destination principale"
             value={topEntryLabel(exits?.byOrientation, ORIENTATION_LABELS)}
-            color="text-emerald-400"
           />
         </div>
 
@@ -323,10 +321,10 @@ export function Sorties() {
   );
 }
 
-function StatCard({ icon, label, value, color }: { icon: ReactNode; label: string; value: string; color: string }) {
+function StatCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3">
-      <span className={`flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--crm-surface-2)] ${color}`}>{icon}</span>
+      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--crm-surface-2)] text-zinc-950 dark:text-white">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs text-zinc-500">{label}</p>
         <p className="truncate text-lg font-bold text-zinc-100">{value}</p>

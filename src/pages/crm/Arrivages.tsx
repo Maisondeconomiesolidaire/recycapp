@@ -407,28 +407,24 @@ function StatsOverview({
         label="Objets arrivés"
         value={totalArticles != null ? String(totalArticles) : "…"}
         detail="Sur les 12 derniers mois"
-        color="text-emerald-400"
       />
       <MetricCard
         icon={<Weight className="h-5 w-5" />}
         label="Poids entrant"
         value={totalWeight != null ? `${totalWeight} kg` : "…"}
         detail="Poids cumulé"
-        color="text-amber-400"
       />
       <MetricCard
         icon={<BarChart3 className="h-5 w-5" />}
         label="Provenance principale"
         value={topOrigin}
         detail="Volume le plus fréquent"
-        color="text-sky-400"
       />
       <MetricCard
         icon={<Check className="h-5 w-5" />}
         label="Destination principale"
         value={topOrientation}
         detail={totalValue != null ? `Valeur estimée ${totalValue.toLocaleString("fr-FR")} €` : "Orientation dominante"}
-        color="text-brand-300"
       />
     </div>
   );
@@ -439,18 +435,16 @@ function MetricCard({
   label,
   value,
   detail,
-  color,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
   detail: string;
-  color: string;
 }) {
   return (
     <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
       <div className="flex items-center gap-3">
-        <span className={`flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] ${color}`}>
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] text-zinc-950 dark:text-white">
           {icon}
         </span>
         <div className="min-w-0">
