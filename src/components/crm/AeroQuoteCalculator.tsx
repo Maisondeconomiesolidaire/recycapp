@@ -176,7 +176,7 @@ export function AeroQuoteCalculator({ request }: { request: AeroQuoteRequest }) 
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4">
+      <section className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -189,7 +189,7 @@ export function AeroQuoteCalculator({ request }: { request: AeroQuoteRequest }) 
           </div>
           <div className="rounded-2xl border border-brand-500/30 bg-brand-500/10 px-5 py-3 text-right">
             <p className="text-xs uppercase tracking-[0.18em] text-brand-300">Total TTC</p>
-            <p className="mt-1 text-3xl font-semibold text-white">{formatPrice(result.totalTtc)}</p>
+            <p className="mt-1 text-3xl font-semibold text-zinc-100">{formatPrice(result.totalTtc)}</p>
           </div>
         </div>
       </section>
@@ -198,8 +198,8 @@ export function AeroQuoteCalculator({ request }: { request: AeroQuoteRequest }) 
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
           Meubles
         </h3>
-        <div className="overflow-hidden rounded-2xl border border-zinc-800">
-          <div className="grid grid-cols-[1fr_110px_130px_130px] gap-3 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)]">
+          <div className="grid grid-cols-[1fr_110px_130px_130px] gap-3 border-b border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
             <span>Type</span>
             <span>Qté</span>
             <span>Prix appliqué</span>
@@ -211,7 +211,7 @@ export function AeroQuoteCalculator({ request }: { request: AeroQuoteRequest }) 
             return (
               <div
                 key={line.key}
-                className="grid grid-cols-[1fr_110px_130px_130px] items-center gap-3 border-b border-zinc-800/70 px-4 py-3 last:border-b-0"
+                className="grid grid-cols-[1fr_110px_130px_130px] items-center gap-3 border-b border-[var(--crm-border)] px-4 py-3 last:border-b-0"
               >
                 <div>
                   <p className="text-sm font-medium text-zinc-200">{ref?.label ?? line.key}</p>
@@ -269,7 +269,7 @@ export function AeroQuoteCalculator({ request }: { request: AeroQuoteRequest }) 
         />
       </section>
 
-      <section className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 md:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Meubles" value={result.furnitureTotal} detail={`${result.furnitureQuantity} objet(s)`} />
         <SummaryCard label="Portes" value={result.doorTotal} detail={`${inputs.doorSurface} m²`} />
         <SummaryCard label="Volets" value={result.shutterTotal} detail={`${inputs.shutterSurface} m²`} />
@@ -335,11 +335,11 @@ function TransportField({
   entry: { km: number; minutes: number; amount: number } | null;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4">
+    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
       <button
         type="button"
         onClick={() => onEnabledChange(!enabled)}
-        className="flex w-full items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 text-left transition hover:bg-zinc-900/60"
+        className="flex w-full items-center gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3 text-left transition hover:bg-[var(--crm-surface-3)]"
         aria-pressed={enabled}
       >
         <span
@@ -400,9 +400,9 @@ function SummaryCard({
   strong?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+    <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-      <p className={strong ? "mt-1 text-xl font-semibold text-white" : "mt-1 text-lg font-semibold text-zinc-100"}>
+      <p className={strong ? "mt-1 text-xl font-semibold text-zinc-100" : "mt-1 text-lg font-semibold text-zinc-100"}>
         {formatPrice(value)}
       </p>
       {detail && <p className="mt-1 text-xs text-zinc-500">{detail}</p>}

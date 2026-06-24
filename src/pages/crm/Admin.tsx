@@ -549,7 +549,7 @@ function RoleBadge({ role }: { role: CrmRole }) {
         "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em]",
         role === "admin" && "bg-brand-500 text-white",
         role === "staff" && "bg-sky-500/15 text-sky-200 ring-1 ring-sky-400/20",
-        role === "client" && "bg-zinc-800 text-zinc-400",
+        role === "client" && "bg-[var(--crm-surface-3)] text-zinc-400",
       )}
     >
       {label}

@@ -22,12 +22,12 @@ export function KanbanColumn({
             />
           )}
           <h3 className="text-sm font-semibold text-zinc-300">{title}</h3>
-          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+          <span className="rounded-full bg-[var(--crm-surface-3)] px-2 py-0.5 text-xs text-zinc-400">
             {count}
           </span>
         </div>
       </div>
-      <div className="flex-1 space-y-2.5 rounded-xl bg-zinc-900/40 p-2 min-h-[120px]">
+      <div className="flex-1 space-y-2.5 rounded-xl bg-[var(--crm-surface-2)] p-2 min-h-[120px]">
         {children}
       </div>
     </div>

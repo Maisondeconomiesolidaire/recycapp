@@ -60,9 +60,9 @@ export function Equipe() {
             }
           />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+          <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)]">
             <table className="min-w-[720px] w-full text-sm">
-              <thead className="bg-zinc-900 text-zinc-400">
+              <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">Salarié</th>
                   <th className="px-4 py-3 text-left font-medium">Email</th>
@@ -74,10 +74,10 @@ export function Equipe() {
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 {members.map((m) => (
-                  <tr key={m._id} className="bg-zinc-950 hover:bg-zinc-900/60">
+                  <tr key={m._id} className="bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-2)]">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-300">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface-3)] text-xs font-semibold text-zinc-300">
                           {initials(m.name.split(" ")[0] ?? m.name, m.name.split(" ")[1] ?? "")}
                         </span>
                         <span className="font-medium text-zinc-100">{m.name}</span>
@@ -105,7 +105,7 @@ export function Equipe() {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => setDetailId(m._id)}
-                          className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                          className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -114,13 +114,13 @@ export function Equipe() {
                             setEditing(m);
                             setFormOpen(true);
                           }}
-                          className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                          className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setDeleting(m)}
-                          className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-400"
+                          className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-red-400"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -270,7 +270,7 @@ function MemberDetailModal({
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 sm:grid-cols-3">
+          <div className="grid gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 sm:grid-cols-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Email</p>
               <p className="mt-1 text-sm text-zinc-200">{data.member.email || "—"}</p>
@@ -292,7 +292,7 @@ function MemberDetailModal({
               Demandes attribuées
             </h4>
             {data.requests.length === 0 ? (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-500">
+              <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 text-sm text-zinc-500">
                 Aucune demande attribuée pour le moment.
               </div>
             ) : (
@@ -300,7 +300,7 @@ function MemberDetailModal({
                 {data.requests.map((request) => (
                   <div
                     key={request._id}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4"
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">

@@ -58,7 +58,7 @@ function ValueBar({
 }) {
   const pct = hexToGradientPosition(color);
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
           Indice de valeur IA
@@ -90,7 +90,7 @@ function ValueBar({
       </div>
 
       {(rationale || justification) && (
-        <div className="mt-3 space-y-2 border-t border-zinc-800 pt-3">
+        <div className="mt-3 space-y-2 border-t border-[var(--crm-border)] pt-3">
           {rationale && (
             <p className="text-[11px] leading-relaxed text-zinc-500">
               <span className="font-semibold text-zinc-400">Source : </span>
@@ -522,7 +522,7 @@ export function ArticleForm({
                 <div
                   key={photo.id}
                   className={cn(
-                    "group relative overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900",
+                    "group relative overflow-hidden rounded-2xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)]",
                     index === 0 && "ring-2 ring-brand-500/70 ring-offset-2 ring-offset-zinc-950",
                   )}
                 >
@@ -601,8 +601,8 @@ export function ArticleForm({
               isDragging
                 ? "border-brand-500 bg-brand-500/10 text-brand-300 scale-[1.01]"
                 : uploading
-                  ? "cursor-not-allowed border-zinc-700 bg-zinc-900/70 text-zinc-500 opacity-60"
-                  : "border-zinc-700 bg-zinc-900/70 text-zinc-300 hover:border-brand-500/60 hover:bg-zinc-900 hover:text-zinc-100",
+                  ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-500 opacity-60"
+                  : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/60 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
             )}
           >
             {uploading ? (
@@ -680,8 +680,8 @@ export function ArticleForm({
               className={cn(
                 "flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3.5 text-sm font-medium transition-colors",
                 generatingStep !== null
-                  ? "cursor-not-allowed border-zinc-700 bg-zinc-900/70 text-zinc-400"
-                  : "border-zinc-700 bg-zinc-900/70 text-zinc-200 hover:border-zinc-500 hover:bg-zinc-900",
+                  ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-400"
+                  : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-200 hover:border-zinc-500 hover:bg-[var(--crm-surface-2)]",
               )}
             >
               {generatingStep === "visuels" ? (
@@ -713,7 +713,7 @@ export function ArticleForm({
         )}
 
         {sources.length > 0 && (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-4">
+          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-300">
               Sources consultées par l'IA
             </p>
@@ -738,7 +738,7 @@ export function ArticleForm({
         {(listingRecommendation || singleSaleNote || bundleSaleNote || priceBelowOnlineThreshold) && (
           <div
             className={cn(
-              "rounded-2xl border border-zinc-800 bg-zinc-900/55 p-4",
+              "rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4",
             )}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-300">
@@ -754,7 +754,7 @@ export function ArticleForm({
                   "rounded-2xl border p-3",
                   recommendedSaleMode === "single"
                     ? "border-emerald-500/45 bg-emerald-500/10"
-                    : "border-zinc-800 bg-zinc-950/45",
+                    : "border-[var(--crm-border)] bg-[var(--crm-surface)]",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -776,7 +776,7 @@ export function ArticleForm({
                   "rounded-2xl border p-3",
                   recommendedSaleMode === "bundle" || priceBelowOnlineThreshold || resolvedOnlineEligible === false
                     ? "border-amber-500/45 bg-amber-500/10"
-                    : "border-zinc-800 bg-zinc-950/45",
+                    : "border-[var(--crm-border)] bg-[var(--crm-surface)]",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">

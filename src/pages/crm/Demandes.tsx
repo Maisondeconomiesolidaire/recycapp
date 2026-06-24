@@ -108,12 +108,12 @@ export function Demandes() {
       </div>
 
       {/* Filtres – défilement horizontal sur mobile */}
-      <div className="relative z-10 border-b border-zinc-800 px-4 sm:px-6">
+      <div className="relative z-10 border-b border-[var(--crm-border)] px-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-2 overflow-visible py-3">
           <SortFilter value={sortOrder} onChange={setSortOrder} />
-          <div className="h-4 w-px shrink-0 bg-zinc-800" />
+          <div className="h-4 w-px shrink-0 bg-[var(--crm-surface-3)]" />
           <TypeFilter value={typeFilter} onChange={setTypeFilter} />
-          <div className="h-4 w-px shrink-0 bg-zinc-800" />
+          <div className="h-4 w-px shrink-0 bg-[var(--crm-surface-3)]" />
           <SiteFilter value={siteFilter} onChange={setSiteFilter} />
           <StaffFilter value={staffFilter} onChange={setStaffFilter} team={team} />
         </div>
@@ -305,14 +305,14 @@ function MobileOpenBoard({
                 "shrink-0 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
                 stage === s.key
                   ? "bg-zinc-100 text-zinc-900"
-                  : "bg-zinc-900 text-zinc-400 hover:text-zinc-200",
+                  : "bg-[var(--crm-surface-2)] text-zinc-400 hover:text-zinc-200",
               )}
             >
               {s.label}
               <span
                 className={cn(
                   "rounded-full px-1.5 py-0.5 text-xs tabular-nums",
-                  stage === s.key ? "bg-zinc-800 text-zinc-100" : "bg-zinc-800 text-zinc-400",
+                  stage === s.key ? "bg-[var(--crm-surface-3)] text-zinc-100" : "bg-[var(--crm-surface-3)] text-zinc-400",
                 )}
               >
                 {count}
@@ -675,13 +675,13 @@ function TypeFilter({
   onChange: (v: RequestType | null) => void;
 }) {
   return (
-    <div className="flex max-w-full items-center gap-1.5 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900 p-1">
+    <div className="flex max-w-full items-center gap-1.5 overflow-x-auto rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-1">
       <button
         onClick={() => onChange(null)}
         className={cn(
           "shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
           value === null
-            ? "bg-zinc-800 text-zinc-100"
+            ? "bg-[var(--crm-surface-3)] text-zinc-100"
             : "text-zinc-500 hover:text-zinc-300",
         )}
       >
@@ -719,7 +719,7 @@ function SiteFilter({
     <Select
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || null)}
-      className="h-9 w-[150px] rounded-xl bg-zinc-900 px-3 text-xs font-medium text-zinc-300"
+      className="h-9 w-[150px] rounded-xl bg-[var(--crm-surface-2)] px-3 text-xs font-medium text-zinc-300"
     >
       <option value="">Tous les sites</option>
       <option value="60">Recyclerie 60</option>
@@ -741,7 +741,7 @@ function StaffFilter({
     <Select
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || null)}
-      className="h-9 w-[180px] rounded-xl bg-zinc-900 px-3 text-xs font-medium text-zinc-300"
+      className="h-9 w-[180px] rounded-xl bg-[var(--crm-surface-2)] px-3 text-xs font-medium text-zinc-300"
     >
       <option value="">Tous les encadrants</option>
       {team.map((m) => (
@@ -764,7 +764,7 @@ function SortFilter({
     <Select
       value={value}
       onChange={(e) => onChange(e.target.value as "desc" | "asc")}
-      className="h-9 w-[140px] rounded-xl bg-zinc-900 px-3 text-xs font-medium text-zinc-300"
+      className="h-9 w-[140px] rounded-xl bg-[var(--crm-surface-2)] px-3 text-xs font-medium text-zinc-300"
     >
       <option value="desc">Plus récent</option>
       <option value="asc">Plus ancien</option>

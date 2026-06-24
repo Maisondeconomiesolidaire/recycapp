@@ -228,7 +228,7 @@ export function GlobalScanner() {
           {modal.phase === "already_sold" && (
             <>
               <ArticleCard article={modal.article} />
-              <div className="rounded-xl bg-zinc-800/60 border border-zinc-700 px-4 py-3 text-center text-sm text-zinc-400">
+              <div className="rounded-xl bg-[var(--crm-surface-3)] border border-[var(--crm-border-strong)] px-4 py-3 text-center text-sm text-zinc-400">
                 Cet article est déjà marqué comme <strong className="text-zinc-200">vendu</strong>.
               </div>
               <button type="button" onClick={close}
@@ -352,7 +352,7 @@ export function GlobalScanner() {
 function ArticleCard({ article }: { article: FoundArticle }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-800">
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[var(--crm-surface-3)]">
         {article.imageUrls?.[0] ? (
           <img src={article.imageUrls[0]} alt={article.title} className="h-full w-full object-cover" />
         ) : (

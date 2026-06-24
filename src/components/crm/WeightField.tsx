@@ -17,7 +17,7 @@ export function WeightField({
 }) {
   return (
     <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
-      <label className="relative block cursor-text rounded-2xl border border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-surface-2)_80%,#000)] px-6 py-7 shadow-inner transition focus-within:border-brand-500/60 focus-within:ring-2 focus-within:ring-brand-500/25">
+      <label className="relative block cursor-text rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-6 py-7 shadow-inner transition focus-within:border-brand-500/60 focus-within:ring-2 focus-within:ring-brand-500/25">
         <div className="flex items-baseline justify-center gap-3">
           <input
             type="number"
@@ -28,7 +28,7 @@ export function WeightField({
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             autoFocus={autoFocus}
-            className="w-[6ch] bg-transparent text-center text-6xl font-extrabold leading-none tabular-nums tracking-tight text-brand-300 placeholder-zinc-700 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="w-[6ch] bg-transparent text-center text-6xl font-extrabold leading-none tabular-nums tracking-tight text-brand-300 placeholder-zinc-500 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
           <span className="text-2xl font-bold text-zinc-400">{unit}</span>
         </div>

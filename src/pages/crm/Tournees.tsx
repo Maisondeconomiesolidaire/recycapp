@@ -313,7 +313,7 @@ function PlanificationTab() {
                   </div>
                   {totalStops > 0 && t.status === "en_cours" && (
                     <div className="shrink-0 mr-2">
-                      <div className="h-1.5 w-24 rounded-full bg-zinc-800 overflow-hidden">
+                      <div className="h-1.5 w-24 rounded-full bg-[var(--crm-surface-3)] overflow-hidden">
                         <div
                           className="h-full rounded-full bg-emerald-500 transition-all"
                           style={{ width: `${(doneStops / totalStops) * 100}%` }}
@@ -569,7 +569,7 @@ function PlanificationTab() {
                                     ? "bg-emerald-500 text-white"
                                     : stop.status === "annule"
                                       ? "bg-zinc-700 text-zinc-500 line-through"
-                                      : "bg-zinc-800 text-zinc-300"
+                                      : "bg-[var(--crm-surface-3)] text-zinc-300"
                                 }`}
                               >
                                 {stop.status === "effectue" ? (

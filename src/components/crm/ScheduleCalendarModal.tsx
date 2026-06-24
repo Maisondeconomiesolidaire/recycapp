@@ -102,7 +102,7 @@ export function ScheduleCalendarModal({
             <button
               type="button"
               onClick={() => setMonth((m) => subMonths(m, 1))}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-100"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--crm-border-strong)] text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-100"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -112,7 +112,7 @@ export function ScheduleCalendarModal({
             <button
               type="button"
               onClick={() => setMonth((m) => addMonths(m, 1))}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-100"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--crm-border-strong)] text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-100"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -146,10 +146,10 @@ export function ScheduleCalendarModal({
                       isSelected
                         ? "border-brand-500 bg-brand-500/10"
                         : today
-                          ? "border-brand-500/30 bg-zinc-900/70 hover:border-brand-500/60"
+                          ? "border-brand-500/30 bg-[var(--crm-surface-2)] hover:border-brand-500/60"
                           : inMonth
-                            ? "border-zinc-800 bg-zinc-900/40 hover:border-zinc-600 hover:bg-zinc-800/50"
-                            : "border-transparent bg-zinc-950/20 hover:bg-zinc-900/30",
+                            ? "border-[var(--crm-border)] bg-[var(--crm-surface-2)] hover:border-zinc-600 hover:bg-[var(--crm-surface-3)]"
+                            : "border-transparent bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-2)]",
                     )}
                   >
                     <span
@@ -213,7 +213,7 @@ export function ScheduleCalendarModal({
                   dayRequests.map((r) => (
                     <div
                       key={r._id}
-                      className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
+                      className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3"
                     >
                       <div className="mb-1 flex items-center gap-2">
                         <span

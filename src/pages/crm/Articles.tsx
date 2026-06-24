@@ -345,14 +345,14 @@ export function Articles() {
           />
         ) : (
           <div className="pt-6">
-            <div className="mb-6 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 overflow-hidden">
+            <div className="mb-6 space-y-4 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 overflow-hidden">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                 <Input
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
                   placeholder="Rechercher par titre, réf. interne ou réf. externe…"
-                  className="pl-9 dark:bg-zinc-950"
+                  className="pl-9 dark:bg-[var(--crm-surface)]"
                 />
               </div>
               <div>
@@ -391,9 +391,9 @@ export function Articles() {
                 }
               />
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+              <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)]">
                 <table className="min-w-[760px] w-full text-sm">
-                  <thead className="bg-zinc-900 text-zinc-400">
+                  <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
                     <tr>
                       <th className="px-4 py-3 text-left font-medium">Article</th>
                       <th className="px-4 py-3 text-left font-medium">Références</th>
@@ -406,10 +406,10 @@ export function Articles() {
                   </thead>
                   <tbody className="divide-y divide-zinc-800">
                     {filteredArticles.map((a) => (
-                      <tr key={a._id} className="bg-zinc-950 hover:bg-zinc-900/60">
+                      <tr key={a._id} className="bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-2)]">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-900">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--crm-surface-2)]">
                               {a.imageUrls[0] ? (
                                 <img
                                   src={a.imageUrls[0]}
@@ -463,7 +463,7 @@ export function Articles() {
                             {canPrint && (
                               <button
                                 onClick={() => setPrintArticles([a])}
-                                className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                                className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
                                 title="Imprimer l'étiquette"
                               >
                                 <Printer className="h-4 w-4" />
@@ -472,7 +472,7 @@ export function Articles() {
                             {canUpdate && (
                               <button
                                 onClick={() => openEdit(a)}
-                                className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                                className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
@@ -480,7 +480,7 @@ export function Articles() {
                             {canDelete && (
                               <button
                                 onClick={() => setDeleting(a)}
-                                className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-red-400"
+                                className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-red-400"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -552,7 +552,7 @@ export function Articles() {
                 <button
                   type="button"
                   onClick={() => setScanOpen(false)}
-                  className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300"
+                  className="rounded-xl border border-[var(--crm-border-strong)] px-4 py-2.5 text-sm font-semibold text-zinc-300"
                 >
                   Fermer
                 </button>
@@ -881,7 +881,7 @@ function PotentialLots({
       {groups.map((group) => (
         <div
           key={group.key}
-          className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
+          className="rounded-3xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -911,7 +911,7 @@ function PotentialLots({
                 </p>
               )}
             </div>
-            <div className="rounded-2xl bg-zinc-950 px-4 py-3 text-right">
+            <div className="rounded-2xl bg-[var(--crm-surface)] px-4 py-3 text-right">
               <p className="text-xs text-zinc-500">Prix suggéré</p>
               <p className="text-2xl font-bold text-zinc-100">
                 {formatPrice(group.suggestedPrice)}
@@ -923,9 +923,9 @@ function PotentialLots({
             {group.items.slice(0, 6).map((article) => (
               <div
                 key={article._id}
-                className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/65 p-2.5"
+                className="flex items-center gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-2.5"
               >
-                <span className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-zinc-900">
+                <span className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-[var(--crm-surface-2)]">
                   {article.imageUrls[0] ? (
                     <img
                       src={article.imageUrls[0]}
@@ -1041,7 +1041,7 @@ function ArticleDashboard({ articles }: { articles: ArticleDoc[] }) {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5">
           <p className="text-sm font-medium text-zinc-100">Vue rapide</p>
           <div className="mt-5 space-y-4">
             <ProgressRow
@@ -1065,9 +1065,9 @@ function ArticleDashboard({ articles }: { articles: ArticleDoc[] }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)]">
           <table className="min-w-[640px] w-full text-sm">
-            <thead className="bg-zinc-900 text-zinc-400">
+            <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Catégorie</th>
                 <th className="px-4 py-3 text-left font-medium">Total</th>
@@ -1078,7 +1078,7 @@ function ArticleDashboard({ articles }: { articles: ArticleDoc[] }) {
             </thead>
             <tbody className="divide-y divide-zinc-800">
               {categoryBreakdown.map((row) => (
-                <tr key={row.category} className="bg-zinc-950">
+                <tr key={row.category} className="bg-[var(--crm-surface)]">
                   <td className="px-4 py-3 font-medium text-zinc-100">{row.category}</td>
                   <td className="px-4 py-3 text-zinc-300">{row.total}</td>
                   <td className="px-4 py-3 text-zinc-300">{row.available}</td>
@@ -1108,7 +1108,7 @@ function MetricCard({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5">
       <div className="flex items-center gap-2 text-zinc-400">
         {icon}
         <p className="text-sm font-medium">{title}</p>
@@ -1142,7 +1142,7 @@ function ProgressRow({
           {value} • {share}%
         </p>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+      <div className="h-2 overflow-hidden rounded-full bg-[var(--crm-surface-3)]">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${share}%` }} />
       </div>
     </div>

@@ -383,7 +383,7 @@ export function Sorties() {
             <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-4 bg-black p-8 text-center">
               <ScanLine className="h-9 w-9 text-zinc-500" />
               <p className="max-w-xs text-sm text-zinc-200">Le scanner n'a pas pu démarrer. Rechargez la page puis réessayez.</p>
-              <button type="button" onClick={() => setScanOpen(false)} className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300">
+              <button type="button" onClick={() => setScanOpen(false)} className="rounded-xl border border-[var(--crm-border-strong)] px-4 py-2.5 text-sm font-semibold text-zinc-300">
                 Fermer
               </button>
             </div>

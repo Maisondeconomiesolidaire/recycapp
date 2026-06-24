@@ -328,7 +328,7 @@ function DemandeTab({ request }: { request: RequestDoc }) {
       {request.comment && (
         <section>
           <SectionTitle>Commentaire</SectionTitle>
-          <p className="text-sm text-zinc-300 whitespace-pre-line rounded-lg bg-zinc-800/50 p-3">
+          <p className="text-sm text-zinc-300 whitespace-pre-line rounded-lg bg-[var(--crm-surface-3)] p-3">
             {request.comment}
           </p>
         </section>
@@ -337,7 +337,7 @@ function DemandeTab({ request }: { request: RequestDoc }) {
       {request.outcome === "perdue" && request.lostReason && (
         <section>
           <SectionTitle>Motif d'annulation</SectionTitle>
-          <p className="rounded-lg bg-zinc-800/50 p-3 text-sm text-zinc-300">
+          <p className="rounded-lg bg-[var(--crm-surface-3)] p-3 text-sm text-zinc-300">
             {request.lostReason === "devis_refuse" && "Devis refusé"}
             {request.lostReason === "pas_de_retour_client" &&
               "Pas de retour client"}
@@ -500,8 +500,8 @@ function ManagedRequestPhotoBlock({
         className={cn(
           "flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-4 text-sm font-medium transition-colors",
           uploading
-            ? "cursor-not-allowed border-zinc-700 bg-zinc-900/70 text-zinc-500 opacity-70"
-            : "border-zinc-700 bg-zinc-900/70 text-zinc-300 hover:border-brand-500/60 hover:bg-zinc-900 hover:text-zinc-100",
+            ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-500 opacity-70"
+            : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/60 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
         )}
       >
         {uploading ? (
@@ -548,7 +548,7 @@ function PhotoGrid({
       {urls.map((url, i) => (
         <div
           key={`${url}-${i}`}
-          className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-800"
+          className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--crm-border)]"
         >
           <button
             type="button"
@@ -754,7 +754,7 @@ function GestionTab({
             onChange={(e) =>
               patchVisit({ id: request._id, visitNeeded: e.target.checked })
             }
-            className="border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/60"
+            className="border-[var(--crm-border)] bg-[var(--crm-surface-2)] hover:bg-[var(--crm-surface-3)]"
           />
         </section>
       )}
@@ -1011,7 +1011,7 @@ function ProcessChecklist({
 
   if (steps.length === 0) {
     return (
-      <p className="text-sm text-zinc-500 rounded-lg bg-zinc-800/40 p-3">
+      <p className="text-sm text-zinc-500 rounded-lg bg-[var(--crm-surface-3)] p-3">
         Aucun process à suivre pour le moment.
       </p>
     );
@@ -1079,12 +1079,12 @@ function ProcessChecklist({
   return (
     <>
       <div className="space-y-4">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
           <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-zinc-500">
             <span>Complétude</span>
             <span className="text-brand-300">{completionPercent}%</span>
           </div>
-          <div className="h-2.5 overflow-hidden rounded-full bg-zinc-800">
+          <div className="h-2.5 overflow-hidden rounded-full bg-[var(--crm-surface-3)]">
             <div
               className="h-full rounded-full bg-[linear-gradient(90deg,#ff9a3d,#ff7700)] transition-all"
               style={{ width: `${completionPercent}%` }}
@@ -1114,8 +1114,8 @@ function ProcessChecklist({
                       : isNext && !locked && nextIsBlocked
                         ? "border-amber-500/40 bg-[linear-gradient(180deg,rgba(245,158,11,0.08),var(--crm-surface-3))] text-zinc-200 shadow-[0_12px_24px_rgba(0,0,0,0.12)] hover:border-amber-400"
                         : isNext && !locked
-                          ? "border-zinc-700 bg-[linear-gradient(180deg,var(--crm-surface-2),var(--crm-surface-3))] text-zinc-200 shadow-[0_12px_24px_rgba(0,0,0,0.12)] hover:border-brand-500"
-                          : "border-zinc-800 bg-zinc-900/50 text-zinc-500",
+                          ? "border-[var(--crm-border-strong)] bg-[linear-gradient(180deg,var(--crm-surface-2),var(--crm-surface-3))] text-zinc-200 shadow-[0_12px_24px_rgba(0,0,0,0.12)] hover:border-brand-500"
+                          : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-500",
                   )}
                 >
                   <button
@@ -1135,7 +1135,7 @@ function ProcessChecklist({
                             ? "border-brand-400 bg-brand-500 text-white shadow-[0_10px_24px_rgba(255,119,0,0.28)]"
                             : isNext && !locked
                               ? "border-brand-400 bg-brand-500/12 text-brand-300"
-                              : "border-zinc-700 bg-zinc-950/70 text-transparent",
+                              : "border-[var(--crm-border-strong)] bg-[var(--crm-surface)] text-transparent",
                         )}
                       >
                         {isDone && (
@@ -1240,7 +1240,7 @@ function ProcessChecklist({
         headerClassName="border-b-0"
       >
         <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4">
+          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
               Nouvelle note
             </p>
@@ -1280,7 +1280,7 @@ function ProcessChecklist({
               stepNotes.map((note, index) => (
                 <div
                   key={`${note.at}-${index}`}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4"
+                  className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4"
                 >
                   <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
                     <span className="truncate">{note.by}</span>
@@ -1292,7 +1292,7 @@ function ProcessChecklist({
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/35 p-4 text-sm text-zinc-500">
+              <div className="rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 text-sm text-zinc-500">
                 Aucune note pour cette étape pour le moment.
               </div>
             )}
@@ -1318,7 +1318,7 @@ function CollecteMap({
   const src = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&output=embed&t=k&z=19`;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-800">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-[var(--crm-border)]">
       <iframe
         title="Carte de collecte"
         src={src}
@@ -1354,7 +1354,7 @@ function Row({
 }) {
   if (!value) return null;
   return (
-    <div className="flex justify-between gap-4 py-1.5 border-b border-zinc-800/60 last:border-0">
+    <div className="flex justify-between gap-4 py-1.5 border-b border-[var(--crm-border)] last:border-0">
       <span className="text-zinc-500">{label}</span>
       <span
         className={cn(
@@ -1569,7 +1569,7 @@ function ArticlePaymentSection({ request }: { request: RequestDoc }) {
   return (
     <section>
       <SectionTitle>Paiement</SectionTitle>
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
         <div className="space-y-2 text-sm">
           <Row label="Type de paiement" value={methodLabel} />
           <Row label="Paiement validé" value={statusLabel} />
@@ -1661,12 +1661,12 @@ function ArticleRequestPreview({
 
   if (article === undefined) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60">
-        <div className="aspect-[4/3] w-full animate-pulse bg-zinc-800" />
+      <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]">
+        <div className="aspect-[4/3] w-full animate-pulse bg-[var(--crm-surface-3)]" />
         {fallbackTitle && (
           <div className="p-4">
             <p className="text-sm font-semibold text-zinc-100">{fallbackTitle}</p>
-            <div className="mt-2 h-4 w-16 animate-pulse rounded bg-zinc-800" />
+            <div className="mt-2 h-4 w-16 animate-pulse rounded bg-[var(--crm-surface-3)]" />
           </div>
         )}
       </div>
@@ -1675,7 +1675,7 @@ function ArticleRequestPreview({
 
   if (article === null) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/40 text-sm text-zinc-500">
+      <div className="flex h-40 items-center justify-center rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-sm text-zinc-500">
         Article introuvable
       </div>
     );

@@ -253,7 +253,7 @@ function TypeChoice({ onSelect }: { onSelect: (t: InternalType) => void }) {
             key={c.key}
             type="button"
             onClick={() => onSelect(c.key)}
-            className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 text-left transition hover:border-zinc-600 hover:bg-zinc-800/60"
+            className="flex flex-col gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5 text-left transition hover:border-zinc-600 hover:bg-[var(--crm-surface-3)]"
           >
             <span
               className="inline-block h-3 w-3 rounded-full"
@@ -336,13 +336,13 @@ function ClientSearch({ onSelect }: { onSelect: (c: ClientRow) => void }) {
             className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] py-2.5 pl-9 pr-3 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
           />
           {results.length > 0 && (
-            <div className="absolute left-0 right-0 top-full z-20 mt-1.5 overflow-hidden rounded-2xl border border-zinc-700 bg-[var(--crm-surface)] shadow-2xl">
+            <div className="absolute left-0 right-0 top-full z-20 mt-1.5 overflow-hidden rounded-2xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)] shadow-2xl">
               {results.map((c) => (
                 <button
                   key={c.email}
                   type="button"
                   onClick={() => pick(c)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-zinc-800"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-[var(--crm-surface-3)]"
                 >
                   <UserCircle className="h-5 w-5 shrink-0 text-zinc-500" />
                   <div className="min-w-0">
@@ -425,7 +425,7 @@ function CustomerSection({
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="mb-4 mt-6 border-b border-zinc-800 pb-2 text-sm font-semibold text-zinc-300">
+    <h3 className="mb-4 mt-6 border-b border-[var(--crm-border)] pb-2 text-sm font-semibold text-zinc-300">
       {children}
     </h3>
   );
@@ -514,7 +514,7 @@ function AeroForm({
           return (
             <div
               key={field.id}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3"
+              className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 space-y-3"
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-zinc-300">Objet {i + 1}</p>
@@ -878,7 +878,7 @@ function ArticleForm({
 
       <SectionHeader>Article à réserver</SectionHeader>
       {available.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] py-12 text-center">
           <PackageOpen className="h-8 w-8 text-zinc-600" />
           <p className="text-sm text-zinc-500">Aucun article disponible en boutique.</p>
         </div>
@@ -893,7 +893,7 @@ function ArticleForm({
                 "overflow-hidden rounded-2xl border text-left transition",
                 selectedArticleId === a._id
                   ? "border-brand-500 ring-1 ring-brand-500/40"
-                  : "border-zinc-800 hover:border-zinc-600",
+                  : "border-[var(--crm-border)] hover:border-zinc-600",
               )}
             >
               {a.imageUrls[0] ? (
@@ -903,7 +903,7 @@ function ArticleForm({
                   className="aspect-[4/3] w-full object-cover"
                 />
               ) : (
-                <div className="flex aspect-[4/3] w-full items-center justify-center bg-zinc-800 text-zinc-600">
+                <div className="flex aspect-[4/3] w-full items-center justify-center bg-[var(--crm-surface-3)] text-zinc-600">
                   <PackageOpen className="h-8 w-8" />
                 </div>
               )}
@@ -955,7 +955,7 @@ function DarkYesNo({
   errors: ReturnType<typeof useForm<CollecteData>>["formState"]["errors"];
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+    <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
       <p className="text-sm text-zinc-300">{label}</p>
       <div className="mt-2 flex gap-4">
         {(["oui", "non"] as const).map((val) => (

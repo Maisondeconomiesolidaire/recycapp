@@ -141,7 +141,7 @@ function SaisieAtelier() {
                 <button
                   type="button"
                   onClick={() => setCameraOpen(false)}
-                  className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800"
+                  className="rounded-xl border border-[var(--crm-border-strong)] px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-[var(--crm-surface-3)]"
                 >
                   Fermer
                 </button>
@@ -216,7 +216,7 @@ function SaisieAtelier() {
 
         {selectedArticle && (
           <div className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[var(--crm-surface-3)]">
               {selectedArticle.imageUrls[0] ? (
                 <img src={selectedArticle.imageUrls[0]} alt={selectedArticle.title} className="h-full w-full object-cover" />
               ) : (
@@ -345,7 +345,7 @@ function EnCoursList() {
           return (
             <div key={s._id} className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] overflow-hidden">
               <div className="flex items-center gap-4 p-4">
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[var(--crm-surface-3)]">
                   {s.article?.imageUrl ? (
                     <img src={s.article.imageUrl} alt={s.article.title} className="h-full w-full object-cover" />
                   ) : <div className="flex h-full w-full items-center justify-center"><Package className="h-5 w-5 text-zinc-600" /></div>}

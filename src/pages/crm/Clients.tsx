@@ -59,9 +59,9 @@ export function Clients() {
           />
         ) : (
           <>
-            <div className="hidden overflow-x-auto rounded-2xl border border-zinc-800 sm:block">
+            <div className="hidden overflow-x-auto rounded-2xl border border-[var(--crm-border)] sm:block">
               <table className="min-w-[760px] w-full text-sm">
-                <thead className="bg-zinc-900 text-zinc-400">
+                <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
                   <tr>
                     <th className="px-4 py-3 text-left font-medium">Client</th>
                     <th className="px-4 py-3 text-left font-medium">Contact</th>
@@ -75,11 +75,11 @@ export function Clients() {
                     <tr
                       key={c.email}
                       onClick={() => setOpenEmail(c.email)}
-                      className="cursor-pointer bg-zinc-950 hover:bg-zinc-900/60"
+                      className="cursor-pointer bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-2)]"
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-300">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface-3)] text-xs font-semibold text-zinc-300">
                             {initials(c.firstName, c.lastName)}
                           </span>
                           <span className="font-medium text-zinc-100">
@@ -123,9 +123,9 @@ export function Clients() {
                 <button
                   key={c.email}
                   onClick={() => setOpenEmail(c.email)}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 p-3 text-left hover:bg-zinc-900/60"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3 text-left hover:bg-[var(--crm-surface-2)]"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-300">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface-3)] text-sm font-semibold text-zinc-300">
                     {initials(c.firstName, c.lastName)}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -227,7 +227,7 @@ function ClientSheet({
                     onClose();
                     onOpenRequest(r._id);
                   }}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-left hover:bg-zinc-900"
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3 text-left hover:bg-[var(--crm-surface-2)]"
                 >
                   <div className="flex items-center gap-2">
                     <TypeBadge type={r.type} size="sm" solid />

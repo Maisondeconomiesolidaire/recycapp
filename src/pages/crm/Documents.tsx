@@ -583,7 +583,7 @@ function ExplorerItem({
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+              className="rounded-lg p-2 text-zinc-500 hover:bg-[var(--crm-surface-3)] hover:text-zinc-100"
               aria-label="Ouvrir"
             >
               <Download className="h-4 w-4" />
@@ -592,7 +592,7 @@ function ExplorerItem({
           <button
             type="button"
             onClick={onRename}
-            className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+            className="rounded-lg p-2 text-zinc-500 hover:bg-[var(--crm-surface-3)] hover:text-zinc-100"
             aria-label="Renommer"
           >
             <Pencil className="h-4 w-4" />

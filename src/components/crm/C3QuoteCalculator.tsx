@@ -135,7 +135,7 @@ export function C3QuoteCalculator({ request }: { request: C3QuoteRequest }) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4">
+      <section className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -148,7 +148,7 @@ export function C3QuoteCalculator({ request }: { request: C3QuoteRequest }) {
           </div>
           <div className="rounded-2xl border border-brand-500/30 bg-brand-500/10 px-5 py-3 text-right">
             <p className="text-xs uppercase tracking-[0.18em] text-brand-300">Total TTC</p>
-            <p className="mt-1 text-3xl font-semibold text-white">{formatPrice(result.totalTtc)}</p>
+            <p className="mt-1 text-3xl font-semibold text-zinc-100">{formatPrice(result.totalTtc)}</p>
           </div>
         </div>
       </section>
@@ -219,7 +219,7 @@ export function C3QuoteCalculator({ request }: { request: C3QuoteRequest }) {
         </div>
       </section>
 
-      <section className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 md:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Déplacement HT" value={result.travelCost} detail={`${result.totalKm.toFixed(2)} km / ${result.totalTravelHours.toFixed(2)} h`} />
         <SummaryCard label="Chargement HT" value={result.loadingCost} detail={`${result.loadingTotalHours.toFixed(2)} h agent`} />
         <SummaryCard label="Déchets HT" value={result.wasteCost} detail={`${inputs.wasteVolume} m³`} />
@@ -275,9 +275,9 @@ function SummaryCard({
   strong?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+    <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-      <p className={strong ? "mt-1 text-xl font-semibold text-white" : "mt-1 text-lg font-semibold text-zinc-100"}>
+      <p className={strong ? "mt-1 text-xl font-semibold text-zinc-100" : "mt-1 text-lg font-semibold text-zinc-100"}>
         {formatPrice(value)}
       </p>
       {detail && <p className="mt-1 text-xs text-zinc-500">{detail}</p>}

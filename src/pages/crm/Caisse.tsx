@@ -41,7 +41,7 @@ function ScannerError({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800"
+          className="rounded-xl border border-[var(--crm-border-strong)] px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-[var(--crm-surface-3)]"
         >
           Fermer
         </button>
@@ -423,7 +423,7 @@ function CaissePanel() {
                     onClick={() => addArticleToCart(article)}
                     className="flex w-full items-center gap-3 border-t border-[var(--crm-border)] px-3 py-3 text-left first:border-t-0 hover:bg-white/5"
                   >
-                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
+                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--crm-surface-3)]">
                       {article.imageUrls[0] ? (
                         <img
                           src={article.imageUrls[0]}
@@ -465,7 +465,7 @@ function CaissePanel() {
           <div className="space-y-2">
             {cart.map((item) => (
               <div key={item.articleId} className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[var(--crm-surface-3)]">
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
                   ) : (
