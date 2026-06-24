@@ -31,7 +31,6 @@ import {
 import {
   AERO_OBJECT_TYPES,
   ARTICLE_CATEGORIES,
-  ARTICLE_CONDITIONS,
   ARTICLE_SUBCATEGORIES,
   WOOD_TYPES,
   STRIPPING_OPTIONS,
@@ -135,7 +134,6 @@ const livraisonSchema = z.object({
   articleTitle: z.string().optional(),
   category: z.string().optional(),
   subcategory: z.string().optional(),
-  condition: z.string().optional(),
   reference: z.string().optional(),
   articlePrice: z.preprocess(pre, z.number().nonnegative().optional()),
   deliveryAddress: z
@@ -992,7 +990,6 @@ type AnalysisResult = {
   articleTitle: string;
   category: string;
   subcategory: string;
-  condition: string;
   reference: string;
   referenceFromBarcode: boolean;
   articlePrice: number | null;
@@ -1042,6 +1039,7 @@ function LivraisonForm({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SlotResult["slots"][number] | null>(null);
+  const [deliveryMode, setDeliveryMode] = useState<"standard" | "grouped">("standard");
   const [lastSlotsAddress, setLastSlotsAddress] = useState("");
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -1074,7 +1072,6 @@ function LivraisonForm({
       articleTitle: "",
       category: "",
       subcategory: "",
-      condition: "",
       reference: "",
       articlePrice: undefined,
       comment: "",
@@ -1085,7 +1082,6 @@ function LivraisonForm({
   const manualCategory = watch("category") ?? "";
   const manualArticleTitle = watch("articleTitle") ?? "";
   const manualSubcategory = watch("subcategory") ?? "";
-  const manualCondition = watch("condition") ?? "";
   const manualReference = watch("reference") ?? "";
   const manualArticlePrice = watch("articlePrice");
   const photoSignature = `${articlePhotos[0] ?? ""}:${referencePhotos[0] ?? ""}`;
@@ -1100,7 +1096,6 @@ function LivraisonForm({
   const resolvedArticleTitle = manualArticleTitle.trim() || analysis?.articleTitle || "";
   const resolvedCategory = manualCategory.trim() || analysis?.category || "";
   const resolvedSubcategory = manualSubcategory.trim() || analysis?.subcategory || "";
-  const resolvedCondition = manualCondition.trim() || analysis?.condition || "";
   const resolvedReference = manualReference.trim() || analysis?.reference || "";
   const articlePrice =
     typeof manualArticlePrice === "number" && Number.isFinite(manualArticlePrice)
@@ -1118,6 +1113,16 @@ function LivraisonForm({
       : null;
   const reducedAcompte =
     reducedTotal !== null ? Math.round(reducedTotal * 0.2 * 100) / 100 : null;
+  const effectiveDeliveryFee =
+    deliveryMode === "grouped" && selectedSlot
+      ? selectedSlot.reducedDeliveryFee
+      : baseDeliveryFee;
+  const effectiveTotal =
+    articlePrice !== null && effectiveDeliveryFee !== null
+      ? articlePrice + effectiveDeliveryFee
+      : null;
+  const effectiveAcompte =
+    effectiveTotal !== null ? Math.round(effectiveTotal * 0.2 * 100) / 100 : null;
 
   const steps = [
     {
@@ -1280,7 +1285,6 @@ function LivraisonForm({
     if (!getValues("articleTitle")?.trim()) setValue("articleTitle", analysis.articleTitle);
     if (!getValues("category")?.trim()) setValue("category", analysis.category);
     if (!getValues("subcategory")?.trim()) setValue("subcategory", analysis.subcategory);
-    if (!getValues("condition")?.trim()) setValue("condition", analysis.condition);
     if (!getValues("reference")?.trim()) setValue("reference", analysis.reference);
     if (
       analysis.articlePrice !== null &&
@@ -1318,6 +1322,16 @@ function LivraisonForm({
     return () => window.clearTimeout(timer);
   }, [addressSignature, deliveryAddress, fee, lastSlotsAddress, loadingSlots]);
 
+  useEffect(() => {
+    if (!slots?.slots.length) {
+      setDeliveryMode("standard");
+      return;
+    }
+    if (deliveryMode === "grouped" && !selectedSlot) {
+      setSelectedSlot(slots.slots[0]);
+    }
+  }, [deliveryMode, selectedSlot, slots]);
+
   async function onSubmit(data: LivraisonData) {
     setFormError(null);
     if (!articlePhotos[0]) {
@@ -1342,14 +1356,14 @@ function LivraisonForm({
           articleTitle: resolvedArticleTitle || undefined,
           category: resolvedCategory || undefined,
           subcategory: resolvedSubcategory || undefined,
-          condition: resolvedCondition || undefined,
+          condition: undefined,
           reference: resolvedReference || undefined,
           referenceFromBarcode: analysis?.referenceFromBarcode,
           articlePrice: articlePrice ?? undefined,
-          acompte: (selectedSlot ? reducedAcompte : baseAcompte) ?? undefined,
+          acompte: effectiveAcompte ?? undefined,
           distanceKm: fee?.distanceKm,
-          deliveryFee: selectedSlot?.reducedDeliveryFee ?? fee?.deliveryFee,
-          suggestedSlot: selectedSlot
+          deliveryFee: effectiveDeliveryFee ?? undefined,
+          suggestedSlot: deliveryMode === "grouped" && selectedSlot
             ? {
                 requestReference: selectedSlot.requestReference,
                 scheduledDate: selectedSlot.scheduledDate,
@@ -1464,9 +1478,6 @@ function LivraisonForm({
                       <span className="text-zinc-200">{resolvedSubcategory || analysis.subcategory}</span>
                     </p>
                     <p>
-                      État : <span className="text-zinc-200">{resolvedCondition || analysis.condition}</span>
-                    </p>
-                    <p>
                       Référence : <span className="font-mono text-zinc-200">{resolvedReference || analysis.reference}</span>
                       {" "}
                       <span className="text-zinc-500">
@@ -1518,16 +1529,6 @@ function LivraisonForm({
                       {(ARTICLE_SUBCATEGORIES[manualCategory] ?? []).map((subcategory) => (
                         <option key={subcategory} value={subcategory}>
                           {subcategory}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="État">
-                    <Select {...register("condition")} value={manualCondition}>
-                      <option value="">Sélectionner…</option>
-                      {ARTICLE_CONDITIONS.map((condition) => (
-                        <option key={condition} value={condition}>
-                          {condition}
                         </option>
                       ))}
                     </Select>
@@ -1595,7 +1596,7 @@ function LivraisonForm({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <SummaryPill label="Distance" value={`${fee.distanceKm} km`} />
                     <SummaryPill label="Livraison" value={formatPrice(fee.deliveryFee)} />
-                    {baseAcompte !== null && <SummaryPill label="Acompte 20%" value={formatPrice(baseAcompte)} />}
+                    {effectiveAcompte !== null && <SummaryPill label="Acompte 20%" value={formatPrice(effectiveAcompte)} />}
                   </div>
                 )}
               </div>
@@ -1608,21 +1609,102 @@ function LivraisonForm({
             <WizardStepIntro
               eyebrow="Étape 4"
               title="Validation du montant"
-              helper="Le tarif standard apparaît à gauche. Si une collecte planifiée est à 5 km ou moins, l'offre groupée apparaît à droite."
+              helper="Choisissez clairement le mode de livraison, puis vérifiez le total et l'acompte demandé."
             >
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="rounded-3xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5">
-                  <div className="flex items-start justify-between gap-3">
+              <div className="mb-4 grid gap-3 lg:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setDeliveryMode("standard")}
+                  className={cn(
+                    "rounded-3xl border p-4 text-left transition",
+                    deliveryMode === "standard"
+                      ? "border-brand-500 bg-brand-500/10 ring-1 ring-brand-500/30"
+                      : "border-[var(--crm-border)] bg-[var(--crm-surface)] hover:border-brand-500/30",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Tarif standard</p>
-                      <p className="mt-2 text-lg font-semibold text-zinc-100">
-                        {resolvedArticleTitle || "Article en attente d'analyse"}
+                      <p className="text-sm font-semibold text-zinc-100">Livraison standard</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Trajet direct depuis le depot jusqu'au client.
                       </p>
                     </div>
-                    <Button type="button" variant={selectedSlot ? "outline" : "secondary"} size="sm" onClick={() => setSelectedSlot(null)}>
-                      {selectedSlot ? "Choisir standard" : "Standard choisi"}
-                    </Button>
+                    <span className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-semibold",
+                      deliveryMode === "standard"
+                        ? "bg-brand-500 text-white"
+                        : "bg-[var(--crm-surface-2)] text-zinc-300",
+                    )}>
+                      {deliveryMode === "standard" ? "Selectionnee" : "Choisir"}
+                    </span>
                   </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!slots?.slots.length}
+                  onClick={() => {
+                    if (!slots?.slots.length) return;
+                    setDeliveryMode("grouped");
+                    if (!selectedSlot) setSelectedSlot(slots.slots[0]);
+                  }}
+                  className={cn(
+                    "rounded-3xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50",
+                    deliveryMode === "grouped"
+                      ? "border-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-400/30"
+                      : "border-[var(--crm-border)] bg-[var(--crm-surface)] hover:border-emerald-400/30",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-100">Livraison groupée</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Regroupement avec une collecte deja planifiee a 5 km ou moins.
+                      </p>
+                    </div>
+                    <span className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-semibold",
+                      deliveryMode === "grouped"
+                        ? "bg-emerald-500 text-white"
+                        : "bg-[var(--crm-surface-2)] text-zinc-300",
+                    )}>
+                      {deliveryMode === "grouped" ? "Selectionnee" : "Choisir"}
+                    </span>
+                  </div>
+                </button>
+              </div>
+
+              <div className="mb-4 rounded-3xl border border-amber-400/20 bg-amber-400/8 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Acompte a demander</p>
+                <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-3xl font-bold text-zinc-100">
+                      {effectiveAcompte !== null ? formatPrice(effectiveAcompte) : "En attente"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      20% de {articlePrice !== null ? formatPrice(articlePrice) : "prix article"} + {effectiveDeliveryFee !== null ? formatPrice(effectiveDeliveryFee) : "livraison"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[var(--crm-surface)] px-4 py-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-500">Total retenu</span>
+                      <span className="font-semibold text-zinc-100">
+                        {effectiveTotal !== null ? formatPrice(effectiveTotal) : "En attente"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-2xl bg-[var(--crm-surface)] px-4 py-3 text-sm text-zinc-300">
+                  Le client doit verser <span className="font-semibold text-white">{effectiveAcompte !== null ? formatPrice(effectiveAcompte) : "..."}</span> d'acompte a la creation de la demande.
+                </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-3xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Tarif standard</p>
+                  <p className="mt-2 text-lg font-semibold text-zinc-100">
+                    {resolvedArticleTitle || "Article en attente d'analyse"}
+                  </p>
                   <div className="mt-4 space-y-3 text-sm">
                     <PriceRow label="Prix article" value={articlePrice !== null ? formatPrice(articlePrice) : "En attente"} />
                     <PriceRow label="Livraison" value={baseDeliveryFee !== null ? formatPrice(baseDeliveryFee) : "En attente"} />
@@ -1655,7 +1737,10 @@ function LivraisonForm({
                             <button
                               key={slot.requestReference + slot.scheduledDate}
                               type="button"
-                              onClick={() => setSelectedSlot(slot)}
+                              onClick={() => {
+                                setSelectedSlot(slot);
+                                setDeliveryMode("grouped");
+                              }}
                               className={cn(
                                 "w-full rounded-2xl border px-4 py-3 text-left transition",
                                 active
@@ -1685,11 +1770,11 @@ function LivraisonForm({
                               <div className="mt-3 flex justify-end">
                                 <span className={cn(
                                   "rounded-full px-2.5 py-1 text-xs font-semibold",
-                                  active
+                                  active && deliveryMode === "grouped"
                                     ? "bg-emerald-400/20 text-emerald-200"
                                     : "bg-[var(--crm-surface-2)] text-zinc-300",
                                 )}>
-                                  {active ? "Groupée choisie" : "Choisir cette option"}
+                                  {active && deliveryMode === "grouped" ? "Option active" : "Activer cette option"}
                                 </span>
                               </div>
                             </button>

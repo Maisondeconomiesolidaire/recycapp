@@ -347,7 +347,7 @@ function DemandeTab({ request }: { request: RequestDoc }) {
         </section>
       )}
 
-      {request.photoUrls.length > 0 && (
+      {request.type !== "livraison" && request.photoUrls.length > 0 && (
         <section>
           <SectionTitle>Photos client</SectionTitle>
           <PhotoGrid urls={request.photoUrls} onOpen={setLb} />
@@ -362,7 +362,7 @@ function DemandeTab({ request }: { request: RequestDoc }) {
         Reçue le {formatDateTime(request.createdAt)}
       </p>
 
-      {lb !== null && (
+      {request.type !== "livraison" && lb !== null && (
         <Lightbox
           images={request.photoUrls}
           startIndex={lb}
@@ -1549,7 +1549,6 @@ function RequestDetails({ request }: { request: RequestDoc }) {
             <Row label="Désignation" value={l.articleTitle} />
             <Row label="Catégorie" value={l.category} />
             <Row label="Sous-catégorie" value={l.subcategory} />
-            <Row label="État" value={l.condition} />
             <Row
               label="Référence interne"
               value={

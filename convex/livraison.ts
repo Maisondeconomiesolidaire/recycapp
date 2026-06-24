@@ -122,8 +122,7 @@ Retourne UNIQUEMENT un JSON valide (sans markdown) :
 {
   "title": "nom court et précis de l'article en français (max 60 caractères)",
   "category": "Exactement une de : Maison et Jardin | Électronique | Loisirs",
-  "subcategory": "Exactement une des sous-catégories de la catégorie choisie",
-  "condition": "une de : Neuf | Très bon état | Bon état | État correct | À rénover"
+  "subcategory": "Exactement une des sous-catégories de la catégorie choisie"
 }
 Sous-catégories :
 - Maison et Jardin : Ameublement, Électroménager, Décoration, Bricolage, Vaisselle
@@ -133,8 +132,17 @@ Sous-catégories :
 const BARCODE_PROMPT = `Tu lis une étiquette / code-barres / référence sur une photo.
 Retourne UNIQUEMENT un JSON valide (sans markdown) :
 {
-  "code": "la suite de chiffres lue sur le code-barres ou la référence, sans espaces ni lettres. null si illisible."
+  "code": "la suite de chiffres lue sur le code-barres ou la référence, sans espaces ni lettres. null si illisible.",
+  "price": "le prix visible sur l'etiquette en euros, sous forme numerique uniquement, par exemple 19.99. null si absent ou illisible."
 }`;
+
+function normalizeVisionPrice(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[^\d,.-]/g, "").replace(",", ".");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 async function callOpenAIVision<T>(
   apiKey: string,
@@ -257,7 +265,6 @@ export const analyzePhotos = action({
       title: string;
       category: string;
       subcategory: string;
-      condition: string;
     }>(apiKey, VISION_PROMPT, articleUrl, "Catégorise cet article.");
 
     const category = Object.keys(ARTICLE_CATEGORIES).includes(vision.category)
@@ -270,20 +277,23 @@ export const analyzePhotos = action({
     // 2) Référence : lecture du code-barres si une photo de référence est fournie,
     //    sinon génération d'un nouveau numéro interne unique.
     let barcode: string | null = null;
+    let visiblePrice: number | null = null;
     if (referencePhotoId) {
       const refUrl = await ctx.storage.getUrl(referencePhotoId);
       if (refUrl) {
         try {
-          const read = await callOpenAIVision<{ code: string | null }>(
+          const read = await callOpenAIVision<{ code: string | null; price: number | string | null }>(
             apiKey,
             BARCODE_PROMPT,
             refUrl,
-            "Lis le code-barres ou la référence.",
+            "Lis le code-barres, la référence et le prix affiché sur l'étiquette.",
           );
           const digits = (read.code ?? "").replace(/\D/g, "");
           barcode = digits.length >= 4 ? digits : null;
+          visiblePrice = normalizeVisionPrice(read.price);
         } catch {
           barcode = null;
+          visiblePrice = null;
         }
       }
     }
@@ -300,6 +310,9 @@ export const analyzePhotos = action({
         articlePrice = match.price;
         matchedTitle = match.title;
       }
+    }
+    if (articlePrice === null && visiblePrice !== null) {
+      articlePrice = Math.round(visiblePrice * 100) / 100;
     }
 
     const used = new Set(
@@ -326,7 +339,7 @@ export const analyzePhotos = action({
       articleTitle: matchedTitle ?? vision.title?.slice(0, 80) ?? "Article",
       category,
       subcategory,
-      condition: vision.condition ?? "Bon état",
+      condition: "",
       reference,
       referenceFromBarcode,
       articlePrice,
