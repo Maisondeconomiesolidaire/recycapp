@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { action, env } from "./_generated/server";
-import { internal } from "./_generated/api";
-import { requireStaff } from "./lib";
+import { api, internal } from "./_generated/api";
+import { accessAllows } from "./lib";
 import type { Id } from "./_generated/dataModel";
 
 function buildStripeBody(params: Record<string, string>) {
@@ -43,7 +43,10 @@ export const startTestCheckout = action({
     returnUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await requireStaff(ctx);
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "caisse", "checkout")) {
+      throw new Error("Accès CRM insuffisant.");
+    }
     const secretKey = env.STRIPE_SECRET_KEY;
     if (!secretKey) {
       throw new Error(
@@ -56,7 +59,7 @@ export const startTestCheckout = action({
       {
         items: args.items,
         discountAmount: args.discountAmount,
-        createdBy: identity.tokenIdentifier,
+        createdBy: access.email ?? "caisse",
       },
     );
 
@@ -139,7 +142,10 @@ export const confirmTestCheckout = action({
     sessionId: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "caisse", "checkout")) {
+      throw new Error("Accès CRM insuffisant.");
+    }
     if (args.sessionId === "{CHECKOUT_SESSION_ID}") {
       throw new Error(
         "Stripe n'a pas remplacé le session_id dans l'URL de retour. Relancez le paiement après la mise à jour du flux Checkout.",

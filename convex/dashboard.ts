@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireStaff } from "./lib";
+import { requireCrmPermission } from "./lib";
 import { STEP } from "./processes";
 import { Doc } from "./_generated/dataModel";
 
@@ -24,7 +24,7 @@ function deriveStage(r: Doc<"requests">): "nouveau" | "validation" | "planifie" 
 export const stats = query({
   args: { type: v.optional(REQUEST_TYPE) },
   handler: async (ctx, { type }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "dashboard", "read");
     const all = await ctx.db.query("requests").collect();
     const requests = type ? all.filter((r) => r.type === type) : all;
 

@@ -1,11 +1,11 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { customerFullName, requireStaff } from "./lib";
+import { customerFullName, requireCrmPermission } from "./lib";
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "equipe", "read");
     return await ctx.db.query("teamMembers").order("desc").collect();
   },
 });
@@ -18,7 +18,7 @@ export const create = mutation({
     site: v.optional(v.union(v.literal("60"), v.literal("76"))),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "equipe", "create");
     return await ctx.db.insert("teamMembers", {
       ...args,
       active: true,
@@ -37,7 +37,7 @@ export const update = mutation({
     active: v.boolean(),
   },
   handler: async (ctx, { id, ...rest }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "equipe", "update");
     await ctx.db.patch(id, rest);
   },
 });
@@ -45,7 +45,7 @@ export const update = mutation({
 export const get = query({
   args: { id: v.id("teamMembers") },
   handler: async (ctx, { id }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "equipe", "read");
     const member = await ctx.db.get(id);
     if (!member) return null;
 
@@ -70,7 +70,7 @@ export const get = query({
 export const remove = mutation({
   args: { id: v.id("teamMembers") },
   handler: async (ctx, { id }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "equipe", "delete");
     await ctx.db.delete(id);
   },
 });

@@ -2,7 +2,10 @@ import { internalMutation, mutation, query, MutationCtx } from "./_generated/ser
 import { v } from "convex/values";
 import {
   customerFullName,
-  requireStaff,
+  requireAdmin,
+  requireCrmPermission,
+  requireAnyCrmPermission,
+  hasCrmPermission,
   isAerogommageComplete,
   isCollecteComplete,
   isArticleComplete,
@@ -482,7 +485,7 @@ export const list = query({
     type: v.optional(requestType),
   },
   handler: async (ctx, { type }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "read");
     const all = type
       ? await ctx.db
           .query("requests")
@@ -497,7 +500,11 @@ export const list = query({
 export const counts = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    // Badge de navigation : renvoie 0 sans erreur si l'utilisateur n'a pas
+    // accès aux demandes (la query est montée en permanence dans le layout).
+    if (!(await hasCrmPermission(ctx, "demandes", "read"))) {
+      return { complete: 0 };
+    }
     const requests = await ctx.db.query("requests").collect();
     return {
       complete: requests.filter(
@@ -510,7 +517,7 @@ export const counts = query({
 export const get = query({
   args: { id: v.id("requests") },
   handler: async (ctx, { id }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "read");
     const request = await ctx.db.get(id);
     if (!request) return null;
     const photoUrls = await Promise.all(
@@ -563,7 +570,7 @@ export const setOutcome = mutation({
     lostReasonDetails: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, { id, outcome, lostReason, lostReasonDetails }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     const request = await ctx.db.get(id);
     if (!request) throw new Error("Demande introuvable.");
     await ctx.db.patch(id, {
@@ -593,7 +600,7 @@ export const setComplete = mutation({
     complete: v.boolean(),
   },
   handler: async (ctx, { id, complete }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     await ctx.db.patch(id, { complete, updatedAt: Date.now() });
   },
 });
@@ -601,7 +608,7 @@ export const setComplete = mutation({
 export const backfillRequestOrigins = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireAdmin(ctx);
     const requests = await ctx.db.query("requests").collect();
     let updated = 0;
 
@@ -622,7 +629,7 @@ export const backfillRequestOrigins = mutation({
 export const backfillCustomerNameFormatting = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireAdmin(ctx);
 
     let requestsUpdated = 0;
     let usersUpdated = 0;
@@ -704,7 +711,7 @@ export const patchManagement = mutation({
     afterPhotos: v.optional(v.array(v.id("_storage"))),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     const patch: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.site !== undefined) patch.site = args.site;
     if (args.assignedTo !== undefined)
@@ -729,7 +736,7 @@ export const patchManagement = mutation({
 export const schedule = mutation({
   args: { id: v.id("requests"), scheduledDate: v.optional(v.number()) },
   handler: async (ctx, { id, scheduledDate }) => {
-    await requireStaff(ctx);
+    await requireAnyCrmPermission(ctx, [["demandes", "update"], ["calendrier", "update"]]);
     await ctx.db.patch(id, { scheduledDate, updatedAt: Date.now() });
   },
 });
@@ -741,7 +748,7 @@ export const schedule = mutation({
 export const advanceProcess = mutation({
   args: { id: v.id("requests"), by: v.optional(v.string()) },
   handler: async (ctx, { id, by }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     const r = await ctx.db.get(id);
     if (!r) throw new Error("Demande introuvable.");
     const steps = r.processSteps ?? [];
@@ -769,7 +776,7 @@ export const advanceProcess = mutation({
 export const retreatProcess = mutation({
   args: { id: v.id("requests") },
   handler: async (ctx, { id }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     const r = await ctx.db.get(id);
     if (!r) throw new Error("Demande introuvable.");
     const current = r.completedSteps ?? 0;
@@ -799,7 +806,7 @@ export const addProcessNote = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, { id, step, body, by }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     const request = await ctx.db.get(id);
     if (!request) throw new Error("Demande introuvable.");
     if (step < 0 || step >= request.processSteps.length) {
@@ -830,7 +837,7 @@ export const addProcessNote = mutation({
 export const setCollecteType = mutation({
   args: { id: v.id("requests"), collecteType },
   handler: async (ctx, { id, collecteType: ct }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     const r = await ctx.db.get(id);
     if (!r) throw new Error("Demande introuvable.");
     if (r.type !== "collecte") throw new Error("Type de demande invalide.");
@@ -850,7 +857,7 @@ export const setCollecteType = mutation({
 export const updateCustomer = mutation({
   args: { id: v.id("requests"), customer: customerArg },
   handler: async (ctx, { id, customer }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "update");
     await ctx.db.patch(id, { customer: normalizeCustomer(customer), updatedAt: Date.now() });
   },
 });
@@ -905,7 +912,7 @@ export const createInternal = mutation({
     articleId: v.optional(v.id("articles")),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "demandes", "create");
     args = { ...args, customer: normalizeCustomer(args.customer) };
     const now = Date.now();
     const reference = await generateReference(ctx);
@@ -995,7 +1002,7 @@ export const createInternal = mutation({
 export const scheduled = query({
   args: { from: v.number(), to: v.number() },
   handler: async (ctx, { from, to }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "calendrier", "read");
     const requests = await ctx.db
       .query("requests")
       .withIndex("by_scheduledDate", (q) =>

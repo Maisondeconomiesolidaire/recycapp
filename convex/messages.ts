@@ -1,21 +1,13 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { customerFullName, isStaffIdentity, requireStaff, requireUser, titleCaseName } from "./lib";
+import { mutation, query } from "./_generated/server";
+import {
+  customerFullName,
+  hasCrmPermission,
+  requireCrmPermission,
+  requireRequestParticipant,
+  titleCaseName,
+} from "./lib";
 import type { Doc, Id } from "./_generated/dataModel";
-
-async function loadRequestForParticipant(
-  ctx: QueryCtx | MutationCtx,
-  requestId: Id<"requests">,
-) {
-  const identity = await requireUser(ctx);
-  const request = await ctx.db.get(requestId);
-  if (!request) throw new Error("Demande introuvable.");
-  const staff = isStaffIdentity(identity);
-  if (!staff && request.userId !== identity.subject) {
-    throw new Error("Accès refusé à cette conversation.");
-  }
-  return { identity, request, staff };
-}
 
 function serializeMessage(message: Doc<"messages">) {
   return {
@@ -39,7 +31,8 @@ export const listForRequest = query({
     if (!identity) return [];
     const request = await ctx.db.get(requestId);
     if (!request) return [];
-    if (!isStaffIdentity(identity) && request.userId !== identity.subject) return [];
+    const staff = await hasCrmPermission(ctx, "messages", "read");
+    if (!staff && request.userId !== identity.subject) return [];
 
     const messages = await ctx.db
       .query("messages")
@@ -54,7 +47,12 @@ export const sendMessage = mutation({
   handler: async (ctx, { requestId, body }) => {
     const trimmed = body.trim();
     if (!trimmed) throw new Error("Message vide.");
-    const { identity, request, staff } = await loadRequestForParticipant(ctx, requestId);
+    const { identity, request, staff } = await requireRequestParticipant(
+      ctx,
+      requestId,
+      "messages",
+      "reply",
+    );
 
     let senderName: string;
     if (staff) {
@@ -104,7 +102,7 @@ export const sendMessage = mutation({
 export const markRead = mutation({
   args: { requestId: v.id("requests") },
   handler: async (ctx, { requestId }) => {
-    const { staff } = await loadRequestForParticipant(ctx, requestId);
+    const { staff } = await requireRequestParticipant(ctx, requestId, "messages", "read");
     const now = Date.now();
     const messages = await ctx.db
       .query("messages")
@@ -151,7 +149,7 @@ export const myUnreadCount = query({
 export const listConversations = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "messages", "read");
     const messages = await ctx.db.query("messages").withIndex("by_createdAt").collect();
 
     const byRequest = new Map<
@@ -213,7 +211,8 @@ export const listConversations = query({
 export const staffUnreadCount = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    // Badge permanent → 0 sans erreur si pas d'accès messages.
+    if (!(await hasCrmPermission(ctx, "messages", "read"))) return 0;
     const messages = await ctx.db.query("messages").withIndex("by_createdAt").collect();
     return messages.filter((m) => m.senderRole === "client" && !m.readByStaffAt).length;
   },
@@ -223,7 +222,7 @@ export const staffUnreadCount = query({
 export const getConversationContext = query({
   args: { requestId: v.id("requests") },
   handler: async (ctx, { requestId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "messages", "read");
     const request = await ctx.db.get(requestId);
     if (!request) return null;
     const c = request.customer;

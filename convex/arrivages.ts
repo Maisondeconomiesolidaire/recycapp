@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireStaff } from "./lib";
+import { requireCrmPermission } from "./lib";
 
 const originValidator = v.union(
   v.literal("decheterie"),
@@ -19,7 +19,7 @@ export const createArrivage = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "create");
     return await ctx.db.insert("arrivages", {
       ...args,
       status: "open",
@@ -31,14 +31,14 @@ export const createArrivage = mutation({
 export const closeArrivage = mutation({
   args: { arrivageId: v.id("arrivages") },
   handler: async (ctx, { arrivageId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "update");
     await ctx.db.patch(arrivageId, { status: "closed" });
   },
 });
 
 export const listOpenArrivages = query({
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
     return await ctx.db.query("arrivages").withIndex("by_status", (q) => q.eq("status", "open")).order("desc").collect();
   },
 });
@@ -46,7 +46,7 @@ export const listOpenArrivages = query({
 export const getArrivageWithItems = query({
   args: { arrivageId: v.id("arrivages") },
   handler: async (ctx, { arrivageId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
     const arrivage = await ctx.db.get(arrivageId);
     if (!arrivage) return null;
     const items = await ctx.db
@@ -89,7 +89,7 @@ const itemArgs = {
 export const addItem = mutation({
   args: itemArgs,
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "create");
     const reference = makeReference(args.category);
 
     const itemId = await ctx.db.insert("arrivageItems", {
@@ -111,7 +111,7 @@ export const promoteToArticle = mutation({
     condition: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "create");
     const item = await ctx.db.get(args.itemId);
     if (!item) throw new Error("Item introuvable");
     if (item.articleId) throw new Error("Déjà promu en boutique");
@@ -140,7 +140,7 @@ export const promoteToArticle = mutation({
 export const removeItem = mutation({
   args: { itemId: v.id("arrivageItems") },
   handler: async (ctx, { itemId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "delete");
     const item = await ctx.db.get(itemId);
     if (!item) return;
     await ctx.db.delete(itemId);
@@ -162,7 +162,7 @@ export const createDepot = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "create");
     const all = await ctx.db.query("depots").collect();
     const depotNumber = all.length + 1;
     return await ctx.db.insert("depots", {
@@ -176,7 +176,7 @@ export const createDepot = mutation({
 
 export const listPendingDepots = query({
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
     const depots = await ctx.db
       .query("depots")
       .filter((q) => q.neq(q.field("status"), "closed"))
@@ -200,7 +200,7 @@ export const listPendingDepots = query({
 export const getDepotWithItems = query({
   args: { depotId: v.id("depots") },
   handler: async (ctx, { depotId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
     const depot = await ctx.db.get(depotId);
     if (!depot) return null;
     const items = await ctx.db
@@ -215,7 +215,7 @@ export const getDepotWithItems = query({
 export const closeDepot = mutation({
   args: { depotId: v.id("depots") },
   handler: async (ctx, { depotId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "update");
     await ctx.db.patch(depotId, { status: "closed", closedAt: Date.now() });
   },
 });
@@ -228,7 +228,7 @@ export const listHistory = query({
     endDate: v.number(),
   },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
     const arrivages = await ctx.db
       .query("arrivages")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -264,7 +264,7 @@ export const historyStats = query({
     endDate: v.number(),
   },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
 
     const items = await ctx.db
       .query("arrivageItems")

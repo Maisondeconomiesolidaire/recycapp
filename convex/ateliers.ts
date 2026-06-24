@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireStaff } from "./lib";
+import { requireCrmPermission } from "./lib";
 import type { Id } from "./_generated/dataModel";
 
 export const createSession = mutation({
@@ -12,7 +12,7 @@ export const createSession = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "create");
     const article = await ctx.db.get(args.articleId);
     if (!article) throw new Error("Article introuvable");
 
@@ -36,7 +36,7 @@ export const terminateSession = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, { sessionId, price, notes }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "update");
     const session = await ctx.db.get(sessionId);
     if (!session) throw new Error("Session introuvable");
 
@@ -57,7 +57,7 @@ export const terminateSession = mutation({
 export const listSessions = query({
   args: { status: v.optional(v.union(v.literal("en_cours"), v.literal("termine"))) },
   handler: async (ctx, { status }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
     const sessions = status
       ? await ctx.db.query("atelierSessions").withIndex("by_status", (q) => q.eq("status", status)).order("desc").collect()
       : await ctx.db.query("atelierSessions").order("desc").collect();
@@ -83,7 +83,7 @@ export const listSessions = query({
 export const getArticleForAtelier = query({
   args: { reference: v.string() },
   handler: async (ctx, { reference }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "ateliers", "read");
     const articles = await ctx.db.query("articles").collect();
     const found = articles.find(
       (a) =>

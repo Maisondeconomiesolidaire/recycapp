@@ -54,6 +54,21 @@ function allowedEmailsFromEnv(name: string) {
     .filter(Boolean);
 }
 
+function hasDb(ctx: QueryCtx | MutationCtx | ActionCtx): ctx is QueryCtx | MutationCtx {
+  return "db" in ctx;
+}
+
+async function getActiveCrmPermissionRecord(
+  ctx: QueryCtx | MutationCtx,
+  email: string,
+) {
+  const record = await ctx.db
+    .query("crmPermissions")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .unique();
+  return record?.active ? record : null;
+}
+
 /**
  * Détermine si une identité Clerk correspond à un membre du staff.
  *
@@ -86,10 +101,15 @@ export function isAdminIdentity(identity: UserIdentity): boolean {
 /** Vérifie qu'une session Clerk *staff* est présente (CRM). */
 export async function requireStaff(ctx: QueryCtx | MutationCtx | ActionCtx) {
   const identity = await requireUser(ctx);
-  if (!isStaffIdentity(identity)) {
-    throw new Error("Accès réservé au personnel.");
+  if (isStaffIdentity(identity)) return identity;
+
+  const email = identity.email?.trim().toLowerCase();
+  if (email && hasDb(ctx)) {
+    const record = await getActiveCrmPermissionRecord(ctx, email);
+    if (record) return identity;
   }
-  return identity;
+
+  throw new Error("Accès réservé au personnel.");
 }
 
 /** Vérifie qu'une session Clerk admin est présente. */
@@ -118,33 +138,30 @@ export async function getCrmAccessForIdentity(
   ctx: QueryCtx | MutationCtx,
   identity: UserIdentity,
 ) {
-  const staff = isStaffIdentity(identity);
   const admin = isAdminIdentity(identity);
   const email = identity.email?.trim().toLowerCase() ?? null;
 
-  if (!staff) {
-    return { staff: false, admin: false, email, bootstrapMode: false, grants: [] };
-  }
-
   if (admin) {
     return { staff: true, admin: true, email, bootstrapMode: false, grants: [] };
+  }
+
+  const record = email ? await getActiveCrmPermissionRecord(ctx, email) : null;
+  const staff = isStaffIdentity(identity) || Boolean(record);
+
+  if (!staff) {
+    return { staff: false, admin: false, email, bootstrapMode: false, grants: [] };
   }
 
   if (!email) {
     return { staff: true, admin: false, email, bootstrapMode: false, grants: [] };
   }
 
-  const record = await ctx.db
-    .query("crmPermissions")
-    .withIndex("by_email", (q) => q.eq("email", email))
-    .unique();
-
   return {
     staff: true,
     admin: false,
     email,
     bootstrapMode: false,
-    grants: record?.active ? record.grants : [],
+    grants: record?.grants ?? [],
   };
 }
 
@@ -170,6 +187,58 @@ export async function requireCrmPermission(
   if (!allowed) {
     throw new Error("Accès CRM insuffisant.");
   }
+}
+
+/**
+ * Vérification pure (sans ctx) à partir d'un objet d'accès — utile dans les
+ * actions, qui n'ont pas accès à la base et passent par `permissions.myAccess`.
+ */
+export function accessAllows(
+  access: {
+    isAdmin?: boolean;
+    bootstrapMode?: boolean;
+    grants: Array<{ pageKey: string; actions: string[] }>;
+  },
+  pageKey: string,
+  action: CrmPermissionAction = "read",
+) {
+  if (access.isAdmin || access.bootstrapMode) return true;
+  return Boolean(
+    access.grants.find((grant) => grant.pageKey === pageKey)?.actions.includes(action),
+  );
+}
+
+/** Autorise si l'utilisateur détient au moins une des permissions listées. */
+export async function requireAnyCrmPermission(
+  ctx: QueryCtx | MutationCtx,
+  checks: Array<[string, CrmPermissionAction]>,
+) {
+  for (const [pageKey, action] of checks) {
+    if (await hasCrmPermission(ctx, pageKey, action)) return;
+  }
+  throw new Error("Accès CRM insuffisant.");
+}
+
+/**
+ * Accès à une ressource rattachée à une demande (messagerie, documents…) :
+ * autorisé si l'utilisateur a la permission CRM requise (= staff habilité)
+ * OU s'il est le client propriétaire de la demande. Sinon, refus.
+ */
+export async function requireRequestParticipant(
+  ctx: QueryCtx | MutationCtx,
+  requestId: import("./_generated/dataModel").Id<"requests">,
+  pageKey: string,
+  action: CrmPermissionAction = "read",
+) {
+  const identity = await requireUser(ctx);
+  const request = await ctx.db.get(requestId);
+  if (!request) throw new Error("Demande introuvable.");
+  const staff = await hasCrmPermission(ctx, pageKey, action);
+  if (staff) return { identity, request, staff: true as const };
+  if (request.userId && request.userId === identity.subject) {
+    return { identity, request, staff: false as const };
+  }
+  throw new Error("Accès refusé à cette demande.");
 }
 
 type AerogommageItemInput = {

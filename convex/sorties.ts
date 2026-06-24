@@ -8,8 +8,8 @@ import {
   query,
   type MutationCtx,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
-import { customerFullName, requireStaff } from "./lib";
+import { api, internal } from "./_generated/api";
+import { accessAllows, customerFullName, requireCrmPermission } from "./lib";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const TOURNEE_DEPOT_ADDRESS = "4 rue de la prairie 60650 Lachapelle-aux-Pots";
@@ -184,7 +184,7 @@ export const createSortieHorsMagasin = mutation({
     date: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "checkout");
     if (args.articleId) {
       await ctx.db.patch(args.articleId, { status: "vendu" });
     }
@@ -198,7 +198,7 @@ export const createSortieHorsMagasin = mutation({
 export const listSortiesHorsMagasin = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "read");
     return await ctx.db
       .query("sortiesHorsMagasin")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -220,7 +220,7 @@ export const createSortieMatiere = mutation({
     date: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "checkout");
     return await ctx.db.insert("sortiesMatieres", {
       ...args,
       createdAt: Date.now(),
@@ -231,7 +231,7 @@ export const createSortieMatiere = mutation({
 export const listSortiesMatieres = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "read");
     return await ctx.db
       .query("sortiesMatieres")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -243,7 +243,7 @@ export const listSortiesMatieres = query({
 export const sortiesStats = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "read");
     const [hm, mat] = await Promise.all([
       ctx.db.query("sortiesHorsMagasin").withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate)).collect(),
       ctx.db.query("sortiesMatieres").withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate)).collect(),
@@ -278,7 +278,7 @@ export const createTournee = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "create");
     const tourneeId = await ctx.db.insert("tournees", {
       ...args,
       depotAddress: TOURNEE_DEPOT_ADDRESS,
@@ -400,7 +400,11 @@ function limitRouteCoordinates(
 export const optimizeTournee = action({
   args: { tourneeId: v.id("tournees") },
   handler: async (ctx, { tourneeId }) => {
-    await requireStaff(ctx);
+    // Action (sans db) : on vérifie la permission via la query d'accès.
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "tournees", "update")) {
+      throw new Error("Accès CRM insuffisant.");
+    }
     const accessToken = env.MAPBOX_ACCESS_TOKEN;
     if (!accessToken) {
       throw new Error("MAPBOX_ACCESS_TOKEN n'est pas configurée côté Convex.");
@@ -515,7 +519,7 @@ export const updateTourneeStop = mutation({
     status: v.union(v.literal("prevu"), v.literal("effectue"), v.literal("annule")),
   },
   handler: async (ctx, { tourneeId, stopOrder, status }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "update");
     const tournee = await ctx.db.get(tourneeId);
     if (!tournee) throw new Error("Tournée introuvable");
     const stops = tournee.stops.map((s) =>
@@ -535,7 +539,7 @@ export const updateTourneeStatus = mutation({
     status: v.union(v.literal("planifiee"), v.literal("en_cours"), v.literal("terminee"), v.literal("annulee")),
   },
   handler: async (ctx, { tourneeId, status }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "update");
     const tournee = await ctx.db.get(tourneeId);
     if (!tournee) throw new Error("Tournée introuvable");
     const resolvedStops = await syncTrackingLinks(ctx, tourneeId, tournee.stops);
@@ -546,7 +550,7 @@ export const updateTourneeStatus = mutation({
 export const deleteTournee = mutation({
   args: { tourneeId: v.id("tournees") },
   handler: async (ctx, { tourneeId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "delete");
     const tournee = await ctx.db.get(tourneeId);
     if (!tournee) return;
 
@@ -575,7 +579,7 @@ export const updateTourneeVehicleLocation = mutation({
     speedKmh: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "start");
     const existing = await ctx.db
       .query("tourneeVehicleLocations")
       .withIndex("by_tourneeId", (q) => q.eq("tourneeId", args.tourneeId))
@@ -599,7 +603,7 @@ export const updateTourneeVehicleLocation = mutation({
 export const listTourneeTrackingLinks = query({
   args: { tourneeId: v.id("tournees") },
   handler: async (ctx, { tourneeId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "read");
     const links = await ctx.db
       .query("tourneeTrackingLinks")
       .withIndex("by_tourneeId", (q) => q.eq("tourneeId", tourneeId))
@@ -611,7 +615,7 @@ export const listTourneeTrackingLinks = query({
 export const listTrackingLinksByTournees = query({
   args: { tourneeIds: v.array(v.id("tournees")) },
   handler: async (ctx, { tourneeIds }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "read");
     return await Promise.all(
       tourneeIds.map(async (tourneeId) => {
         const links = await ctx.db
@@ -714,7 +718,7 @@ export const getPublicTrackingByToken = query({
 export const listTournees = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "read");
     const tournees = await ctx.db
       .query("tournees")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -757,7 +761,7 @@ export const listTournees = query({
 export const getTournee = query({
   args: { tourneeId: v.id("tournees") },
   handler: async (ctx, { tourneeId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "read");
     const tournee = await ctx.db.get(tourneeId);
     if (!tournee) return null;
     const driver = tournee.driverId ? await ctx.db.get(tournee.driverId) : null;
@@ -793,7 +797,7 @@ export const getTournee = query({
 
 export const listUpcomingCollectes = query({
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "tournees", "read");
     return await ctx.db
       .query("requests")
       .filter((q) => q.eq(q.field("type"), "collecte"))

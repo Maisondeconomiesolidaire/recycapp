@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { titleCaseName, requireStaff } from "./lib";
+import { titleCaseName, requireCrmPermission, hasCrmPermission } from "./lib";
 import type { Doc } from "./_generated/dataModel";
 
 function currentProcessStep(request: Doc<"requests">) {
@@ -95,7 +95,7 @@ function requestPreview(request: Doc<"requests">) {
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "notifications", "read");
     const notifications = await ctx.db
       .query("notifications")
       .withIndex("by_createdAt")
@@ -152,7 +152,8 @@ export const list = query({
 export const unreadCount = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    // Badge permanent → 0 sans erreur si pas d'accès notifications.
+    if (!(await hasCrmPermission(ctx, "notifications", "read"))) return 0;
     const unread = await ctx.db
       .query("notifications")
       .withIndex("by_read_and_createdAt", (q) => q.eq("read", false))
@@ -164,7 +165,7 @@ export const unreadCount = query({
 export const markAllRead = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "notifications", "manage");
     const unread = await ctx.db
       .query("notifications")
       .withIndex("by_read_and_createdAt", (q) => q.eq("read", false))

@@ -3,6 +3,7 @@ import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
+import { accessAllows, requireCrmPermission } from "./lib";
 
 const CATEGORIES = {
   "Maison et Jardin": [
@@ -355,8 +356,10 @@ function sanitizeLotGroups(
 export const analyzePotentialLots = action({
   args: {},
   handler: async (ctx): Promise<LotAnalysisResult> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Non authentifié.");
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "articles", "analyze")) {
+      throw new Error("Accès CRM insuffisant.");
+    }
 
     const articles = await ctx.runQuery(api.articles.listForLotAnalysis, {});
     if (articles.length < 2) return { groups: [] };
@@ -429,8 +432,10 @@ Règles IMPÉRATIVES :
 export const analyzeArticleImage = action({
   args: { storageId: v.id("_storage"), extraDetails: v.optional(v.string()) },
   handler: async (ctx, { storageId, extraDetails }): Promise<ArticleAIAnalysis> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Non authentifié.");
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "articles", "analyze")) {
+      throw new Error("Accès CRM insuffisant.");
+    }
 
     const details = extraDetails?.trim();
     const detailsBlock = details
@@ -672,8 +677,7 @@ export const createBgJob = mutation({
     articleTitle: v.optional(v.string()),
   },
   handler: async (ctx, { storageIds, backgroundPrompt, articleTitle }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Non authentifié.");
+    await requireCrmPermission(ctx, "articles", "analyze");
 
     const jobId = await ctx.db.insert("bgJobs", {
       status: "pending",
@@ -690,6 +694,7 @@ export const createBgJob = mutation({
 export const getBgJob = query({
   args: { jobId: v.id("bgJobs") },
   handler: async (ctx, { jobId }) => {
+    await requireCrmPermission(ctx, "articles", "analyze");
     return ctx.db.get(jobId);
   },
 });

@@ -5,7 +5,7 @@ import {
   query,
   type MutationCtx,
 } from "./_generated/server";
-import { requireStaff } from "./lib";
+import { requireCrmPermission } from "./lib";
 import type { Id } from "./_generated/dataModel";
 
 const saleItemValidator = v.object({
@@ -73,7 +73,7 @@ export const createVente = mutation({
     amountTendered: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "checkout");
     return await recordVente(ctx, args);
   },
 });
@@ -81,7 +81,7 @@ export const createVente = mutation({
 export const listVentes = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "read");
     return await ctx.db
       .query("ventes")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -93,7 +93,7 @@ export const listVentes = query({
 export const ventesStats = query({
   args: { startDate: v.number(), endDate: v.number() },
   handler: async (ctx, { startDate, endDate }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "read");
     const ventes = await ctx.db
       .query("ventes")
       .withIndex("by_date", (q) => q.gte("date", startDate).lte("date", endDate))
@@ -118,7 +118,7 @@ export const ventesStats = query({
 export const getArticleByReference = query({
   args: { reference: v.string() },
   handler: async (ctx, { reference }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "read");
     // Try internalReference index first, then gdrReference
     let found = await ctx.db
       .query("articles")
@@ -141,7 +141,7 @@ export const getArticleByReference = query({
 export const searchArticlesForSale = query({
   args: { searchText: v.string() },
   handler: async (ctx, { searchText }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "caisse", "read");
     const normalized = searchText.trim().toLowerCase();
     if (normalized.length < 2) {
       return [];

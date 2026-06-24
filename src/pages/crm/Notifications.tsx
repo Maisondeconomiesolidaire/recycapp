@@ -15,6 +15,8 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { TypeBadge } from "../../components/crm/TypeBadge";
 import { RequestDrawer } from "../../components/crm/RequestDrawer";
+import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
+import { canAccess } from "../../lib/crmPermissions";
 import { RequestOriginBadge } from "../../components/crm/RequestOriginBadge";
 import { formatDateTime, formatRelative } from "../../lib/format";
 import { cn } from "../../lib/cn";
@@ -28,6 +30,9 @@ export function Notifications() {
   const unreadCount = useQuery(api.notifications.unreadCount);
   const markAllRead = useMutation(api.notifications.markAllRead);
   const [openRequestId, setOpenRequestId] = useState<Id<"requests"> | null>(null);
+  const access = useCrmAccess();
+  // L'ouverture de la demande depuis une notification exige l'accès Demandes.
+  const canOpenRequest = canAccess(access, "demandes", "read");
 
   useEffect(() => {
     if (unreadCount === undefined || unreadCount === 0) return;
@@ -71,7 +76,7 @@ export function Notifications() {
                 <NotificationCard
                   key={notification._id}
                   notification={notification}
-                  onOpenRequest={setOpenRequestId}
+                  onOpenRequest={canOpenRequest ? setOpenRequestId : undefined}
                 />
               ))}
             </div>
@@ -92,13 +97,14 @@ function NotificationCard({
   onOpenRequest,
 }: {
   notification: NotificationDoc;
-  onOpenRequest: (id: Id<"requests">) => void;
+  onOpenRequest?: (id: Id<"requests">) => void;
 }) {
   return (
     <button
       type="button"
-      onClick={() => onOpenRequest(notification.requestId)}
-      className="group flex w-full items-start justify-between gap-4 rounded-[24px] border border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-surface)_92%,transparent)] p-4 text-left shadow-[0_12px_32px_rgba(0,0,0,0.12)] transition hover:border-[var(--crm-border-strong)] hover:bg-[var(--crm-surface-2)]"
+      onClick={onOpenRequest ? () => onOpenRequest(notification.requestId) : undefined}
+      disabled={!onOpenRequest}
+      className="group flex w-full items-start justify-between gap-4 rounded-[24px] border border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-surface)_92%,transparent)] p-4 text-left shadow-[0_12px_32px_rgba(0,0,0,0.12)] transition enabled:hover:border-[var(--crm-border-strong)] enabled:hover:bg-[var(--crm-surface-2)] disabled:cursor-default"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">

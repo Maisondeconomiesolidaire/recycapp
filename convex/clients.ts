@@ -1,6 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireStaff, normalizeCustomer, titleCaseName } from "./lib";
+import { requireCrmPermission, normalizeCustomer, titleCaseName } from "./lib";
 import { RequestType } from "./processes";
 
 type ClientRow = {
@@ -23,7 +23,7 @@ type ClientRow = {
 export const list = query({
   args: {},
   handler: async (ctx): Promise<ClientRow[]> => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "clients", "read");
     const requests = await ctx.db.query("requests").order("desc").collect();
     const map = new Map<string, ClientRow>();
 
@@ -65,7 +65,7 @@ export const list = query({
 export const get = query({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "clients", "read");
     const target = email.trim().toLowerCase();
     const all = await ctx.db.query("requests").order("desc").collect();
     const requests = all.filter(

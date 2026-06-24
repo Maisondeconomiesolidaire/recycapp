@@ -28,6 +28,8 @@ import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { UnderlineTabs } from "../ui/UnderlineTabs";
 import { MessageThread } from "../MessageThread";
 import { RequestDocumentsPanel } from "../RequestDocumentsPanel";
+import { useCrmAccess } from "./RequireCrmPermission";
+import { canAccess } from "../../lib/crmPermissions";
 import { Modal } from "../ui/Modal";
 import { TypeBadge } from "./TypeBadge";
 import { PhoneInput } from "../ui/PhoneInput";
@@ -82,6 +84,8 @@ export function RequestDrawer({
   );
   const setOutcome = useMutation(api.requests.setOutcome);
   const setComplete = useMutation(api.requests.setComplete);
+  const access = useCrmAccess();
+  const canUpdate = canAccess(access, "demandes", "update");
   const [tab, setTab] = useState<Tab>("demande");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [lostReason, setLostReason] = useState<LostReasonValue | "">("");
@@ -147,7 +151,7 @@ export function RequestDrawer({
               </span>
             </div>
 
-            <div className="ml-auto flex items-center gap-2 pl-3">
+            <div className={cn("ml-auto flex items-center gap-2 pl-3", !canUpdate && "hidden")}>
               <Checkbox
                 checked={request.complete}
                 onChange={(e) =>
@@ -208,7 +212,11 @@ export function RequestDrawer({
 
           {activeTab === "demande" && <DemandeTab request={request} />}
           {activeTab === "gestion" && (
-            <GestionTab request={request} collecteUndefined={!!collecteUndefined} />
+            <GestionTab
+              request={request}
+              collecteUndefined={!!collecteUndefined}
+              canUpdate={canUpdate}
+            />
           )}
           {activeTab === "calculDevis" && request.type === "aerogommage" && (
             <AeroQuoteCalculator key={request._id} request={request} />
@@ -220,7 +228,7 @@ export function RequestDrawer({
             <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
           )}
           {activeTab === "client" && (
-            <ClientTab key={request._id} request={request} />
+            <ClientTab key={request._id} request={request} canUpdate={canUpdate} />
           )}
           {activeTab === "messages" && (
             <div className="h-[60vh]">
@@ -570,9 +578,11 @@ function PhotoGrid({
 function GestionTab({
   request,
   collecteUndefined,
+  canUpdate,
 }: {
   request: RequestDoc;
   collecteUndefined: boolean;
+  canUpdate: boolean;
 }) {
   const { user } = useUser();
   const advance = useMutation(api.requests.advanceProcess);
@@ -632,7 +642,15 @@ function GestionTab({
   }
 
   return (
-    <div className="space-y-6">
+    <fieldset
+      disabled={!canUpdate}
+      className="space-y-6 border-0 p-0 disabled:opacity-95"
+    >
+      {!canUpdate && (
+        <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-xs text-zinc-400">
+          Lecture seule — vous n'avez pas la permission de modifier cette demande.
+        </p>
+      )}
       {/* Sous-type de collecte */}
       {request.type === "collecte" && (
         <section>
@@ -844,13 +862,13 @@ function GestionTab({
           </div>
         </div>
       </section>
-    </div>
+    </fieldset>
   );
 }
 
 /* ------------------------------------------------------------------- Client */
 
-function ClientTab({ request }: { request: RequestDoc }) {
+function ClientTab({ request, canUpdate }: { request: RequestDoc; canUpdate: boolean }) {
   const update = useMutation(api.requests.updateCustomer);
   const [c, setC] = useState({
     firstName: request.customer.firstName,
@@ -891,7 +909,12 @@ function ClientTab({ request }: { request: RequestDoc }) {
   }
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={!canUpdate} className="space-y-5 border-0 p-0">
+      {!canUpdate && (
+        <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-xs text-zinc-400">
+          Lecture seule — vous n'avez pas la permission de modifier le client.
+        </p>
+      )}
       <section>
         <SectionTitle>Coordonnées</SectionTitle>
         <div className="grid grid-cols-2 gap-3">
@@ -948,7 +971,7 @@ function ClientTab({ request }: { request: RequestDoc }) {
           </span>
         )}
       </div>
-    </div>
+    </fieldset>
   );
 }
 

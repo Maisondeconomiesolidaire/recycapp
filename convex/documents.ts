@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { isStaffIdentity, requireStaff, requireUser } from "./lib";
+import {
+  hasCrmPermission,
+  requireCrmPermission,
+  requireRequestParticipant,
+} from "./lib";
 import type { Id } from "./_generated/dataModel";
 
 const docType = v.union(
@@ -15,20 +19,6 @@ const docType = v.union(
 
 // ─── Documents rattachés à une demande ────────────────────────────────────────
 
-async function ensureRequestAccess(
-  ctx: QueryCtx | MutationCtx,
-  requestId: Id<"requests">,
-) {
-  const identity = await requireUser(ctx);
-  const request = await ctx.db.get(requestId);
-  if (!request) throw new Error("Demande introuvable.");
-  const staff = isStaffIdentity(identity);
-  if (!staff && request.userId !== identity.subject) {
-    throw new Error("Accès refusé à cette demande.");
-  }
-  return { staff };
-}
-
 export const listForRequest = query({
   args: { requestId: v.id("requests") },
   handler: async (ctx, { requestId }) => {
@@ -36,7 +26,7 @@ export const listForRequest = query({
     if (!identity) return [];
     const request = await ctx.db.get(requestId);
     if (!request) return [];
-    const staff = isStaffIdentity(identity);
+    const staff = await hasCrmPermission(ctx, "demandes", "read");
     if (!staff && request.userId !== identity.subject) return [];
 
     const docs = await ctx.db
@@ -69,7 +59,7 @@ export const addToRequest = mutation({
     mimeType: v.optional(v.string()),
   },
   handler: async (ctx, { requestId, storageId, name, docType: type, mimeType }) => {
-    const { staff } = await ensureRequestAccess(ctx, requestId);
+    const { staff } = await requireRequestParticipant(ctx, requestId, "demandes", "update");
     return await ctx.db.insert("requestDocuments", {
       requestId,
       storageId,
@@ -87,7 +77,7 @@ export const removeFromRequest = mutation({
   handler: async (ctx, { documentId }) => {
     const doc = await ctx.db.get(documentId);
     if (!doc) return;
-    const { staff } = await ensureRequestAccess(ctx, doc.requestId);
+    const { staff } = await requireRequestParticipant(ctx, doc.requestId, "demandes", "update");
     if (!staff && doc.uploadedByRole !== "client") {
       throw new Error("Seule l'équipe peut supprimer ce document.");
     }
@@ -114,7 +104,7 @@ async function buildBreadcrumb(ctx: QueryCtx, folderId?: Id<"documentFolders">) 
 export const listFolder = query({
   args: { folderId: v.optional(v.id("documentFolders")) },
   handler: async (ctx, { folderId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "read");
 
     const folders = await ctx.db
       .query("documentFolders")
@@ -150,7 +140,7 @@ export const listFolder = query({
 export const listTree = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "read");
     return await ctx.db.query("documentFolders").take(500);
   },
 });
@@ -158,7 +148,7 @@ export const listTree = query({
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "read");
     const folders = await ctx.db.query("documentFolders").take(500);
     const files = await ctx.db.query("documents").take(1000);
     return {
@@ -181,7 +171,7 @@ export const listAll = query({
 export const createFolder = mutation({
   args: { name: v.string(), parentId: v.optional(v.id("documentFolders")) },
   handler: async (ctx, { name, parentId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "create");
     return await ctx.db.insert("documentFolders", {
       name: name.trim() || "Nouveau dossier",
       parentId,
@@ -193,7 +183,7 @@ export const createFolder = mutation({
 export const renameFolder = mutation({
   args: { folderId: v.id("documentFolders"), name: v.string() },
   handler: async (ctx, { folderId, name }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "update");
     await ctx.db.patch(folderId, { name: name.trim() || "Dossier" });
   },
 });
@@ -220,7 +210,7 @@ async function deleteFolderRecursive(ctx: MutationCtx, folderId: Id<"documentFol
 export const deleteFolder = mutation({
   args: { folderId: v.id("documentFolders") },
   handler: async (ctx, { folderId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "delete");
     await deleteFolderRecursive(ctx, folderId);
   },
 });
@@ -234,7 +224,7 @@ export const addFile = mutation({
     size: v.optional(v.number()),
   },
   handler: async (ctx, { name, folderId, storageId, mimeType, size }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "create");
     return await ctx.db.insert("documents", {
       name: name.trim() || "Document",
       folderId,
@@ -249,7 +239,7 @@ export const addFile = mutation({
 export const renameFile = mutation({
   args: { documentId: v.id("documents"), name: v.string() },
   handler: async (ctx, { documentId, name }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "update");
     await ctx.db.patch(documentId, { name: name.trim() || "Document" });
   },
 });
@@ -257,7 +247,7 @@ export const renameFile = mutation({
 export const deleteFile = mutation({
   args: { documentId: v.id("documents") },
   handler: async (ctx, { documentId }) => {
-    await requireStaff(ctx);
+    await requireCrmPermission(ctx, "documents", "delete");
     const doc = await ctx.db.get(documentId);
     if (!doc) return;
     await ctx.storage.delete(doc.storageId).catch(() => {});
