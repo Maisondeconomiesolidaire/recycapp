@@ -119,7 +119,7 @@ export const chat = action({
     }
 
     const snapshotData: AnalysisSnapshot = await ctx.runQuery(api.requestAnalysis.snapshot, {});
-    const model = env.OPENAI_REQUEST_ANALYSIS_MODEL ?? "gpt-5.5";
+    const model = env.OPENAI_REQUEST_ANALYSIS_MODEL ?? "gpt-5.4-mini";
     const compactMessages = messages.slice(-10);
 
     const response = await fetch("https://api.openai.com/v1/responses", {
