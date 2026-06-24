@@ -61,6 +61,24 @@ function responseText(data: {
   );
 }
 
+function compactSnapshot(snapshotData: AnalysisSnapshot): AnalysisSnapshot {
+  const now = Date.now();
+  const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
+  const requests = snapshotData.requests
+    .filter((request) => request.outcome === "open" || request.updatedAt >= ninetyDaysAgo)
+    .sort((a, b) => {
+      const aScore = (a.outcome === "open" ? 1_000_000_000_000 : 0) + a.updatedAt;
+      const bScore = (b.outcome === "open" ? 1_000_000_000_000 : 0) + b.updatedAt;
+      return bScore - aScore;
+    })
+    .slice(0, 120);
+  return {
+    generatedAt: snapshotData.generatedAt,
+    team: snapshotData.team,
+    requests,
+  };
+}
+
 export const snapshot = query({
   args: {},
   handler: async (ctx): Promise<AnalysisSnapshot> => {
@@ -118,7 +136,7 @@ export const chat = action({
       throw new Error("Clé OpenAI non configurée. Ajoutez OPENAI_API_KEY dans les variables Convex.");
     }
 
-    const snapshotData: AnalysisSnapshot = await ctx.runQuery(api.requestAnalysis.snapshot, {});
+    const snapshotData = compactSnapshot(await ctx.runQuery(api.requestAnalysis.snapshot, {}));
     const model = env.OPENAI_REQUEST_ANALYSIS_MODEL ?? "gpt-5.4-mini";
     const compactMessages = messages.slice(-10);
 
@@ -134,12 +152,12 @@ export const chat = action({
           {
             role: "system",
             content:
-              "Tu es l'assistant manager CRM de Recycapp. Analyse les demandes et aide à organiser les collectes, le planning, les encadrants et les priorités. Réponds en français, de façon opérationnelle, concise et actionnable. Quand tu cites une demande, utilise toujours sa référence au format #000123 pour que l'interface puisse la rendre cliquable. Ne prétends jamais avoir modifié les données.",
+              "Tu es l'assistant manager CRM de Recycapp. Analyse les demandes pour aider à organiser collectes, planning, encadrants et priorités. Réponds en français, directement, avec sections courtes et listes actionnables. Limite la première réponse à 450 mots maximum. Quand tu cites une demande, utilise sa référence au format #000123. Ne prétends jamais avoir modifié les données.",
           },
           {
             role: "user",
             content:
-              "Voici le snapshot CRM à analyser. Les dates sont des timestamps Unix en millisecondes. Donne des recommandations concrètes, repère les demandes en attente, les regroupements possibles par date/ville/type, les journées chargées et les assignations.\n\n" +
+              "Snapshot CRM compact. Dates en timestamps Unix millisecondes. Priorise : demandes à planifier, journées chargées, regroupements ville/date/type, assignations, risques, prochaines actions.\n\n" +
               JSON.stringify(snapshotData),
           },
           ...compactMessages.map((message) => ({
@@ -147,8 +165,8 @@ export const chat = action({
             content: message.content,
           })),
         ],
-        reasoning: { effort: "medium" },
-        text: { verbosity: "medium" },
+        reasoning: { effort: "low" },
+        text: { verbosity: "low" },
       }),
     });
 

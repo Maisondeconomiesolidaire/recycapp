@@ -29,7 +29,16 @@ type Tab = "complete" | "incomplete" | "closed";
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  hidden?: boolean;
 };
+
+const ANALYSIS_LOADING_MESSAGES = [
+  "En cours d'analyse par l'assistant IA...",
+  "Je parcours les demandes et les dates...",
+  "Je repère les regroupements possibles...",
+  "Ça ne devrait plus tarder...",
+  "Je prépare les priorités manager...",
+];
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "complete", label: "Demandes complètes" },
@@ -388,6 +397,7 @@ function RequestsAnalysisDrawer({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
 
@@ -409,6 +419,7 @@ function RequestsAnalysisDrawer({
     const first: ChatMessage[] = [
       {
         role: "user",
+        hidden: true,
         content:
           "Fais une analyse manager complète de toutes les demandes : priorités, demandes à planifier, regroupements possibles, journées chargées, encadrants disponibles ou déjà assignés, et prochaines actions concrètes.",
       },
@@ -417,6 +428,17 @@ function RequestsAnalysisDrawer({
     setMessages(first);
     void ask(first);
   }, [open, started]);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingStep(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setLoadingStep((current) => (current + 1) % ANALYSIS_LOADING_MESSAGES.length);
+    }, 2400);
+    return () => window.clearInterval(timer);
+  }, [loading]);
 
   async function submitMessage() {
     const trimmed = input.trim();
@@ -465,21 +487,8 @@ function RequestsAnalysisDrawer({
         </div>
       }
     >
-      <div className="rounded-2xl border border-brand-500/25 bg-brand-500/10 p-4">
-        <p className="text-sm font-semibold text-zinc-100">Chat IA connecté à OpenAI</p>
-        <p className="mt-1 text-xs text-zinc-500">
-          L'assistant lit un snapshot serveur de toutes les demandes CRM autorisées. Les références comme #000123 sont cliquables.
-        </p>
-      </div>
-
       <div className="flex flex-1 flex-col gap-3">
-        {messages.length === 0 && loading && (
-          <div className="flex items-center gap-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-zinc-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Analyse des demandes en cours...
-          </div>
-        )}
-        {messages.map((message, index) => (
+        {messages.filter((message) => !message.hidden).map((message, index) => (
           <ChatBubble
             key={`${message.role}-${index}`}
             message={message}
@@ -487,10 +496,15 @@ function RequestsAnalysisDrawer({
             onOpenRequest={onOpenRequest}
           />
         ))}
-        {loading && messages.length > 0 && (
-          <div className="flex items-center gap-2 text-sm text-zinc-500">
+        {loading && (
+          <div className="flex items-center gap-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-zinc-500">
             <Loader2 className="h-4 w-4 animate-spin" />
-            L'assistant réfléchit...
+            <span
+              key={loadingStep}
+              className="inline-block animate-[crm-text-flip_420ms_cubic-bezier(0.22,1,0.36,1)]"
+            >
+              {ANALYSIS_LOADING_MESSAGES[loadingStep]}
+            </span>
           </div>
         )}
         {error && (
@@ -537,31 +551,105 @@ function LinkedAssistantText({
   requests: Doc<"requests">[];
   onOpenRequest: (id: Id<"requests">) => void;
 }) {
-  const byReference = new Map(requests.map((request) => [request.reference, request]));
-  const lines = text.split("\n");
-  return (
-    <>
-      {lines.map((line, lineIndex) => (
-        <p key={lineIndex} className={lineIndex > 0 ? "mt-2" : undefined}>
-          {line.split(/(#[0-9]{6})/g).map((part, index) => {
-            const reference = part.startsWith("#") ? part.slice(1) : "";
-            const request = reference ? byReference.get(reference) : undefined;
-            if (!request) return <span key={`${part}-${index}`}>{part}</span>;
-            return (
-              <button
-                key={`${part}-${index}`}
-                type="button"
-                onClick={() => onOpenRequest(request._id)}
-                className="mx-0.5 rounded-full border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 text-xs font-bold text-brand-300 transition hover:bg-brand-500/20"
-              >
-                {part}
-              </button>
-            );
-          })}
-        </p>
-      ))}
-    </>
+  const byReference = new Map(
+    requests
+      .filter((request) => Boolean(request.reference))
+      .map((request) => [request.reference as string, request]),
   );
+  const lines = text.split("\n").filter((line) => line.trim() !== "---");
+  return (
+    <div className="space-y-2">
+      {lines.map((line, lineIndex) => (
+        <MarkdownLine
+          key={lineIndex}
+          line={line}
+          byReference={byReference}
+          onOpenRequest={onOpenRequest}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MarkdownLine({
+  line,
+  byReference,
+  onOpenRequest,
+}: {
+  line: string;
+  byReference: Map<string, Doc<"requests">>;
+  onOpenRequest: (id: Id<"requests">) => void;
+}) {
+  const trimmed = line.trim();
+  if (!trimmed) return <div className="h-2" />;
+
+  const heading = trimmed.match(/^(#{1,4})\s*(.*)$/);
+  if (heading) {
+    const level = heading[1].length;
+    const content = heading[2].replace(/^\d+\)\s*/, "");
+    return (
+      <p
+        className={
+          level <= 2
+            ? "pt-2 text-base font-bold text-zinc-100"
+            : "pt-1 text-sm font-bold text-zinc-100"
+        }
+      >
+        {renderInlineMarkdown(content, byReference, onOpenRequest)}
+      </p>
+    );
+  }
+
+  const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+  if (bullet) {
+    return (
+      <div className="flex gap-2">
+        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" />
+        <p className="min-w-0 text-sm leading-6 text-zinc-300">
+          {renderInlineMarkdown(bullet[1], byReference, onOpenRequest)}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-sm leading-6 text-zinc-300">
+      {renderInlineMarkdown(trimmed, byReference, onOpenRequest)}
+    </p>
+  );
+}
+
+function renderInlineMarkdown(
+  text: string,
+  byReference: Map<string, Doc<"requests">>,
+  onOpenRequest: (id: Id<"requests">) => void,
+) {
+  return text.split(/(\*\*[^*]+\*\*|#[0-9A-Za-z]{6})/g).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={`${part}-${index}`} className="font-bold text-zinc-100">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    const reference = part.startsWith("#") ? part.slice(1) : "";
+    const request = reference ? byReference.get(reference) : undefined;
+    if (request) {
+      return (
+        <button
+          key={`${part}-${index}`}
+          type="button"
+          onClick={() => onOpenRequest(request._id)}
+          className="mx-0.5 rounded-full border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 text-xs font-bold text-brand-300 transition hover:bg-brand-500/20"
+        >
+          {part}
+        </button>
+      );
+    }
+
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
 }
 
 function countForTab(requests: Doc<"requests">[], tab: Tab): number {
