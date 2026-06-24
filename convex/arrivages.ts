@@ -430,15 +430,28 @@ export const listExits = query({
     const totalArticles = items.reduce((s, i) => s + i.quantity, 0);
     const totalWeight = items.reduce((s, i) => s + (i.weightKg ?? 0) * i.quantity, 0);
     const byMotif: Record<string, number> = {};
+    const byOrigin: Record<string, number> = {};
+    const byOrientation: Record<string, number> = {};
+    const byCategory: Record<string, number> = {};
     for (const i of items) {
       const m = i.exitMotif ?? "Autre";
       byMotif[m] = (byMotif[m] ?? 0) + i.quantity;
+      byOrigin[i.origin] = (byOrigin[i.origin] ?? 0) + i.quantity;
+      byOrientation[i.orientation] = (byOrientation[i.orientation] ?? 0) + i.quantity;
+      byCategory[i.category] = (byCategory[i.category] ?? 0) + i.quantity;
     }
+    const toEntries = (m: Record<string, number>) =>
+      Object.entries(m)
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count);
 
     return {
       totalArticles,
       totalWeight: Math.round(totalWeight * 10) / 10,
-      byMotif: Object.entries(byMotif).map(([label, count]) => ({ label, count })),
+      byMotif: toEntries(byMotif),
+      byOrigin: toEntries(byOrigin),
+      byOrientation: toEntries(byOrientation),
+      byCategory: toEntries(byCategory),
       recent: items.slice(0, 60).map((i) => ({
         _id: i._id,
         reference: i.reference,

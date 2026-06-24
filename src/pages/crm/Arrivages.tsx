@@ -1,7 +1,7 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { createPortal } from "react-dom";
-import { Plus, Printer, X, Check, Trash2 } from "lucide-react";
+import { BarChart3, Check, PackageCheck, Plus, Printer, Trash2, Weight, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Barcode } from "../../components/ui/Barcode";
@@ -47,12 +47,22 @@ type Ticket = {
   quantity: number;
 };
 
+type StatEntry = {
+  label: string;
+  count: number;
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function Arrivages() {
   const addItem = useMutation(api.arrivages.addItem);
   const removeItem = useMutation(api.arrivages.removeItem);
   const history = useQuery(api.arrivages.listRecentArrivals);
+  const { start, end } = useMemo(() => {
+    const now = Date.now();
+    return { start: now - 365 * 86400000, end: now };
+  }, []);
+  const stats = useQuery(api.arrivages.historyStats, { startDate: start, endDate: end });
 
   const [tab, setTab] = useState<"new" | "history">("new");
   const [origin, setOrigin] = useState("");
@@ -132,6 +142,14 @@ export function Arrivages() {
           Dernières arrivées
         </TabButton>
       </div>
+
+      <StatsOverview
+        totalArticles={stats?.totalArticles}
+        totalWeight={stats?.totalWeight}
+        totalValue={stats?.totalValue}
+        byOrigin={stats?.byOrigin}
+        byOrientation={stats?.byOrientation}
+      />
 
       {tab === "new" ? (
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
@@ -294,8 +312,24 @@ export function Arrivages() {
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
-          <h3 className="mb-4 text-sm font-semibold text-zinc-300">Dernières arrivées</h3>
+        <div className="space-y-5">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <DistributionPanel
+              title="Provenances"
+              entries={stats?.byOrigin}
+              labels={ORIGIN_LABELS}
+              accent="bg-brand-500"
+            />
+            <DistributionPanel
+              title="Destinations"
+              entries={stats?.byOrientation}
+              labels={ORIENTATION_LABELS}
+              accent="bg-emerald-500"
+            />
+          </div>
+
+          <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+            <h3 className="mb-4 text-sm font-semibold text-zinc-300">Dernières arrivées</h3>
           {!history || history.length === 0 ? (
             <p className="text-xs text-zinc-500">Aucune arrivée enregistrée pour le moment.</p>
           ) : (
@@ -339,6 +373,7 @@ export function Arrivages() {
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -348,6 +383,135 @@ export function Arrivages() {
 }
 
 // ─── Petits composants ──────────────────────────────────────────────────────
+
+function StatsOverview({
+  totalArticles,
+  totalWeight,
+  totalValue,
+  byOrigin,
+  byOrientation,
+}: {
+  totalArticles?: number;
+  totalWeight?: number;
+  totalValue?: number;
+  byOrigin?: StatEntry[];
+  byOrientation?: StatEntry[];
+}) {
+  const topOrigin = topEntryLabel(byOrigin, ORIGIN_LABELS);
+  const topOrientation = topEntryLabel(byOrientation, ORIENTATION_LABELS);
+
+  return (
+    <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <MetricCard
+        icon={<PackageCheck className="h-5 w-5" />}
+        label="Objets arrivés"
+        value={totalArticles != null ? String(totalArticles) : "…"}
+        detail="Sur les 12 derniers mois"
+        color="text-emerald-400"
+      />
+      <MetricCard
+        icon={<Weight className="h-5 w-5" />}
+        label="Poids entrant"
+        value={totalWeight != null ? `${totalWeight} kg` : "…"}
+        detail="Poids cumulé"
+        color="text-amber-400"
+      />
+      <MetricCard
+        icon={<BarChart3 className="h-5 w-5" />}
+        label="Provenance principale"
+        value={topOrigin}
+        detail="Volume le plus fréquent"
+        color="text-sky-400"
+      />
+      <MetricCard
+        icon={<Check className="h-5 w-5" />}
+        label="Destination principale"
+        value={topOrientation}
+        detail={totalValue != null ? `Valeur estimée ${totalValue.toLocaleString("fr-FR")} €` : "Orientation dominante"}
+        color="text-brand-300"
+      />
+    </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  detail,
+  color,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+  color: string;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+      <div className="flex items-center gap-3">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] ${color}`}>
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{label}</p>
+          <p className="truncate text-lg font-bold text-zinc-100">{value}</p>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-zinc-500">{detail}</p>
+    </div>
+  );
+}
+
+function DistributionPanel({
+  title,
+  entries,
+  labels,
+  accent,
+}: {
+  title: string;
+  entries?: StatEntry[];
+  labels: Record<string, string>;
+  accent: string;
+}) {
+  const total = entries?.reduce((sum, entry) => sum + entry.count, 0) ?? 0;
+  const visibleEntries = entries?.slice(0, 5) ?? [];
+
+  return (
+    <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-zinc-200">{title}</h3>
+        <span className="text-xs text-zinc-500">{total} objet{total > 1 ? "s" : ""}</span>
+      </div>
+      {visibleEntries.length === 0 ? (
+        <p className="text-xs text-zinc-500">Aucune donnée disponible pour le moment.</p>
+      ) : (
+        <div className="space-y-3">
+          {visibleEntries.map((entry) => {
+            const percent = total > 0 ? Math.round((entry.count / total) * 100) : 0;
+            return (
+              <div key={entry.label}>
+                <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                  <span className="font-medium text-zinc-300">{labels[entry.label] ?? entry.label}</span>
+                  <span className="text-zinc-500">{entry.count} · {percent}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[var(--crm-surface-2)]">
+                  <div className={`h-full rounded-full ${accent}`} style={{ width: `${percent}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function topEntryLabel(entries: StatEntry[] | undefined, labels: Record<string, string>) {
+  if (!entries || entries.length === 0) return "…";
+  const top = [...entries].sort((a, b) => b.count - a.count)[0];
+  return labels[top.label] ?? top.label;
+}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (

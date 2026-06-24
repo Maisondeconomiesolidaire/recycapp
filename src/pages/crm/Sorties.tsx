@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, lazy, Suspense, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
-  ArrowUpRight, Weight, Check, Loader2, X, PackageMinus, ScanLine, Search, Package, RotateCcw,
+  ArrowUpRight, BarChart3, Weight, Check, Loader2, X, PackageMinus, ScanLine, Search, Package, RotateCcw,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -12,6 +12,26 @@ const CameraScanner = lazy(() =>
 );
 
 const EXIT_MOTIFS = ["Vente", "Don", "Déchèterie", "Recyclage / Filière", "Casse / Perte", "Autre"];
+
+const ORIGIN_LABELS: Record<string, string> = {
+  decheterie: "Déchèterie",
+  domicile: "Rendez-vous",
+  apport: "Apport volontaire",
+  tournee: "Tournée",
+};
+
+const ORIENTATION_LABELS: Record<string, string> = {
+  boutique: "Boutique",
+  atelier: "Atelier",
+  dons: "Dons",
+  recyclage: "Recyclage",
+  dechet: "Déchet",
+};
+
+type StatEntry = {
+  label: string;
+  count: number;
+};
 
 type ExitItem = {
   _id: Id<"arrivageItems">;
@@ -87,9 +107,48 @@ export function Sorties() {
 
       <div className="space-y-5">
         {/* Compteurs */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <StatCard icon={<PackageMinus className="h-5 w-5" />} label="Articles sortis (12 mois)" value={String(exits?.totalArticles ?? "…")} color="text-rose-400" />
           <StatCard icon={<Weight className="h-5 w-5" />} label="Poids total sorti" value={exits ? `${exits.totalWeight} kg` : "…"} color="text-amber-400" />
+          <StatCard
+            icon={<BarChart3 className="h-5 w-5" />}
+            label="Motif principal"
+            value={topEntryLabel(exits?.byMotif, {})}
+            color="text-sky-400"
+          />
+          <StatCard
+            icon={<ArrowUpRight className="h-5 w-5" />}
+            label="Destination principale"
+            value={topEntryLabel(exits?.byOrientation, ORIENTATION_LABELS)}
+            color="text-emerald-400"
+          />
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+          <DistributionPanel
+            title="Motifs de sortie"
+            entries={exits?.byMotif}
+            labels={{}}
+            accent="bg-rose-500"
+          />
+          <DistributionPanel
+            title="Destinations d'origine"
+            entries={exits?.byOrientation}
+            labels={ORIENTATION_LABELS}
+            accent="bg-emerald-500"
+          />
+          <DistributionPanel
+            title="Provenances"
+            entries={exits?.byOrigin}
+            labels={ORIGIN_LABELS}
+            accent="bg-sky-500"
+          />
+          <DistributionPanel
+            title="Catégories sorties"
+            entries={exits?.byCategory}
+            labels={{}}
+            accent="bg-amber-500"
+          />
         </div>
 
         {/* Recherche / scan */}
@@ -268,10 +327,60 @@ function StatCard({ icon, label, value, color }: { icon: ReactNode; label: strin
   return (
     <div className="flex items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3">
       <span className={`flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--crm-surface-2)] ${color}`}>{icon}</span>
-      <div>
+      <div className="min-w-0">
         <p className="text-xs text-zinc-500">{label}</p>
-        <p className="text-lg font-bold text-zinc-100">{value}</p>
+        <p className="truncate text-lg font-bold text-zinc-100">{value}</p>
       </div>
     </div>
   );
+}
+
+function DistributionPanel({
+  title,
+  entries,
+  labels,
+  accent,
+}: {
+  title: string;
+  entries?: StatEntry[];
+  labels: Record<string, string>;
+  accent: string;
+}) {
+  const total = entries?.reduce((sum, entry) => sum + entry.count, 0) ?? 0;
+  const visibleEntries = entries?.slice(0, 5) ?? [];
+
+  return (
+    <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-zinc-200">{title}</h3>
+        <span className="text-xs text-zinc-500">{total} objet{total > 1 ? "s" : ""}</span>
+      </div>
+      {visibleEntries.length === 0 ? (
+        <p className="text-xs text-zinc-500">Aucune donnée disponible pour le moment.</p>
+      ) : (
+        <div className="space-y-3">
+          {visibleEntries.map((entry) => {
+            const percent = total > 0 ? Math.round((entry.count / total) * 100) : 0;
+            return (
+              <div key={entry.label}>
+                <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                  <span className="truncate font-medium text-zinc-300">{labels[entry.label] ?? entry.label}</span>
+                  <span className="shrink-0 text-zinc-500">{entry.count} · {percent}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[var(--crm-surface-2)]">
+                  <div className={`h-full rounded-full ${accent}`} style={{ width: `${percent}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function topEntryLabel(entries: StatEntry[] | undefined, labels: Record<string, string>) {
+  if (!entries || entries.length === 0) return "…";
+  const top = [...entries].sort((a, b) => b.count - a.count)[0];
+  return labels[top.label] ?? top.label;
 }
