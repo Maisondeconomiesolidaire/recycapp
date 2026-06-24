@@ -725,7 +725,9 @@ export const myWishlist = query({
     const out = [];
     for (const r of rows) {
       const a = await ctx.db.get(r.articleId);
-      if (a && a.status !== "vendu" && a.status !== "attente" && a.status !== "lot") {
+      // On garde aussi les articles réservés/vendus pour afficher leur statut,
+      // mais pas les brouillons (attente) ni les lots.
+      if (a && a.status !== "attente" && a.status !== "lot") {
         out.push(await withCoverImageUrl(ctx, a));
       }
     }

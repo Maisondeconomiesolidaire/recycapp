@@ -438,11 +438,35 @@ function ProductOfDayHero({
 }) {
   return (
     <section className="mx-auto w-full max-w-[92rem] px-5 pt-8 sm:px-7 lg:px-8">
-      <div className="overflow-hidden rounded-[32px] border border-white/60 bg-gradient-to-br from-white to-[#fff4ea] shadow-[0_30px_90px_rgba(24,24,27,0.10)]">
-        <div className="grid items-stretch md:grid-cols-2">
+      <style>{`
+        @keyframes podTwinkle {
+          0%, 100% { opacity: 0.25; transform: scale(0.8) rotate(0deg); }
+          50% { opacity: 1; transform: scale(1.15) rotate(15deg); }
+        }
+        @keyframes podFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        @keyframes podSheen {
+          0% { transform: translateX(-120%) skewX(-12deg); }
+          60%, 100% { transform: translateX(220%) skewX(-12deg); }
+        }
+      `}</style>
+      <div className="relative overflow-hidden rounded-[36px] border border-brand-500/15 bg-gradient-to-br from-white via-[#fff7ef] to-[#ffe9d6] shadow-[0_36px_110px_rgba(241,16,79,0.16)]">
+        {/* halos décoratifs */}
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-amber-300/20 blur-3xl" />
+
+        {/* étincelles flottantes */}
+        <Sparkles className="pointer-events-none absolute left-[6%] top-[22%] h-5 w-5 text-amber-400" style={{ animation: "podTwinkle 2.6s ease-in-out infinite" }} />
+        <Sparkles className="pointer-events-none absolute left-[44%] top-[10%] h-7 w-7 text-brand-400" style={{ animation: "podTwinkle 3.2s ease-in-out 0.4s infinite" }} />
+        <Sparkles className="pointer-events-none absolute right-[8%] bottom-[16%] h-6 w-6 text-amber-400" style={{ animation: "podTwinkle 2.9s ease-in-out 0.8s infinite" }} />
+        <Sparkles className="pointer-events-none absolute right-[46%] bottom-[10%] h-4 w-4 text-brand-300" style={{ animation: "podTwinkle 3.4s ease-in-out 1.2s infinite" }} />
+
+        <div className="relative grid items-stretch md:grid-cols-2">
           <Link
             to={`/boutique/${product._id}`}
-            className="group relative block aspect-[4/3] overflow-hidden bg-[#f2eee7]"
+            className="group relative block aspect-[4/3] overflow-hidden bg-[#f2eee7] md:aspect-auto md:min-h-[460px]"
           >
             {product.imageUrls[0] ? (
               <img
@@ -452,11 +476,13 @@ function ProductOfDayHero({
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-zinc-300">
-                <PackageOpen className="h-14 w-14" />
+                <PackageOpen className="h-16 w-16" />
               </div>
             )}
-            <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white shadow-lg">
-              <Sparkles className="h-3.5 w-3.5" />
+            {/* reflet animé */}
+            <span className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent" style={{ animation: "podSheen 4.5s ease-in-out infinite" }} />
+            <span className="absolute left-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white shadow-[0_10px_24px_rgba(241,16,79,0.4)]" style={{ animation: "podFloat 3.5s ease-in-out infinite" }}>
+              <Sparkles className="h-4 w-4" />
               Produit du jour
             </span>
             <HeartButton
@@ -466,47 +492,47 @@ function ProductOfDayHero({
                 e.stopPropagation();
                 onToggleWishlist();
               }}
-              className="absolute right-4 top-4"
+              className="absolute right-5 top-5 h-11 w-11"
             />
           </Link>
 
-          <div className="flex flex-col justify-center gap-4 p-7 sm:p-10">
-            <span className="inline-flex w-fit items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">
-              <Sparkles className="h-3.5 w-3.5" />
+          <div className="relative flex flex-col justify-center gap-5 p-8 sm:p-12 lg:p-14">
+            <span className="inline-flex w-fit items-center gap-2 text-xs font-extrabold uppercase tracking-[0.24em] text-brand-600">
+              <Sparkles className="h-4 w-4" style={{ animation: "podTwinkle 2.4s ease-in-out infinite" }} />
               La pépite du moment
             </span>
-            <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-zinc-950">
+            <h2 className="text-4xl font-black leading-[1.05] tracking-tight text-zinc-950 sm:text-5xl lg:text-6xl">
               {product.title}
             </h2>
-            <p className="max-w-prose text-sm leading-6 text-zinc-600">
-              {truncateDescription(product.description, 220)}
+            <p className="max-w-prose text-base leading-7 text-zinc-600 sm:text-lg">
+              {truncateDescription(product.description, 240)}
             </p>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-4">
               {product.originalPrice && product.originalPrice > product.price ? (
                 <>
-                  <span className="text-3xl font-extrabold" style={{ color: BRAND }}>
+                  <span className="text-5xl font-black tracking-tight sm:text-6xl" style={{ color: BRAND }}>
                     {formatPrice(product.price)}
                   </span>
-                  <span className="text-base font-semibold text-zinc-400 line-through">
+                  <span className="text-xl font-semibold text-zinc-400 line-through">
                     {formatPrice(product.originalPrice)}
                   </span>
                 </>
               ) : (
-                <span className="text-3xl font-extrabold" style={{ color: BRAND }}>
+                <span className="text-5xl font-black tracking-tight sm:text-6xl" style={{ color: BRAND }}>
                   {formatPrice(product.price)}
                 </span>
               )}
-              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600">
+              <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-zinc-600 shadow-sm ring-1 ring-black/5">
                 {product.condition}
               </span>
             </div>
             <Link
               to={`/boutique/${product._id}`}
-              className="inline-flex w-fit items-center gap-2 rounded-full px-6 py-3.5 text-sm font-bold text-white shadow-[0_12px_30px_rgba(241,16,79,0.3)] transition hover:-translate-y-0.5"
+              className="inline-flex w-fit items-center gap-2.5 rounded-full px-8 py-4 text-base font-bold text-white shadow-[0_16px_40px_rgba(241,16,79,0.34)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(241,16,79,0.42)]"
               style={{ backgroundColor: BRAND }}
             >
               Découvrir l'article
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-5 w-5" />
             </Link>
           </div>
         </div>

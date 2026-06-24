@@ -3,6 +3,7 @@ import { PublicLayout } from "./components/public/PublicLayout";
 import { Boutique } from "./pages/public/Boutique";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
+import { Favoris } from "./pages/public/Favoris";
 import { TourneeTracking } from "./pages/public/TourneeTracking";
 import { AerogommageForm } from "./pages/public/AerogommageForm";
 import { CollecteForm } from "./pages/public/CollecteForm";
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/boutique" replace />} />
         <Route path="/boutique" element={<Boutique />} />
         <Route path="/boutique/panier" element={<CartPage />} />
+        <Route path="/favoris" element={<Favoris />} />
         <Route path="/suivi/:token" element={<TourneeTracking />} />
         <Route path="/boutique/categorie/:slug" element={<Boutique />} />
         <Route path="/boutique/:id" element={<ArticleDetail />} />

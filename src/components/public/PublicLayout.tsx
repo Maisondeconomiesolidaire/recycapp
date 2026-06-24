@@ -8,7 +8,7 @@ import {
   useSearchParams,
   useNavigate,
 } from "react-router-dom";
-import { ArrowRight, Menu, Search, ShoppingCart, Trash2, X } from "lucide-react";
+import { ArrowRight, Heart, Menu, Search, ShoppingCart, Trash2, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import {
   ARTICLE_CATEGORIES,
@@ -267,15 +267,25 @@ function Header() {
             ) : <div className="flex-1" />}
 
             {isBoutiqueArea && (
+              <Link
+                to="/favoris"
+                aria-label="Mes favoris"
+                className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-black/8 bg-white text-zinc-700 shadow-sm transition hover:-translate-y-0.5 hover:text-brand-600 sm:h-14 sm:w-14"
+              >
+                <Heart className="h-5 w-5" />
+              </Link>
+            )}
+
+            {isBoutiqueArea && (
               <div ref={cartRef} className="relative shrink-0">
                 <button
                   type="button"
                   onClick={() => setCartOpen((v) => !v)}
-                  className="relative inline-flex h-12 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(241,16,79,0.28)] transition hover:-translate-y-0.5 sm:h-14"
+                  aria-label="Mon panier"
+                  className="relative inline-flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_14px_34px_rgba(241,16,79,0.28)] transition hover:-translate-y-0.5 sm:h-14 sm:w-14"
                   style={{ backgroundColor: cartOpen ? BRAND_DARK : BRAND }}
                 >
                   <ShoppingCart className="h-5 w-5" />
-                  Panier
                   {cart.count > 0 && (
                     <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-extrabold ring-2 ring-[#f6f4ef]" style={{ color: BRAND }}>
                       {cart.count}
