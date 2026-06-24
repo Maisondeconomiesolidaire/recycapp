@@ -407,6 +407,41 @@ export const recordExit = mutation({
   },
 });
 
+/** Enregistre une sortie de flux (papier, livres, textile…) sans scan d'article individuel. */
+export const recordFlowExit = mutation({
+  args: {
+    date: v.number(),
+    origin: originValidator,
+    category: v.string(),
+    weightKg: v.number(),
+    motif: v.string(),
+    orientation: v.string(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmPermission(ctx, "sorties", "create");
+    const reference = makeReference(args.category);
+    const labelInfo = args.note?.trim()
+      ? `Flux ${args.category} - ${args.note.trim()}`
+      : `Flux ${args.category}`;
+    const itemId = await ctx.db.insert("arrivageItems", {
+      date: args.date,
+      origin: args.origin,
+      category: args.category,
+      flux: "sortie-flux",
+      orientation: args.orientation,
+      weightKg: args.weightKg,
+      quantity: 1,
+      labelInfo,
+      reference,
+      createdAt: Date.now(),
+      exitedAt: Date.now(),
+      exitMotif: args.motif.trim() || "Autre",
+    });
+    return { itemId, reference };
+  },
+});
+
 /** Annule une sortie (remet l'article en stock). */
 export const undoExit = mutation({
   args: { itemId: v.id("arrivageItems") },

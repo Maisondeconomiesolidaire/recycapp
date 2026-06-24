@@ -6,12 +6,33 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
+import { COLLECTE_CATEGORIES } from "../../lib/constants";
 
 const CameraScanner = lazy(() =>
   import("../../components/ui/CameraScanner").then((m) => ({ default: m.CameraScanner })),
 );
 
 const EXIT_MOTIFS = ["Vente", "Don", "Déchèterie", "Recyclage / Filière", "Casse / Perte", "Autre"];
+
+const ORIGINS = [
+  { key: "decheterie", label: "Déchèterie" },
+  { key: "domicile", label: "Rendez-vous" },
+  { key: "apport", label: "Apport volontaire" },
+  { key: "tournee", label: "Tournée" },
+] as const;
+
+const ORIENTATIONS = [
+  { key: "boutique", label: "Boutique" },
+  { key: "atelier", label: "Atelier" },
+  { key: "dons", label: "Dons" },
+  { key: "recyclage", label: "Recyclage" },
+  { key: "dechet", label: "Déchet" },
+] as const;
+
+const FLOW_CATEGORIES = COLLECTE_CATEGORIES.map((c) => ({
+  key: c.label,
+  image: c.image,
+}));
 
 const ORIGIN_LABELS: Record<string, string> = {
   decheterie: "Déchèterie",
@@ -45,6 +66,7 @@ type ExitItem = {
 };
 
 export function Sorties() {
+  const [exitMode, setExitMode] = useState<"individual" | "flow">("individual");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ExitItem | null>(null);
   const [motif, setMotif] = useState(EXIT_MOTIFS[0]);
@@ -52,8 +74,15 @@ export function Sorties() {
   const [scannedRef, setScannedRef] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState<string | null>(null);
+  const [flowOrigin, setFlowOrigin] = useState("apport");
+  const [flowCategory, setFlowCategory] = useState("");
+  const [flowOrientation, setFlowOrientation] = useState("recyclage");
+  const [flowWeightKg, setFlowWeightKg] = useState("");
+  const [flowMotif, setFlowMotif] = useState("Recyclage / Filière");
+  const [flowNote, setFlowNote] = useState("");
 
   const recordExit = useMutation(api.arrivages.recordExit);
+  const recordFlowExit = useMutation(api.arrivages.recordFlowExit);
   const undoExit = useMutation(api.arrivages.undoExit);
 
   const results = useQuery(
@@ -92,6 +121,27 @@ export function Sorties() {
       await recordExit({ itemId: selected._id, motif });
       setSelected(null);
       setMotif(EXIT_MOTIFS[0]);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmFlowExit() {
+    if (!flowCategory || !flowOrientation || !flowOrigin || !(parseFloat(flowWeightKg) > 0)) return;
+    setSaving(true);
+    try {
+      await recordFlowExit({
+        date: Date.now(),
+        origin: flowOrigin as "decheterie" | "domicile" | "apport" | "tournee",
+        category: flowCategory,
+        weightKg: parseFloat(flowWeightKg),
+        motif: flowMotif,
+        orientation: flowOrientation,
+        note: flowNote || undefined,
+      });
+      setFlowCategory("");
+      setFlowWeightKg("");
+      setFlowNote("");
     } finally {
       setSaving(false);
     }
@@ -149,8 +199,36 @@ export function Sorties() {
           />
         </div>
 
+        <div className="flex w-fit rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
+          <ModeTab active={exitMode === "individual"} onClick={() => setExitMode("individual")}>
+            Sortie individuelle
+          </ModeTab>
+          <ModeTab active={exitMode === "flow"} onClick={() => setExitMode("flow")}>
+            Sortie de flux
+          </ModeTab>
+        </div>
+
+        {exitMode === "flow" && (
+          <FlowExitForm
+            origin={flowOrigin}
+            setOrigin={setFlowOrigin}
+            category={flowCategory}
+            setCategory={setFlowCategory}
+            orientation={flowOrientation}
+            setOrientation={setFlowOrientation}
+            weightKg={flowWeightKg}
+            setWeightKg={setFlowWeightKg}
+            motif={flowMotif}
+            setMotif={setFlowMotif}
+            note={flowNote}
+            setNote={setFlowNote}
+            saving={saving}
+            onSubmit={confirmFlowExit}
+          />
+        )}
+
         {/* Recherche / scan */}
-        {!selected && (
+        {exitMode === "individual" && !selected && (
           <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -204,7 +282,7 @@ export function Sorties() {
         )}
 
         {/* Article sélectionné → raison → confirmer */}
-        {selected && (
+        {exitMode === "individual" && selected && (
           <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-4 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -330,6 +408,171 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
         <p className="truncate text-lg font-bold text-zinc-100">{value}</p>
       </div>
     </div>
+  );
+}
+
+function FlowExitForm({
+  origin,
+  setOrigin,
+  category,
+  setCategory,
+  orientation,
+  setOrientation,
+  weightKg,
+  setWeightKg,
+  motif,
+  setMotif,
+  note,
+  setNote,
+  saving,
+  onSubmit,
+}: {
+  origin: string;
+  setOrigin: (value: string) => void;
+  category: string;
+  setCategory: (value: string) => void;
+  orientation: string;
+  setOrientation: (value: string) => void;
+  weightKg: string;
+  setWeightKg: (value: string) => void;
+  motif: string;
+  setMotif: (value: string) => void;
+  note: string;
+  setNote: (value: string) => void;
+  saving: boolean;
+  onSubmit: () => Promise<void> | void;
+}) {
+  const canSubmit = Boolean(origin && category && orientation && motif && parseFloat(weightKg) > 0) && !saving;
+
+  return (
+    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Sortie de flux</p>
+      <h2 className="mt-2 text-xl font-bold text-zinc-100">Évacuation en volume</h2>
+      <p className="mt-1 text-sm text-zinc-500">
+        Pour les flux non individualisés : papier, livres, textile, recyclage, déchèterie, etc.
+      </p>
+
+      <div className="mt-5 space-y-5">
+        <FlowChoiceGroup title="Provenance">
+          {ORIGINS.map((o) => (
+            <ChoiceButton key={o.key} selected={origin === o.key} onClick={() => setOrigin(o.key)}>
+              {o.label}
+            </ChoiceButton>
+          ))}
+        </FlowChoiceGroup>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Flux sorti</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {FLOW_CATEGORIES.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setCategory(c.key)}
+                className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center transition hover:-translate-y-0.5 ${
+                  category === c.key
+                    ? "border-brand-500/60 bg-brand-500/15 text-brand-300"
+                    : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/35 hover:text-zinc-100"
+                }`}
+              >
+                <img src={c.image} alt="" className="h-10 w-10 object-contain" />
+                <span className="text-xs font-bold leading-tight">{c.key}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <FlowChoiceGroup title="Destination">
+          {ORIENTATIONS.map((o) => (
+            <ChoiceButton key={o.key} selected={orientation === o.key} onClick={() => setOrientation(o.key)}>
+              {o.label}
+            </ChoiceButton>
+          ))}
+        </FlowChoiceGroup>
+
+        <FlowChoiceGroup title="Motif">
+          {EXIT_MOTIFS.map((m) => (
+            <ChoiceButton key={m} selected={motif === m} onClick={() => setMotif(m)}>
+              {m}
+            </ChoiceButton>
+          ))}
+        </FlowChoiceGroup>
+
+        <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Poids sorti (kg)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+              placeholder="50"
+              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ex : enlèvement filière papier, textile trié, roll déchèterie..."
+              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!canSubmit}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          Enregistrer la sortie de flux
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FlowChoiceGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">{title}</p>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
+function ChoiceButton({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition ${
+        selected
+          ? "bg-brand-500 text-white ring-transparent"
+          : "bg-[var(--crm-surface-2)] text-zinc-400 ring-[var(--crm-border)] hover:text-zinc-100"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ModeTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+        active ? "bg-brand-500 text-white" : "text-zinc-500 hover:bg-[var(--crm-surface-2)] hover:text-zinc-200"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

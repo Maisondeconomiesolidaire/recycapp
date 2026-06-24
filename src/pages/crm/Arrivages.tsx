@@ -68,6 +68,7 @@ export function Arrivages() {
   const stats = useQuery(api.arrivages.historyStats, { startDate: start, endDate: end });
 
   const [tab, setTab] = useState<"new" | "history">("new");
+  const [arrivalMode, setArrivalMode] = useState<"unique" | "roll">("unique");
   const [origin, setOrigin] = useState("");
   const [orientation, setOrientation] = useState("boutique");
   const [category, setCategory] = useState("");
@@ -76,11 +77,17 @@ export function Arrivages() {
   const [weightKg, setWeightKg] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [saving, setSaving] = useState(false);
+  const [rollOrigin, setRollOrigin] = useState("");
+  const [rollCategory, setRollCategory] = useState("");
+  const [rollOrientation, setRollOrientation] = useState("recyclage");
+  const [rollWeightKg, setRollWeightKg] = useState("");
+  const [rollNote, setRollNote] = useState("");
 
   const [pending, setPending] = useState<Ticket[]>([]);
   const [printTickets, setPrintTickets] = useState<Ticket[] | null>(null);
 
   const canSubmit = Boolean(origin && orientation && category) && !saving;
+  const canSubmitRoll = Boolean(rollOrigin && rollCategory && rollOrientation && parseFloat(rollWeightKg) > 0) && !saving;
 
   async function addObject() {
     if (!canSubmit) return;
@@ -112,6 +119,41 @@ export function Arrivages() {
       setDesignation("");
       setWeightKg("");
       setQuantity("1");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addRoll() {
+    if (!canSubmitRoll) return;
+    setSaving(true);
+    try {
+      const categoryLabel = CATEGORIES.find((c) => c.key === rollCategory)?.key ?? rollCategory;
+      const { itemId, reference } = await addItem({
+        date: Date.now(),
+        origin: rollOrigin as "decheterie" | "domicile" | "apport" | "tournee",
+        orientation: rollOrientation,
+        category: rollCategory,
+        flux: "roll",
+        weightKg: parseFloat(rollWeightKg),
+        quantity: 1,
+        labelInfo: rollNote.trim() ? `Roll ${categoryLabel} - ${rollNote.trim()}` : `Roll ${categoryLabel}`,
+      });
+      setPending((p) => [
+        {
+          itemId,
+          reference,
+          designation: rollNote.trim() ? `Roll ${categoryLabel} - ${rollNote.trim()}` : `Roll ${categoryLabel}`,
+          origin: rollOrigin,
+          orientation: rollOrientation,
+          weightKg: rollWeightKg,
+          quantity: 1,
+        },
+        ...p,
+      ]);
+      setRollCategory("");
+      setRollWeightKg("");
+      setRollNote("");
     } finally {
       setSaving(false);
     }
@@ -154,27 +196,56 @@ export function Arrivages() {
       />
 
       {tab === "new" ? (
+        <div className="mb-4 flex w-fit rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
+          <TabButton active={arrivalMode === "unique"} onClick={() => setArrivalMode("unique")}>
+            Arrivage unique
+          </TabButton>
+          <TabButton active={arrivalMode === "roll"} onClick={() => setArrivalMode("roll")}>
+            Nouveau roll
+          </TabButton>
+        </div>
+      ) : null}
+
+      {tab === "new" ? (
         <div className={`grid gap-6 ${pending.length > 0 ? "lg:grid-cols-[1fr_340px]" : "lg:grid-cols-1"}`}>
           {/* Formulaire */}
-          <ArrivalWizard
-            origin={origin}
-            setOrigin={setOrigin}
-            category={category}
-            setCategory={setCategory}
-            subcategory={subcategory}
-            setSubcategory={setSubcategory}
-            orientation={orientation}
-            setOrientation={setOrientation}
-            designation={designation}
-            setDesignation={setDesignation}
-            weightKg={weightKg}
-            setWeightKg={setWeightKg}
-            quantity={quantity}
-            setQuantity={setQuantity}
-            saving={saving}
-            canSubmit={canSubmit}
-            onAddObject={addObject}
-          />
+          {arrivalMode === "unique" ? (
+            <ArrivalWizard
+              origin={origin}
+              setOrigin={setOrigin}
+              category={category}
+              setCategory={setCategory}
+              subcategory={subcategory}
+              setSubcategory={setSubcategory}
+              orientation={orientation}
+              setOrientation={setOrientation}
+              designation={designation}
+              setDesignation={setDesignation}
+              weightKg={weightKg}
+              setWeightKg={setWeightKg}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              saving={saving}
+              canSubmit={canSubmit}
+              onAddObject={addObject}
+            />
+          ) : (
+            <RollArrivalForm
+              origin={rollOrigin}
+              setOrigin={setRollOrigin}
+              category={rollCategory}
+              setCategory={setRollCategory}
+              orientation={rollOrientation}
+              setOrientation={setRollOrientation}
+              weightKg={rollWeightKg}
+              setWeightKg={setRollWeightKg}
+              note={rollNote}
+              setNote={setRollNote}
+              saving={saving}
+              canSubmit={canSubmitRoll}
+              onSubmit={addRoll}
+            />
+          )}
 
           {pending.length > 0 && (
             <div>
@@ -574,6 +645,121 @@ function ArrivalWizard({
             </button>
           </WizardStepIntro>
         )}
+      </div>
+    </div>
+  );
+}
+
+function RollArrivalForm({
+  origin,
+  setOrigin,
+  category,
+  setCategory,
+  orientation,
+  setOrientation,
+  weightKg,
+  setWeightKg,
+  note,
+  setNote,
+  saving,
+  canSubmit,
+  onSubmit,
+}: {
+  origin: string;
+  setOrigin: (value: string) => void;
+  category: string;
+  setCategory: (value: string) => void;
+  orientation: string;
+  setOrientation: (value: string) => void;
+  weightKg: string;
+  setWeightKg: (value: string) => void;
+  note: string;
+  setNote: (value: string) => void;
+  saving: boolean;
+  canSubmit: boolean;
+  onSubmit: () => Promise<void> | void;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.14)]">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Arrivage roll</p>
+      <h2 className="mt-2 text-2xl font-bold text-zinc-100">Flux reçu en volume</h2>
+      <p className="mt-1 max-w-2xl text-sm text-zinc-500">
+        Pour les rolls, renseignez surtout le type de flux et le poids reçu. Aucun détail article ni sous-catégorie n'est demandé.
+      </p>
+
+      <div className="mt-6 space-y-6">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Provenance</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {ORIGINS.map((o) => (
+              <WizardOption key={o.key} selected={origin === o.key} title={o.label} onClick={() => setOrigin(o.key)} />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Flux reçu</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setCategory(c.key)}
+                className={`flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center transition hover:-translate-y-0.5 ${
+                  category === c.key
+                    ? "border-brand-500/60 bg-brand-500/15 text-brand-300 shadow-[0_14px_32px_rgba(241,16,79,0.16)]"
+                    : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/35 hover:text-zinc-100"
+                }`}
+              >
+                <img src={c.image} alt="" className="h-12 w-12 object-contain" />
+                <span className="text-xs font-bold leading-tight">{c.key}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Destination</p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {ORIENTATIONS.map((o) => (
+              <WizardOption key={o.key} selected={orientation === o.key} title={o.label} onClick={() => setOrientation(o.key)} />
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Poids reçu (kg)</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+              placeholder="50"
+              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ex : roll livres scolaires, papier blanc, textile mélangé..."
+              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!canSubmit}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white shadow-[0_12px_32px_rgba(241,16,79,0.24)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
+        >
+          {saving ? "Ajout..." : <><Plus className="h-4 w-4" /> Ajouter le roll</>}
+        </button>
       </div>
     </div>
   );
