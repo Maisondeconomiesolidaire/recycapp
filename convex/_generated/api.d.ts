@@ -21,6 +21,7 @@ import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as permissions from "../permissions.js";
 import type * as processes from "../processes.js";
+import type * as requestAnalysis from "../requestAnalysis.js";
 import type * as requests from "../requests.js";
 import type * as sorties from "../sorties.js";
 import type * as stripe from "../stripe.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   permissions: typeof permissions;
   processes: typeof processes;
+  requestAnalysis: typeof requestAnalysis;
   requests: typeof requests;
   sorties: typeof sorties;
   stripe: typeof stripe;

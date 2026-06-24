@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
-import { useQuery } from "convex/react";
-import { BrainCircuit, CalendarClock, Inbox, Lightbulb, Plus, UsersRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useAction, useQuery } from "convex/react";
+import { BrainCircuit, Inbox, Loader2, Plus, Send } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
@@ -26,6 +26,10 @@ import {
 import { cn } from "../../lib/cn";
 
 type Tab = "complete" | "incomplete" | "closed";
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "complete", label: "Demandes complètes" },
@@ -156,7 +160,6 @@ export function Demandes() {
         open={analysisOpen}
         onClose={() => setAnalysisOpen(false)}
         requests={requests ?? []}
-        teamNames={teamNames}
         onOpenRequest={(id) => {
           setOpenId(id);
           setAnalysisOpen(false);
@@ -374,16 +377,55 @@ function RequestsAnalysisDrawer({
   open,
   onClose,
   requests,
-  teamNames,
   onOpenRequest,
 }: {
   open: boolean;
   onClose: () => void;
   requests: Doc<"requests">[];
-  teamNames: Map<string, string>;
   onOpenRequest: (id: Id<"requests">) => void;
 }) {
-  const analysis = buildRequestsAnalysis(requests, teamNames);
+  const runChat = useAction(api.requestAnalysis.chat);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
+
+  async function ask(nextMessages: ChatMessage[]) {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await runChat({ messages: nextMessages });
+      setMessages([...nextMessages, { role: "assistant", content: result.answer }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "L'analyse IA a échoué.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!open || started) return;
+    const first: ChatMessage[] = [
+      {
+        role: "user",
+        content:
+          "Fais une analyse manager complète de toutes les demandes : priorités, demandes à planifier, regroupements possibles, journées chargées, encadrants disponibles ou déjà assignés, et prochaines actions concrètes.",
+      },
+    ];
+    setStarted(true);
+    setMessages(first);
+    void ask(first);
+  }, [open, started]);
+
+  async function submitMessage() {
+    const trimmed = input.trim();
+    if (!trimmed || loading) return;
+    const nextMessages = [...messages, { role: "user" as const, content: trimmed }];
+    setInput("");
+    setMessages(nextMessages);
+    await ask(nextMessages);
+  }
 
   return (
     <Drawer
@@ -396,194 +438,130 @@ function RequestsAnalysisDrawer({
         </span>
       }
       panelClassName="max-w-3xl"
-      bodyClassName="space-y-5"
+      bodyClassName="flex flex-col gap-4"
+      footer={
+        <div className="flex items-end gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void submitMessage();
+              }
+            }}
+            rows={2}
+            placeholder="Pose une question : quelles collectes regrouper cette semaine ? Qui est déjà assigné ?"
+            className="min-h-12 flex-1 resize-none rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-brand-500"
+          />
+          <button
+            type="button"
+            onClick={() => void submitMessage()}
+            disabled={loading || !input.trim()}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-500 text-white transition hover:bg-brand-600 disabled:opacity-40"
+          >
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+          </button>
+        </div>
+      }
     >
       <div className="rounded-2xl border border-brand-500/25 bg-brand-500/10 p-4">
-        <p className="text-sm font-semibold text-zinc-100">{analysis.summary}</p>
+        <p className="text-sm font-semibold text-zinc-100">Chat IA connecté à OpenAI</p>
         <p className="mt-1 text-xs text-zinc-500">
-          Analyse opérationnelle basée sur les demandes ouvertes, les dates programmées et les encadrants assignés.
+          L'assistant lit un snapshot serveur de toutes les demandes CRM autorisées. Les références comme #000123 sont cliquables.
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <AnalysisStat label="Demandes ouvertes" value={String(analysis.openCount)} />
-        <AnalysisStat label="À planifier" value={String(analysis.waitingPlanning.length)} />
-        <AnalysisStat label="Collectes planifiées" value={String(analysis.plannedCollectes.length)} />
-      </div>
-
-      <AnalysisSection icon={<Lightbulb className="h-4 w-4" />} title="Recommandations manager">
-        {analysis.recommendations.map((item) => (
-          <div key={item.title} className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
-            <p className="text-sm font-semibold text-zinc-100">{item.title}</p>
-            <p className="mt-1 text-sm leading-6 text-zinc-500">{item.text}</p>
-            {item.requestIds.length > 0 && (
-              <RequestLinkRow requestIds={item.requestIds} requests={requests} onOpenRequest={onOpenRequest} />
-            )}
+      <div className="flex flex-1 flex-col gap-3">
+        {messages.length === 0 && loading && (
+          <div className="flex items-center gap-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-zinc-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Analyse des demandes en cours...
           </div>
+        )}
+        {messages.map((message, index) => (
+          <ChatBubble
+            key={`${message.role}-${index}`}
+            message={message}
+            requests={requests}
+            onOpenRequest={onOpenRequest}
+          />
         ))}
-      </AnalysisSection>
-
-      <AnalysisSection icon={<CalendarClock className="h-4 w-4" />} title="Planning collecte">
-        {analysis.busyDays.length === 0 ? (
-          <p className="text-sm text-zinc-500">Aucune collecte planifiée à analyser pour le moment.</p>
-        ) : (
-          analysis.busyDays.map((day) => (
-            <div key={day.key} className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-bold text-zinc-100">{day.label}</p>
-                <span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs font-semibold text-brand-300">
-                  {day.requests.length} demande{day.requests.length > 1 ? "s" : ""}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-zinc-500">
-                Assigné à : {day.assignees.length > 0 ? day.assignees.join(", ") : "non assigné"}
-              </p>
-              <RequestLinkRow requestIds={day.requests.map((r) => r._id)} requests={requests} onOpenRequest={onOpenRequest} />
-            </div>
-          ))
+        {loading && messages.length > 0 && (
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            L'assistant réfléchit...
+          </div>
         )}
-      </AnalysisSection>
-
-      <AnalysisSection icon={<UsersRound className="h-4 w-4" />} title="Demandes en attente de planification">
-        {analysis.waitingPlanning.length === 0 ? (
-          <p className="text-sm text-zinc-500">Aucune demande complète en attente de planification.</p>
-        ) : (
-          <RequestLinkRow requestIds={analysis.waitingPlanning.map((r) => r._id)} requests={requests} onOpenRequest={onOpenRequest} />
+        {error && (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+            {error}
+          </div>
         )}
-      </AnalysisSection>
+      </div>
     </Drawer>
   );
 }
 
-function AnalysisStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-zinc-100">{value}</p>
-    </div>
-  );
-}
-
-function AnalysisSection({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
-  return (
-    <section>
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-zinc-100">
-        {icon}
-        {title}
-      </h3>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
-}
-
-function RequestLinkRow({
-  requestIds,
+function ChatBubble({
+  message,
   requests,
   onOpenRequest,
 }: {
-  requestIds: Id<"requests">[];
+  message: ChatMessage;
   requests: Doc<"requests">[];
   onOpenRequest: (id: Id<"requests">) => void;
 }) {
-  const byId = new Map(requests.map((r) => [r._id, r]));
+  const mine = message.role === "user";
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {requestIds.map((id) => {
-        const request = byId.get(id);
-        if (!request) return null;
-        return (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onOpenRequest(id)}
-            className="rounded-full border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-brand-500/50 hover:text-brand-300"
-          >
-            #{request.reference} · {TYPE_LABELS[request.type]}
-          </button>
-        );
-      })}
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6 ${
+          mine
+            ? "bg-brand-500 text-white"
+            : "border border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-200"
+        }`}
+      >
+        {mine ? message.content : <LinkedAssistantText text={message.content} requests={requests} onOpenRequest={onOpenRequest} />}
+      </div>
     </div>
   );
 }
 
-function buildRequestsAnalysis(requests: Doc<"requests">[], teamNames: Map<string, string>) {
-  const open = requests.filter((r) => r.outcome === "open");
-  const plannedCollectes = open.filter((r) => r.type === "collecte" && Boolean(r.scheduledDate));
-  const waitingPlanning = open
-    .filter((r) => r.complete && !r.scheduledDate && r.type !== "article")
-    .slice(0, 12);
-  const dayMap = new Map<string, Doc<"requests">[]>();
-  for (const request of plannedCollectes) {
-    if (!request.scheduledDate) continue;
-    const key = new Date(request.scheduledDate).toISOString().slice(0, 10);
-    dayMap.set(key, [...(dayMap.get(key) ?? []), request]);
-  }
-  const busyDays = Array.from(dayMap.entries())
-    .map(([key, dayRequests]) => ({
-      key,
-      label: formatShortDate(dayRequests[0].scheduledDate ?? Date.now()),
-      requests: dayRequests,
-      assignees: Array.from(
-        new Set(
-          dayRequests
-            .map((request) => request.assignedTo ? teamNames.get(request.assignedTo) : undefined)
-            .filter((name): name is string => Boolean(name)),
-        ),
-      ),
-    }))
-    .sort((a, b) => a.key.localeCompare(b.key))
-    .slice(0, 6);
-
-  const busiest = busyDays[0];
-  const recommendations = [
-    {
-      title: waitingPlanning.length > 0 ? "Planification à traiter" : "Planification maîtrisée",
-      text: waitingPlanning.length > 0
-        ? `${waitingPlanning.length} demande${waitingPlanning.length > 1 ? "s" : ""} complète${waitingPlanning.length > 1 ? "s" : ""} attendent une date. Priorité : les regrouper avec les journées déjà planifiées proches géographiquement.`
-        : "Aucune demande complète en attente immédiate de planification.",
-      requestIds: waitingPlanning.slice(0, 6).map((r) => r._id),
-    },
-    {
-      title: busiest ? `Journée à surveiller : ${busiest.label}` : "Aucune journée chargée",
-      text: busiest
-        ? `${busiest.requests.length} collecte${busiest.requests.length > 1 ? "s" : ""} sont déjà planifiées ce jour-là${busiest.assignees.length ? `, assignées à ${busiest.assignees.join(", ")}` : ""}. Vérifiez la tournée avant d'ajouter de nouvelles demandes.`
-        : "Aucune collecte planifiée détectée dans les demandes ouvertes.",
-      requestIds: busiest ? busiest.requests.map((r) => r._id) : [],
-    },
-    {
-      title: "Répartition par type",
-      text: requestTypeSummary(open),
-      requestIds: open.slice(0, 6).map((r) => r._id),
-    },
-  ];
-
-  return {
-    openCount: open.length,
-    plannedCollectes,
-    waitingPlanning,
-    busyDays,
-    recommendations,
-    summary: `${open.length} demande${open.length > 1 ? "s" : ""} ouverte${open.length > 1 ? "s" : ""}, ${plannedCollectes.length} collecte${plannedCollectes.length > 1 ? "s" : ""} planifiée${plannedCollectes.length > 1 ? "s" : ""}, ${waitingPlanning.length} demande${waitingPlanning.length > 1 ? "s" : ""} à planifier.`,
-  };
-}
-
-function requestTypeSummary(requests: Doc<"requests">[]) {
-  const counts = REQUEST_TYPES.map((type) => ({
-    type,
-    count: requests.filter((request) => request.type === type).length,
-  })).filter((entry) => entry.count > 0);
-  if (counts.length === 0) return "Aucune demande ouverte à répartir pour le moment.";
-  return counts
-    .map((entry) => `${entry.count} ${TYPE_LABELS[entry.type]}`)
-    .join(", ");
-}
-
-function formatShortDate(ts: number) {
-  return new Date(ts).toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-  });
+function LinkedAssistantText({
+  text,
+  requests,
+  onOpenRequest,
+}: {
+  text: string;
+  requests: Doc<"requests">[];
+  onOpenRequest: (id: Id<"requests">) => void;
+}) {
+  const byReference = new Map(requests.map((request) => [request.reference, request]));
+  const lines = text.split("\n");
+  return (
+    <>
+      {lines.map((line, lineIndex) => (
+        <p key={lineIndex} className={lineIndex > 0 ? "mt-2" : undefined}>
+          {line.split(/(#[0-9]{6})/g).map((part, index) => {
+            const reference = part.startsWith("#") ? part.slice(1) : "";
+            const request = reference ? byReference.get(reference) : undefined;
+            if (!request) return <span key={`${part}-${index}`}>{part}</span>;
+            return (
+              <button
+                key={`${part}-${index}`}
+                type="button"
+                onClick={() => onOpenRequest(request._id)}
+                className="mx-0.5 rounded-full border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 text-xs font-bold text-brand-300 transition hover:bg-brand-500/20"
+              >
+                {part}
+              </button>
+            );
+          })}
+        </p>
+      ))}
+    </>
+  );
 }
 
 function countForTab(requests: Doc<"requests">[], tab: Tab): number {

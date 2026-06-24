@@ -28,6 +28,8 @@ type Env = {
   readonly ADMIN_EMAILS: string | undefined;
   readonly CLERK_SECRET_KEY: string | undefined;
   readonly MAPBOX_ACCESS_TOKEN: string | undefined;
+  readonly OPENAI_API_KEY: string | undefined;
+  readonly OPENAI_REQUEST_ANALYSIS_MODEL: string | undefined;
   readonly STAFF_EMAILS: string | undefined;
   readonly STRIPE_SECRET_KEY: string | undefined;
 };

@@ -8,5 +8,7 @@ export default defineApp({
     STAFF_EMAILS: v.optional(v.string()),
     ADMIN_EMAILS: v.optional(v.string()),
     CLERK_SECRET_KEY: v.optional(v.string()),
+    OPENAI_API_KEY: v.optional(v.string()),
+    OPENAI_REQUEST_ANALYSIS_MODEL: v.optional(v.string()),
   },
 });
