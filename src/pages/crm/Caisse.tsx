@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   ScanLine, Plus, Trash2, CreditCard, Banknote, FileText,
-  Check, Printer, BarChart3, Package, ShoppingCart,
+  Check, Printer, Package, ShoppingCart,
   Loader2, Camera,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
 import { Barcode } from "../../components/ui/Barcode";
+import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { lazy, Suspense } from "react";
 const CameraScanner = lazy(() => import("../../components/ui/CameraScanner").then((m) => ({ default: m.CameraScanner })));
@@ -93,16 +94,12 @@ export function Caisse() {
         <h1 className="mt-1 text-2xl font-bold text-zinc-100">Caisse</h1>
       </div>
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-[var(--crm-surface)] p-1 w-fit">
-        {[{ key: "caisse" as Tab, label: "Vente" }, { key: "historique" as Tab, label: "Historique" }].map(({ key, label }) => (
-          <button key={key} type="button" onClick={() => setTab(key)}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === key ? "bg-[var(--crm-surface-2)] text-zinc-100 shadow-sm" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            {key === "caisse" ? <ShoppingCart className="h-4 w-4" /> : <BarChart3 className="h-4 w-4" />}
-            {label}
-          </button>
-        ))}
-      </div>
+      <UnderlineTabs
+        className="mb-6"
+        items={[{ key: "caisse", label: "Vente" }, { key: "historique", label: "Historique" }]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {tab === "caisse" ? <CaissePanel /> : <HistoriquePanel />}
     </div>

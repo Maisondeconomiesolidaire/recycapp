@@ -7,6 +7,13 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { WeightField } from "../../components/crm/WeightField";
+import {
+  WizardShell,
+  WizardStepIntro,
+  WizardOption,
+  SummaryPill,
+  type SlideDirection,
+} from "../../components/crm/Wizard";
 import { COLLECTE_CATEGORIES } from "../../lib/constants";
 
 const CameraScanner = lazy(() =>
@@ -443,65 +450,95 @@ function FlowExitForm({
   saving: boolean;
   onSubmit: () => Promise<void> | void;
 }) {
+  const steps = ["poids", "provenance", "flux", "destination", "motif", "note"];
+  const [stepIndex, setStepIndex] = useState(0);
+  const [direction, setDirection] = useState<SlideDirection>("forward");
+  const current = steps[stepIndex];
   const canSubmit = Boolean(origin && category && orientation && motif && parseFloat(weightKg) > 0) && !saving;
 
+  function go(index: number, dir: SlideDirection) {
+    setDirection(dir);
+    setStepIndex(Math.max(0, Math.min(index, steps.length - 1)));
+  }
+  const next = () => go(stepIndex + 1, "forward");
+  const back = () => go(stepIndex - 1, "back");
+
+  const titles: Record<string, string> = {
+    poids: "Pesée", provenance: "Provenance", flux: "Flux", destination: "Destination", motif: "Motif", note: "Note",
+  };
+
   return (
-    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Sortie de flux</p>
-      <h2 className="mt-2 text-xl font-bold text-zinc-100">Évacuation en volume</h2>
-      <p className="mt-1 text-sm text-zinc-500">
-        Pour les flux non individualisés : papier, livres, textile, recyclage, déchèterie, etc.
-      </p>
-
-      <div className="mt-5 space-y-5">
-        <WeightField label="Poids sorti" value={weightKg} onChange={setWeightKg} placeholder="50" autoFocus />
-
-        <FlowChoiceGroup title="Provenance">
-          {ORIGINS.map((o) => (
-            <ChoiceButton key={o.key} selected={origin === o.key} onClick={() => setOrigin(o.key)}>
-              {o.label}
-            </ChoiceButton>
-          ))}
-        </FlowChoiceGroup>
-
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Flux sorti</p>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <WizardShell eyebrow="Sortie de flux" title={titles[current]} stepIndex={stepIndex} stepCount={steps.length} direction={direction} onBack={back}>
+      {current === "poids" && (
+        <WizardStepIntro eyebrow="Étape 1" title="Pesez le flux" helper="Indiquez le poids sorti, puis continuez.">
+          <WeightField value={weightKg} onChange={setWeightKg} placeholder="50" autoFocus />
+          <button
+            type="button"
+            onClick={next}
+            disabled={!(parseFloat(weightKg) > 0)}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-3.5 text-sm font-bold text-white shadow-[0_12px_32px_rgba(241,16,79,0.24)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
+          >
+            Continuer
+          </button>
+        </WizardStepIntro>
+      )}
+      {current === "provenance" && (
+        <WizardStepIntro eyebrow="Étape 2" title="Provenance d'origine" helper="D'où provenait ce flux ?">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ORIGINS.map((o) => (
+              <WizardOption key={o.key} selected={origin === o.key} title={o.label} onClick={() => { setOrigin(o.key); next(); }} />
+            ))}
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "flux" && (
+        <WizardStepIntro eyebrow="Étape 3" title="Quel flux ?" helper="Sélectionnez la famille évacuée.">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {FLOW_CATEGORIES.map((c) => (
               <button
                 key={c.key}
                 type="button"
-                onClick={() => setCategory(c.key)}
-                className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center transition hover:-translate-y-0.5 ${
+                onClick={() => { setCategory(c.key); next(); }}
+                className={`group flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-4 text-center transition hover:-translate-y-0.5 ${
                   category === c.key
-                    ? "border-brand-500/60 bg-brand-500/15 text-brand-300"
+                    ? "border-brand-500/60 bg-brand-500/15 text-brand-300 shadow-[0_14px_32px_rgba(241,16,79,0.16)]"
                     : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/35 hover:text-zinc-100"
                 }`}
               >
-                <img src={c.image} alt="" className="h-10 w-10 object-contain" />
-                <span className="text-xs font-bold leading-tight">{c.key}</span>
+                <img src={c.image} alt="" className="h-14 w-14 object-contain transition group-hover:scale-105" />
+                <span className="text-sm font-bold leading-tight">{c.key}</span>
               </button>
             ))}
           </div>
-        </div>
-
-        <FlowChoiceGroup title="Destination">
-          {ORIENTATIONS.map((o) => (
-            <ChoiceButton key={o.key} selected={orientation === o.key} onClick={() => setOrientation(o.key)}>
-              {o.label}
-            </ChoiceButton>
-          ))}
-        </FlowChoiceGroup>
-
-        <FlowChoiceGroup title="Motif">
-          {EXIT_MOTIFS.map((m) => (
-            <ChoiceButton key={m} selected={motif === m} onClick={() => setMotif(m)}>
-              {m}
-            </ChoiceButton>
-          ))}
-        </FlowChoiceGroup>
-
-        <div>
+        </WizardStepIntro>
+      )}
+      {current === "destination" && (
+        <WizardStepIntro eyebrow="Étape 4" title="Quelle destination ?" helper="Où part ce flux ?">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {ORIENTATIONS.map((o) => (
+              <WizardOption key={o.key} selected={orientation === o.key} title={o.label} onClick={() => { setOrientation(o.key); next(); }} />
+            ))}
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "motif" && (
+        <WizardStepIntro eyebrow="Étape 5" title="Motif de sortie" helper="Pourquoi ce flux sort-il ?">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {EXIT_MOTIFS.map((m) => (
+              <WizardOption key={m} selected={motif === m} title={m} onClick={() => { setMotif(m); next(); }} />
+            ))}
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "note" && (
+        <WizardStepIntro eyebrow="Dernière étape" title="Note & validation" helper="Ajoutez une note si besoin, puis enregistrez la sortie.">
+          <div className="mb-5 flex flex-wrap gap-2">
+            <SummaryPill label="Poids" value={weightKg ? `${weightKg} kg` : "—"} />
+            <SummaryPill label="Provenance" value={ORIGIN_LABELS[origin] ?? origin} />
+            <SummaryPill label="Flux" value={category} />
+            <SummaryPill label="Destination" value={ORIENTATION_LABELS[orientation] ?? orientation} />
+            <SummaryPill label="Motif" value={motif} />
+          </div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
           <input
             type="text"
@@ -510,44 +547,18 @@ function FlowExitForm({
             placeholder="Ex : enlèvement filière papier, textile trié, roll déchèterie..."
             className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
-        </div>
-
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={!canSubmit}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          Enregistrer la sortie de flux
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function FlowChoiceGroup({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">{title}</p>
-      <div className="flex flex-wrap gap-2">{children}</div>
-    </div>
-  );
-}
-
-function ChoiceButton({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition ${
-        selected
-          ? "bg-brand-500 text-white ring-transparent"
-          : "bg-[var(--crm-surface-2)] text-zinc-400 ring-[var(--crm-border)] hover:text-zinc-100"
-      }`}
-    >
-      {children}
-    </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!canSubmit}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Enregistrer la sortie de flux
+          </button>
+        </WizardStepIntro>
+      )}
+    </WizardShell>
   );
 }
 

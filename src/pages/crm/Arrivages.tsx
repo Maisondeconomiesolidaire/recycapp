@@ -1,11 +1,19 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, BarChart3, Check, PackageCheck, Plus, Printer, Trash2, Weight, X } from "lucide-react";
+import { BarChart3, Check, PackageCheck, Plus, Printer, Trash2, Weight, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Barcode } from "../../components/ui/Barcode";
 import { WeightField } from "../../components/crm/WeightField";
+import {
+  WizardShell,
+  WizardStepIntro,
+  WizardOption,
+  SummaryPill,
+  type SlideDirection,
+} from "../../components/crm/Wizard";
+import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { COLLECTE_CATEGORIES, COLLECTE_SUBCATEGORIES } from "../../lib/constants";
 
 // ─── Référentiels ───────────────────────────────────────────────────────────
@@ -53,9 +61,6 @@ type StatEntry = {
   count: number;
 };
 
-type ArrivalStep = 1 | 2 | 3 | 4 | 5;
-type SlideDirection = "forward" | "back";
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function Arrivages() {
@@ -68,7 +73,7 @@ export function Arrivages() {
   }, []);
   const stats = useQuery(api.arrivages.historyStats, { startDate: start, endDate: end });
 
-  const [tab, setTab] = useState<"new" | "history">("new");
+  const [tab, setTab] = useState<"new" | "history" | "stats">("new");
   const [arrivalMode, setArrivalMode] = useState<"unique" | "roll">("unique");
   const [origin, setOrigin] = useState("");
   const [orientation, setOrientation] = useState("boutique");
@@ -179,24 +184,18 @@ export function Arrivages() {
         <p className="mt-1 text-sm text-zinc-500">Ajoutez les objets entrants, puis validez l'arrivage pour imprimer les tickets code-barres.</p>
       </div>
 
-      <div className="mb-6 flex w-fit rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
-        <TabButton active={tab === "new"} onClick={() => setTab("new")}>
-          Nouvelle arrivée
-        </TabButton>
-        <TabButton active={tab === "history"} onClick={() => setTab("history")}>
-          Dernières arrivées
-        </TabButton>
-      </div>
-
-      <StatsOverview
-        totalArticles={stats?.totalArticles}
-        totalWeight={stats?.totalWeight}
-        totalValue={stats?.totalValue}
-        byOrigin={stats?.byOrigin}
-        byOrientation={stats?.byOrientation}
+      <UnderlineTabs
+        className="mb-6"
+        items={[
+          { key: "new", label: "Nouvelle arrivée" },
+          { key: "history", label: "Dernières arrivées" },
+          { key: "stats", label: "Statistiques" },
+        ]}
+        value={tab}
+        onChange={setTab}
       />
 
-      {tab === "new" ? (
+      {tab === "new" && (
         <div className="mb-4 flex w-fit rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
           <TabButton active={arrivalMode === "unique"} onClick={() => setArrivalMode("unique")}>
             Arrivage unique
@@ -205,9 +204,9 @@ export function Arrivages() {
             Nouveau roll
           </TabButton>
         </div>
-      ) : null}
+      )}
 
-      {tab === "new" ? (
+      {tab === "new" && (
         <div className={`grid gap-6 ${pending.length > 0 ? "lg:grid-cols-[1fr_340px]" : "lg:grid-cols-1"}`}>
           {/* Formulaire */}
           {arrivalMode === "unique" ? (
@@ -286,25 +285,10 @@ export function Arrivages() {
             </div>
           )}
         </div>
-      ) : (
-        <div className="space-y-5">
-          <div className="grid gap-3 lg:grid-cols-2">
-            <DistributionPanel
-              title="Provenances"
-              entries={stats?.byOrigin}
-              labels={ORIGIN_LABELS}
-              accent="bg-brand-500"
-            />
-            <DistributionPanel
-              title="Destinations"
-              entries={stats?.byOrientation}
-              labels={ORIENTATION_LABELS}
-              accent="bg-emerald-500"
-            />
-          </div>
+      )}
 
-          <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
-            <h3 className="mb-4 text-sm font-semibold text-zinc-300">Dernières arrivées</h3>
+      {tab === "history" && (
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
           {!history || history.length === 0 ? (
             <p className="text-xs text-zinc-500">Aucune arrivée enregistrée pour le moment.</p>
           ) : (
@@ -348,6 +332,31 @@ export function Arrivages() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {tab === "stats" && (
+        <div className="space-y-5">
+          <StatsOverview
+            totalArticles={stats?.totalArticles}
+            totalWeight={stats?.totalWeight}
+            totalValue={stats?.totalValue}
+            byOrigin={stats?.byOrigin}
+            byOrientation={stats?.byOrientation}
+          />
+          <div className="grid gap-3 lg:grid-cols-2">
+            <DistributionPanel
+              title="Provenances"
+              entries={stats?.byOrigin}
+              labels={ORIGIN_LABELS}
+              accent="bg-brand-500"
+            />
+            <DistributionPanel
+              title="Destinations"
+              entries={stats?.byOrientation}
+              labels={ORIENTATION_LABELS}
+              accent="bg-emerald-500"
+            />
           </div>
         </div>
       )}
@@ -359,453 +368,236 @@ export function Arrivages() {
 
 // ─── Petits composants ──────────────────────────────────────────────────────
 
-function ArrivalWizard({
-  origin,
-  setOrigin,
-  category,
-  setCategory,
-  subcategory,
-  setSubcategory,
-  orientation,
-  setOrientation,
-  designation,
-  setDesignation,
-  weightKg,
-  setWeightKg,
-  quantity,
-  setQuantity,
-  saving,
-  canSubmit,
-  onAddObject,
-}: {
-  origin: string;
-  setOrigin: (value: string) => void;
-  category: string;
-  setCategory: (value: string) => void;
-  subcategory: string;
-  setSubcategory: (value: string) => void;
-  orientation: string;
-  setOrientation: (value: string) => void;
-  designation: string;
-  setDesignation: (value: string) => void;
-  weightKg: string;
-  setWeightKg: (value: string) => void;
-  quantity: string;
-  setQuantity: (value: string) => void;
-  saving: boolean;
-  canSubmit: boolean;
-  onAddObject: () => Promise<void> | void;
-}) {
-  const [step, setStep] = useState<ArrivalStep>(origin ? 2 : 1);
-  const [direction, setDirection] = useState<SlideDirection>("forward");
-  const selectedCategory = CATEGORIES.find((c) => c.key === category);
-  const subs = selectedCategory?.subs ?? [];
-  const visibleSteps: ArrivalStep[] = subs.length > 0 ? [1, 2, 3, 4, 5] : [1, 2, 4, 5];
-  const stepIndex = visibleSteps.includes(step) ? visibleSteps.indexOf(step) : 0;
-  const stepCount = visibleSteps.length;
-  const progress = ((stepIndex + 1) / stepCount) * 100;
+const STEP_TITLES: Record<string, string> = {
+  poids: "Pesée",
+  provenance: "Provenance",
+  categorie: "Catégorie",
+  souscat: "Sous-catégorie",
+  flux: "Flux",
+  destination: "Destination",
+  note: "Note",
+  details: "Détails",
+};
 
-  function goToStep(nextStep: ArrivalStep, nextDirection: SlideDirection) {
-    setDirection(nextDirection);
-    setStep(nextStep);
-  }
-
-  function chooseOrigin(value: string) {
-    setOrigin(value);
-    goToStep(2, "forward");
-  }
-
-  function chooseCategory(value: string) {
-    const nextCategory = CATEGORIES.find((c) => c.key === value);
-    setCategory(value);
-    setSubcategory("");
-    goToStep(nextCategory && nextCategory.subs.length > 0 ? 3 : 4, "forward");
-  }
-
-  function chooseSubcategory(value: string) {
-    setSubcategory(value);
-    goToStep(4, "forward");
-  }
-
-  function chooseOrientation(value: string) {
-    setOrientation(value);
-    goToStep(5, "forward");
-  }
-
-  function goBack() {
-    if (step === 5) return goToStep(4, "back");
-    if (step === 4) return goToStep(subs.length > 0 ? 3 : 2, "back");
-    if (step === 3) return goToStep(2, "back");
-    if (step === 2) return goToStep(1, "back");
-  }
-
-  async function submitObject() {
-    if (!canSubmit) return;
-    await onAddObject();
-    goToStep(origin ? 2 : 1, "forward");
-  }
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
-      <style>{`
-        @keyframes arrivalSlideForward {
-          from { opacity: 0; transform: translateX(-34px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes arrivalSlideBack {
-          from { opacity: 0; transform: translateX(34px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-      `}</style>
-
-      <div className="border-b border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-surface-2)_70%,transparent)] px-5 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
-              Nouvelle arrivée
-            </p>
-            <h2 className="mt-1 text-xl font-bold text-zinc-100">
-              {stepTitle(step)}
-            </h2>
-          </div>
-          <span className="rounded-full border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-1 text-xs font-semibold text-zinc-400">
-            {stepIndex + 1}/{stepCount}
-          </span>
-        </div>
-        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--crm-surface)]">
-          <div
-            className="h-full rounded-full bg-brand-500 transition-[width] duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-
-      <div
-        key={step}
-        className="min-h-[430px] p-5"
-        style={{
-          animation: `${direction === "forward" ? "arrivalSlideForward" : "arrivalSlideBack"} 240ms cubic-bezier(.2,.8,.2,1) both`,
-        }}
-      >
-        {step > 1 && (
-          <button
-            type="button"
-            onClick={goBack}
-            className="mb-5 inline-flex items-center gap-2 rounded-full border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:border-brand-500/40 hover:text-zinc-100"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Retour
-          </button>
-        )}
-
-        {step === 1 && (
-          <WizardStepIntro
-            eyebrow="Étape 1"
-            title="D'où vient l'objet ?"
-            helper="Choisissez la provenance. Le formulaire avance automatiquement."
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {ORIGINS.map((o) => (
-                <WizardOption
-                  key={o.key}
-                  selected={origin === o.key}
-                  title={o.label}
-                  helper={originHint(o.key)}
-                  onClick={() => chooseOrigin(o.key)}
-                />
-              ))}
-            </div>
-          </WizardStepIntro>
-        )}
-
-        {step === 2 && (
-          <WizardStepIntro
-            eyebrow="Étape 2"
-            title="Quelle catégorie ?"
-            helper="Cliquez sur la famille d'objet à enregistrer."
-          >
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => chooseCategory(c.key)}
-                  className={`group flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-4 text-center transition hover:-translate-y-0.5 ${
-                    category === c.key
-                      ? "border-brand-500/60 bg-brand-500/15 text-brand-300 shadow-[0_14px_32px_rgba(241,16,79,0.16)]"
-                      : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/35 hover:text-zinc-100"
-                  }`}
-                >
-                  <img src={c.image} alt="" className="h-14 w-14 object-contain transition group-hover:scale-105" />
-                  <span className="text-sm font-bold leading-tight">{c.key}</span>
-                </button>
-              ))}
-            </div>
-          </WizardStepIntro>
-        )}
-
-        {step === 3 && (
-          <WizardStepIntro
-            eyebrow="Étape 3"
-            title="Précisez le type"
-            helper="Sélectionnez une sous-catégorie ou passez si ce n'est pas utile."
-          >
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {subs.map((s) => (
-                <WizardOption
-                  key={s}
-                  selected={subcategory === s}
-                  title={s}
-                  onClick={() => chooseSubcategory(s)}
-                />
-              ))}
-              <WizardOption
-                selected={subcategory === ""}
-                title="Pas de précision"
-                helper="Continuer sans sous-catégorie"
-                onClick={() => chooseSubcategory("")}
-              />
-            </div>
-          </WizardStepIntro>
-        )}
-
-        {step === 4 && (
-          <WizardStepIntro
-            eyebrow={subs.length > 0 ? "Étape 4" : "Étape 3"}
-            title="Quelle destination ?"
-            helper="Choisissez où l'objet doit aller après son arrivée."
-          >
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {ORIENTATIONS.map((o) => (
-                <WizardOption
-                  key={o.key}
-                  selected={orientation === o.key}
-                  title={o.label}
-                  helper={orientationHint(o.key)}
-                  onClick={() => chooseOrientation(o.key)}
-                />
-              ))}
-            </div>
-          </WizardStepIntro>
-        )}
-
-        {step === 5 && (
-          <WizardStepIntro
-            eyebrow={subs.length > 0 ? "Étape 5" : "Étape 4"}
-            title="Derniers détails"
-            helper="Ajoutez les infos utiles, puis enregistrez l'objet."
-          >
-            <div className="mb-5 flex flex-wrap gap-2">
-              <SummaryPill label="Provenance" value={ORIGIN_LABELS[origin] ?? origin} />
-              <SummaryPill label="Catégorie" value={subcategory || category} />
-              <SummaryPill label="Destination" value={ORIENTATION_LABELS[orientation] ?? orientation} />
-            </div>
-
-            <WeightField value={weightKg} onChange={setWeightKg} autoFocus />
-
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Désignation</label>
-                <input
-                  type="text"
-                  value={designation}
-                  onChange={(e) => setDesignation(e.target.value)}
-                  placeholder="Description courte (optionnel)"
-                  className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Quantité</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={submitObject}
-              disabled={!canSubmit}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white shadow-[0_12px_32px_rgba(241,16,79,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(241,16,79,0.32)] disabled:translate-y-0 disabled:opacity-40"
-            >
-              {saving ? "Ajout…" : <><Plus className="h-4 w-4" /> Ajouter à l'arrivée</>}
-            </button>
-          </WizardStepIntro>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RollArrivalForm({
-  origin,
-  setOrigin,
-  category,
-  setCategory,
-  orientation,
-  setOrientation,
-  weightKg,
-  setWeightKg,
-  note,
-  setNote,
-  saving,
-  canSubmit,
-  onSubmit,
-}: {
-  origin: string;
-  setOrigin: (value: string) => void;
-  category: string;
-  setCategory: (value: string) => void;
-  orientation: string;
-  setOrientation: (value: string) => void;
-  weightKg: string;
-  setWeightKg: (value: string) => void;
-  note: string;
-  setNote: (value: string) => void;
-  saving: boolean;
-  canSubmit: boolean;
-  onSubmit: () => Promise<void> | void;
-}) {
-  return (
-    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.14)]">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Arrivage roll</p>
-      <h2 className="mt-2 text-2xl font-bold text-zinc-100">Flux reçu en volume</h2>
-      <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-        Pour les rolls, renseignez surtout le type de flux et le poids reçu. Aucun détail article ni sous-catégorie n'est demandé.
-      </p>
-
-      <div className="mt-6 space-y-6">
-        <WeightField label="Poids reçu" value={weightKg} onChange={setWeightKg} placeholder="50" autoFocus />
-
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Provenance</p>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {ORIGINS.map((o) => (
-              <WizardOption key={o.key} selected={origin === o.key} title={o.label} onClick={() => setOrigin(o.key)} />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Flux reçu</p>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => setCategory(c.key)}
-                className={`flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center transition hover:-translate-y-0.5 ${
-                  category === c.key
-                    ? "border-brand-500/60 bg-brand-500/15 text-brand-300 shadow-[0_14px_32px_rgba(241,16,79,0.16)]"
-                    : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/35 hover:text-zinc-100"
-                }`}
-              >
-                <img src={c.image} alt="" className="h-12 w-12 object-contain" />
-                <span className="text-xs font-bold leading-tight">{c.key}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Destination</p>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            {ORIENTATIONS.map((o) => (
-              <WizardOption key={o.key} selected={orientation === o.key} title={o.label} onClick={() => setOrientation(o.key)} />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
-          <input
-            type="text"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Ex : roll livres scolaires, papier blanc, textile mélangé..."
-            className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={!canSubmit}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white shadow-[0_12px_32px_rgba(241,16,79,0.24)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
-        >
-          {saving ? "Ajout..." : <><Plus className="h-4 w-4" /> Ajouter le roll</>}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function WizardStepIntro({
-  eyebrow,
-  title,
-  helper,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  helper: string;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">{eyebrow}</p>
-      <h3 className="mt-2 text-2xl font-bold text-zinc-100">{title}</h3>
-      <p className="mt-1 max-w-xl text-sm text-zinc-500">{helper}</p>
-      <div className="mt-6">{children}</div>
-    </div>
-  );
-}
-
-function WizardOption({
-  selected,
-  title,
-  helper,
-  onClick,
-}: {
-  selected: boolean;
-  title: string;
-  helper?: string;
-  onClick: () => void;
-}) {
+function ContinueButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`min-h-24 rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${
-        selected
-          ? "border-brand-500/60 bg-brand-500/15 text-brand-300 shadow-[0_14px_32px_rgba(241,16,79,0.16)]"
-          : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/35 hover:text-zinc-100"
-      }`}
+      disabled={disabled}
+      className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-3.5 text-sm font-bold text-white shadow-[0_12px_32px_rgba(241,16,79,0.24)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
     >
-      <span className="block text-base font-bold">{title}</span>
-      {helper && <span className="mt-1 block text-xs leading-5 text-zinc-500">{helper}</span>}
+      Continuer
     </button>
   );
 }
 
-function SummaryPill({ label, value }: { label: string; value: string }) {
+function CategoryGrid({ value, onSelect }: { value: string; onSelect: (key: string) => void }) {
   return (
-    <span className="rounded-full border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-1.5 text-xs text-zinc-400">
-      {label} : <span className="font-semibold text-zinc-200">{value || "—"}</span>
-    </span>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {CATEGORIES.map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          onClick={() => onSelect(c.key)}
+          className={`group flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-4 text-center transition hover:-translate-y-0.5 ${
+            value === c.key
+              ? "border-brand-500/60 bg-brand-500/15 text-brand-300 shadow-[0_14px_32px_rgba(241,16,79,0.16)]"
+              : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/35 hover:text-zinc-100"
+          }`}
+        >
+          <img src={c.image} alt="" className="h-14 w-14 object-contain transition group-hover:scale-105" />
+          <span className="text-sm font-bold leading-tight">{c.key}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
-function stepTitle(step: ArrivalStep) {
-  if (step === 1) return "Provenance";
-  if (step === 2) return "Catégorie";
-  if (step === 3) return "Sous-catégorie";
-  if (step === 4) return "Destination";
-  return "Détails";
+function ArrivalWizard({
+  origin, setOrigin, category, setCategory, subcategory, setSubcategory,
+  orientation, setOrientation, designation, setDesignation, weightKg, setWeightKg,
+  quantity, setQuantity, saving, canSubmit, onAddObject,
+}: {
+  origin: string; setOrigin: (v: string) => void;
+  category: string; setCategory: (v: string) => void;
+  subcategory: string; setSubcategory: (v: string) => void;
+  orientation: string; setOrientation: (v: string) => void;
+  designation: string; setDesignation: (v: string) => void;
+  weightKg: string; setWeightKg: (v: string) => void;
+  quantity: string; setQuantity: (v: string) => void;
+  saving: boolean; canSubmit: boolean; onAddObject: () => Promise<void> | void;
+}) {
+  const subs = CATEGORIES.find((c) => c.key === category)?.subs ?? [];
+  const steps = useMemo<string[]>(() => {
+    const s = ["poids", "provenance", "categorie"];
+    if (subs.length > 0) s.push("souscat");
+    s.push("destination", "details");
+    return s;
+  }, [subs.length]);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [direction, setDirection] = useState<SlideDirection>("forward");
+  const safeIndex = Math.min(stepIndex, steps.length - 1);
+  const current = steps[safeIndex];
+
+  function go(index: number, dir: SlideDirection) {
+    setDirection(dir);
+    setStepIndex(Math.max(0, Math.min(index, steps.length - 1)));
+  }
+  const next = () => go(safeIndex + 1, "forward");
+  const back = () => go(safeIndex - 1, "back");
+
+  async function submitObject() {
+    if (!canSubmit) return;
+    await onAddObject();
+    go(0, "forward");
+  }
+
+  return (
+    <WizardShell eyebrow="Nouvelle arrivée" title={STEP_TITLES[current]} stepIndex={safeIndex} stepCount={steps.length} direction={direction} onBack={back}>
+      {current === "poids" && (
+        <WizardStepIntro eyebrow="Étape 1" title="Pesez l'objet" helper="Saisissez le poids, puis continuez.">
+          <WeightField value={weightKg} onChange={setWeightKg} autoFocus />
+          <ContinueButton onClick={next} />
+        </WizardStepIntro>
+      )}
+      {current === "provenance" && (
+        <WizardStepIntro eyebrow="Étape 2" title="D'où vient l'objet ?" helper="Choisissez la provenance. Le formulaire avance automatiquement.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ORIGINS.map((o) => (
+              <WizardOption key={o.key} selected={origin === o.key} title={o.label} helper={originHint(o.key)} onClick={() => { setOrigin(o.key); next(); }} />
+            ))}
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "categorie" && (
+        <WizardStepIntro eyebrow="Étape 3" title="Quelle catégorie ?" helper="Cliquez sur la famille d'objet à enregistrer.">
+          <CategoryGrid value={category} onSelect={(key) => { setCategory(key); setSubcategory(""); next(); }} />
+        </WizardStepIntro>
+      )}
+      {current === "souscat" && (
+        <WizardStepIntro eyebrow="Étape 4" title="Précisez le type" helper="Sélectionnez une sous-catégorie ou passez.">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {subs.map((s) => (
+              <WizardOption key={s} selected={subcategory === s} title={s} onClick={() => { setSubcategory(s); next(); }} />
+            ))}
+            <WizardOption selected={subcategory === ""} title="Pas de précision" helper="Continuer sans sous-catégorie" onClick={() => { setSubcategory(""); next(); }} />
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "destination" && (
+        <WizardStepIntro eyebrow={subs.length > 0 ? "Étape 5" : "Étape 4"} title="Quelle destination ?" helper="Choisissez où l'objet doit aller après son arrivée.">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {ORIENTATIONS.map((o) => (
+              <WizardOption key={o.key} selected={orientation === o.key} title={o.label} helper={orientationHint(o.key)} onClick={() => { setOrientation(o.key); next(); }} />
+            ))}
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "details" && (
+        <WizardStepIntro eyebrow="Dernière étape" title="Derniers détails" helper="Ajoutez les infos utiles, puis enregistrez l'objet.">
+          <div className="mb-5 flex flex-wrap gap-2">
+            <SummaryPill label="Poids" value={weightKg ? `${weightKg} kg` : "—"} />
+            <SummaryPill label="Provenance" value={ORIGIN_LABELS[origin] ?? origin} />
+            <SummaryPill label="Catégorie" value={subcategory || category} />
+            <SummaryPill label="Destination" value={ORIENTATION_LABELS[orientation] ?? orientation} />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Désignation</label>
+              <input type="text" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Description courte (optionnel)" className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Quantité</label>
+              <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            </div>
+          </div>
+          <button type="button" onClick={submitObject} disabled={!canSubmit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white shadow-[0_12px_32px_rgba(241,16,79,0.24)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40">
+            {saving ? "Ajout…" : <><Plus className="h-4 w-4" /> Ajouter à l'arrivée</>}
+          </button>
+        </WizardStepIntro>
+      )}
+    </WizardShell>
+  );
+}
+
+function RollArrivalForm({
+  origin, setOrigin, category, setCategory, orientation, setOrientation,
+  weightKg, setWeightKg, note, setNote, saving, canSubmit, onSubmit,
+}: {
+  origin: string; setOrigin: (v: string) => void;
+  category: string; setCategory: (v: string) => void;
+  orientation: string; setOrientation: (v: string) => void;
+  weightKg: string; setWeightKg: (v: string) => void;
+  note: string; setNote: (v: string) => void;
+  saving: boolean; canSubmit: boolean; onSubmit: () => Promise<void> | void;
+}) {
+  const steps = ["poids", "provenance", "flux", "destination", "note"];
+  const [stepIndex, setStepIndex] = useState(0);
+  const [direction, setDirection] = useState<SlideDirection>("forward");
+  const current = steps[stepIndex];
+
+  function go(index: number, dir: SlideDirection) {
+    setDirection(dir);
+    setStepIndex(Math.max(0, Math.min(index, steps.length - 1)));
+  }
+  const next = () => go(stepIndex + 1, "forward");
+  const back = () => go(stepIndex - 1, "back");
+
+  async function submitRoll() {
+    if (!canSubmit) return;
+    await onSubmit();
+    go(0, "forward");
+  }
+
+  return (
+    <WizardShell eyebrow="Nouveau roll" title={STEP_TITLES[current]} stepIndex={stepIndex} stepCount={steps.length} direction={direction} onBack={back}>
+      {current === "poids" && (
+        <WizardStepIntro eyebrow="Étape 1" title="Pesez le roll" helper="Indiquez le poids reçu, puis continuez.">
+          <WeightField value={weightKg} onChange={setWeightKg} placeholder="50" autoFocus />
+          <ContinueButton onClick={next} disabled={!(parseFloat(weightKg) > 0)} />
+        </WizardStepIntro>
+      )}
+      {current === "provenance" && (
+        <WizardStepIntro eyebrow="Étape 2" title="D'où vient le roll ?" helper="Choisissez la provenance.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ORIGINS.map((o) => (
+              <WizardOption key={o.key} selected={origin === o.key} title={o.label} helper={originHint(o.key)} onClick={() => { setOrigin(o.key); next(); }} />
+            ))}
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "flux" && (
+        <WizardStepIntro eyebrow="Étape 3" title="Quel flux ?" helper="Sélectionnez la famille reçue en volume.">
+          <CategoryGrid value={category} onSelect={(key) => { setCategory(key); next(); }} />
+        </WizardStepIntro>
+      )}
+      {current === "destination" && (
+        <WizardStepIntro eyebrow="Étape 4" title="Quelle destination ?" helper="Choisissez l'orientation du flux.">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {ORIENTATIONS.map((o) => (
+              <WizardOption key={o.key} selected={orientation === o.key} title={o.label} helper={orientationHint(o.key)} onClick={() => { setOrientation(o.key); next(); }} />
+            ))}
+          </div>
+        </WizardStepIntro>
+      )}
+      {current === "note" && (
+        <WizardStepIntro eyebrow="Dernière étape" title="Note & validation" helper="Ajoutez une note si besoin, puis enregistrez le roll.">
+          <div className="mb-5 flex flex-wrap gap-2">
+            <SummaryPill label="Poids" value={weightKg ? `${weightKg} kg` : "—"} />
+            <SummaryPill label="Provenance" value={ORIGIN_LABELS[origin] ?? origin} />
+            <SummaryPill label="Flux" value={category} />
+            <SummaryPill label="Destination" value={ORIENTATION_LABELS[orientation] ?? orientation} />
+          </div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Note</label>
+          <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex : roll livres scolaires, papier blanc, textile mélangé..." className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+          <button type="button" onClick={submitRoll} disabled={!canSubmit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white shadow-[0_12px_32px_rgba(241,16,79,0.24)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40">
+            {saving ? "Ajout..." : <><Plus className="h-4 w-4" /> Ajouter le roll</>}
+          </button>
+        </WizardStepIntro>
+      )}
+    </WizardShell>
+  );
 }
 
 function originHint(key: string) {

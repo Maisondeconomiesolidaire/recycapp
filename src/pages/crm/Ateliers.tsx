@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
-  Wrench, ScanLine, Plus, Check, Clock,
+  Wrench, ScanLine, Check, Clock,
   Package, Loader2, ArrowRight, Tag, X, BarChart3, Camera,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
+import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 const CameraScanner = lazy(() => import("../../components/ui/CameraScanner").then((m) => ({ default: m.CameraScanner })));
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -34,20 +35,16 @@ export function Ateliers() {
         <p className="mt-1 text-sm text-zinc-500">Enregistrez le temps de valorisation et marquez les articles comme prêts à la vente.</p>
       </div>
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-[var(--crm-surface)] p-1 w-fit">
-        {[
-          { key: "saisie" as Tab, label: "Saisie", icon: Plus },
-          { key: "en_cours" as Tab, label: "En atelier", icon: Wrench },
-          { key: "historique" as Tab, label: "Historique", icon: BarChart3 },
-        ].map(({ key, label, icon: Icon }) => (
-          <button key={key} type="button" onClick={() => setTab(key)}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === key ? "bg-[var(--crm-surface-2)] text-zinc-100 shadow-sm" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+      <UnderlineTabs
+        className="mb-6"
+        items={[
+          { key: "saisie", label: "Saisie" },
+          { key: "en_cours", label: "En atelier" },
+          { key: "historique", label: "Historique" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {tab === "saisie" && <SaisieAtelier />}
       {tab === "en_cours" && <EnCoursList />}

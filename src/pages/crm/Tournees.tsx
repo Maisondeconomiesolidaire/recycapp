@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 
 type Tab = "planification" | "historique";
 type OptimizeFeedback = {
@@ -150,26 +151,15 @@ export function Tournees() {
         </p>
       </div>
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-[var(--crm-surface)] p-1 w-fit">
-        {[
-          { key: "planification" as Tab, label: "À venir", icon: Route },
-          { key: "historique" as Tab, label: "Historique", icon: Calendar },
-        ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              tab === key
-                ? "bg-[var(--crm-surface-2)] text-zinc-100 shadow-sm"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+      <UnderlineTabs
+        className="mb-6"
+        items={[
+          { key: "planification", label: "À venir" },
+          { key: "historique", label: "Historique" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {tab === "planification" ? <PlanificationTab /> : <HistoriqueTab />}
     </div>
