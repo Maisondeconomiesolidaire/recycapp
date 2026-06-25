@@ -39,7 +39,7 @@ const NAV_GROUPS: Array<{
   {
     key: "demandes",
     label: "Demandes & planning",
-    items: ["demandes", "calendrier", "clients", "tournees"],
+    items: ["demandes", "calendrier", "clients", "tournees", "flotte"],
   },
   {
     key: "stock",
