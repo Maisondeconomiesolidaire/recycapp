@@ -309,6 +309,7 @@ function PlanificationTab() {
                       {totalStops} passage{totalStops > 1 ? "s" : ""}
                       {doneStops > 0 && ` · ${doneStops}/${totalStops} effectué${doneStops > 1 ? "s" : ""}`}
                       {t.driverName && ` · ${t.driverName}`}
+                      {t.vehicleName && ` · 🚚 ${t.vehicleName}`}
                     </p>
                   </div>
                   {totalStops > 0 && t.status === "en_cours" && (
@@ -710,12 +711,18 @@ function TourneeForm({
   const [label, setLabel] = useState(() => formatTourneeLabel(initialDate));
   const [labelTouched, setLabelTouched] = useState(false);
   const [driverId, setDriverId] = useState("");
+  const [fleetVehicleId, setFleetVehicleId] = useState("");
   const [stops, setStops] = useState<StopDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const createTournee = useMutation(api.sorties.createTournee);
 
   const openCollectes = useQuery(api.sorties.listUpcomingCollectes);
+  const availableVehicles =
+    useQuery(api.fleet.availableOn, {
+      date: new Date(date).getTime(),
+      includeVehicleId: fleetVehicleId ? (fleetVehicleId as Id<"vehicles">) : undefined,
+    }) ?? [];
 
   function addStop() {
     setStops((prev) => [...prev, { address: "", contactName: "", contactPhone: "", notes: "" }]);
@@ -789,6 +796,7 @@ function TourneeForm({
         label: label.trim(),
         date: new Date(date).getTime(),
         driverId: driverId ? (driverId as Id<"teamMembers">) : undefined,
+        fleetVehicleId: fleetVehicleId ? (fleetVehicleId as Id<"vehicles">) : undefined,
         stops: validStops,
         notes: undefined,
       });
@@ -861,6 +869,27 @@ function TourneeForm({
               ))}
             </select>
           </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-widest text-zinc-500 block mb-1.5">
+            Véhicule
+          </label>
+          <select
+            value={fleetVehicleId}
+            onChange={(e) => setFleetVehicleId(e.target.value)}
+            className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="">— Aucun véhicule —</option>
+            {availableVehicles.map((vehicle) => (
+              <option key={vehicle._id} value={vehicle._id}>
+                {vehicle.name}
+                {vehicle.plate ? ` · ${vehicle.plate}` : ""}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-zinc-600">
+            Seuls les véhicules disponibles à cette date sont proposés.
+          </p>
         </div>
       </div>
 
@@ -1055,6 +1084,7 @@ function HistoriqueTab() {
                 {t.stops.length > 0 &&
                   ` · ${doneStops}/${t.stops.length} passage${t.stops.length > 1 ? "s" : ""}`}
                 {t.driverName && ` · ${t.driverName}`}
+                {t.vehicleName && ` · 🚚 ${t.vehicleName}`}
               </p>
             </div>
             <span

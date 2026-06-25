@@ -289,6 +289,8 @@ export default defineSchema({
     payment: v.optional(requestPayment),
     velo: v.optional(veloDetails),
     livraison: v.optional(livraisonDetails),
+    // Véhicule de la flotte affecté (collecte / livraison planifiée).
+    assignedVehicle: v.optional(v.id("vehicles")),
     createdAt: v.number(),
     updatedAt: v.number(),
     reference: v.optional(v.string()),
@@ -297,7 +299,25 @@ export default defineSchema({
     .index("by_type", ["type"])
     .index("by_outcome", ["outcome"])
     .index("by_userId", ["userId"])
-    .index("by_scheduledDate", ["scheduledDate"]),
+    .index("by_scheduledDate", ["scheduledDate"])
+    .index("by_assignedVehicle", ["assignedVehicle"]),
+
+  /** Flotte : véhicules utilitaires de la recyclerie. */
+  vehicles: defineTable({
+    name: v.string(),
+    plate: v.optional(v.string()),
+    kind: v.union(
+      v.literal("utilitaire"),
+      v.literal("camionnette"),
+      v.literal("camion"),
+      v.literal("voiture"),
+    ),
+    capacityM3: v.optional(v.number()),
+    site: v.optional(v.union(v.literal("60"), v.literal("76"))),
+    active: v.boolean(),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_active", ["active"]),
 
   /** Comptes clients (boutique). Le clerkId est le `subject` de l'identité Clerk. */
   users: defineTable({
@@ -612,6 +632,8 @@ export default defineSchema({
     date: v.number(),
     label: v.string(),
     vehicleId: v.optional(v.id("teamMembers")),
+    // Véhicule de la flotte affecté à la tournée.
+    fleetVehicleId: v.optional(v.id("vehicles")),
     driverId: v.optional(v.id("teamMembers")),
     stops: v.array(v.object({
       requestId: v.optional(v.id("requests")),
@@ -634,7 +656,9 @@ export default defineSchema({
     estimatedDurationSeconds: v.optional(v.number()),
     routeCoordinates: v.optional(v.array(v.array(v.number()))),
     createdAt: v.number(),
-  }).index("by_date", ["date"]),
+  })
+    .index("by_date", ["date"])
+    .index("by_fleetVehicle", ["fleetVehicleId"]),
 
   tourneeTrackingLinks: defineTable({
     tourneeId: v.id("tournees"),

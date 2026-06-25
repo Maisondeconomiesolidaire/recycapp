@@ -10,6 +10,7 @@ import {
 } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { accessAllows, customerFullName, requireCrmPermission } from "./lib";
+import { vehicleBusyReason } from "./fleet";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const TOURNEE_DEPOT_ADDRESS = "4 rue de la prairie 60650 Lachapelle-aux-Pots";
@@ -274,11 +275,18 @@ export const createTournee = mutation({
     label: v.string(),
     date: v.number(),
     driverId: v.optional(v.id("teamMembers")),
+    fleetVehicleId: v.optional(v.id("vehicles")),
     stops: v.array(tourneeStopValidator),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, "tournees", "create");
+    if (args.fleetVehicleId) {
+      const reason = await vehicleBusyReason(ctx, args.fleetVehicleId, args.date);
+      if (reason) {
+        throw new Error(`Véhicule indisponible pour cette tournée : ${reason}`);
+      }
+    }
     const tourneeId = await ctx.db.insert("tournees", {
       ...args,
       depotAddress: TOURNEE_DEPOT_ADDRESS,
@@ -727,6 +735,7 @@ export const listTournees = query({
     return await Promise.all(
       tournees.map(async (t) => {
         const driver = t.driverId ? await ctx.db.get(t.driverId) : null;
+        const vehicle = t.fleetVehicleId ? await ctx.db.get(t.fleetVehicleId) : null;
         const stops = await Promise.all(
           t.stops.map(async (stop) => {
             const request = stop.requestId ? await ctx.db.get(stop.requestId) : null;
@@ -745,6 +754,7 @@ export const listTournees = query({
           ...rest,
           stops,
           driverName: driver?.name ?? null,
+          vehicleName: vehicle?.name ?? null,
         };
       }),
     );
@@ -758,6 +768,9 @@ export const getTournee = query({
     const tournee = await ctx.db.get(tourneeId);
     if (!tournee) return null;
     const driver = tournee.driverId ? await ctx.db.get(tournee.driverId) : null;
+    const fleetVehicle = tournee.fleetVehicleId
+      ? await ctx.db.get(tournee.fleetVehicleId)
+      : null;
     const vehicleLocation = await ctx.db
       .query("tourneeVehicleLocations")
       .withIndex("by_tourneeId", (q) => q.eq("tourneeId", tournee._id))
@@ -775,6 +788,7 @@ export const getTournee = query({
       ...tournee,
       stops,
       driverName: driver?.name ?? null,
+      vehicleName: fleetVehicle?.name ?? null,
       vehicleLocation: vehicleLocation
         ? {
             latitude: vehicleLocation.latitude,

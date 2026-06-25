@@ -16,6 +16,7 @@ import type * as clients from "../clients.js";
 import type * as dashboard from "../dashboard.js";
 import type * as documents from "../documents.js";
 import type * as files from "../files.js";
+import type * as fleet from "../fleet.js";
 import type * as lib from "../lib.js";
 import type * as livraison from "../livraison.js";
 import type * as messages from "../messages.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   documents: typeof documents;
   files: typeof files;
+  fleet: typeof fleet;
   lib: typeof lib;
   livraison: typeof livraison;
   messages: typeof messages;

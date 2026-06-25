@@ -21,6 +21,7 @@ import {
   requestType,
 } from "./schema";
 import { resolveProcess } from "./processes";
+import { vehicleBusyReason } from "./fleet";
 import { Id } from "./_generated/dataModel";
 
 const customerArg = v.object({
@@ -717,6 +718,7 @@ export const patchManagement = mutation({
     quoteAmount: v.optional(v.union(v.number(), v.null())),
     quoteDetails: v.optional(v.union(v.string(), v.null())),
     visitNeeded: v.optional(v.union(v.boolean(), v.null())),
+    assignedVehicle: v.optional(v.union(v.id("vehicles"), v.null())),
     beforePhotos: v.optional(v.array(v.id("_storage"))),
     afterPhotos: v.optional(v.array(v.id("_storage"))),
   },
@@ -726,6 +728,19 @@ export const patchManagement = mutation({
     if (args.site !== undefined) patch.site = args.site;
     if (args.assignedTo !== undefined)
       patch.assignedTo = args.assignedTo ?? undefined;
+    if (args.assignedVehicle !== undefined) {
+      if (args.assignedVehicle) {
+        const request = await ctx.db.get(args.id);
+        const date = request?.scheduledDate ?? Date.now();
+        const reason = await vehicleBusyReason(ctx, args.assignedVehicle, date, {
+          excludeRequestId: args.id,
+        });
+        if (reason) {
+          throw new Error(`Véhicule indisponible à cette date : ${reason}`);
+        }
+      }
+      patch.assignedVehicle = args.assignedVehicle ?? undefined;
+    }
     if (args.estimatedHours !== undefined)
       patch.estimatedHours = args.estimatedHours ?? undefined;
     if (args.actualHours !== undefined)

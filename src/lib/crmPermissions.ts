@@ -10,6 +10,7 @@ import {
   PackageMinus,
   ShieldCheck,
   ShoppingCart,
+  Truck,
   UserCog,
   Users,
   Wrench,
@@ -43,6 +44,7 @@ export type CrmPageKey =
   | "arrivages"
   | "sorties"
   | "tournees"
+  | "flotte"
   | "equipe"
   | "admin";
 
@@ -190,6 +192,14 @@ export const CRM_PAGES: CrmPageDefinition[] = [
     to: "/crm/tournees",
     icon: CalendarDays,
     actions: ["read", "create", "update", "delete", "start"],
+  },
+  {
+    key: "flotte",
+    label: "Flotte",
+    description: "Véhicules utilitaires, disponibilités et affectations.",
+    to: "/crm/flotte",
+    icon: Truck,
+    actions: ["read", "create", "update", "delete"],
   },
   {
     key: "equipe",

@@ -592,6 +592,17 @@ function GestionTab({
   const schedule = useMutation(api.requests.schedule);
   const patch = useMutation(api.requests.patchManagement);
   const team = useQuery(api.team.list, {}) ?? [];
+  const usesVehicle = request.type === "collecte" || request.type === "livraison";
+  const availableVehicles =
+    useQuery(
+      api.fleet.availableOn,
+      usesVehicle && request.scheduledDate
+        ? {
+            date: request.scheduledDate,
+            includeVehicleId: request.assignedVehicle ?? undefined,
+          }
+        : "skip",
+    ) ?? [];
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const patchVisit = useMutation(api.requests.patchManagement);
@@ -743,6 +754,37 @@ function GestionTab({
           </Select>
         </div>
       </section>
+
+      {usesVehicle && (
+        <section>
+          <SectionTitle>Véhicule de la flotte</SectionTitle>
+          {request.scheduledDate ? (
+            <Select
+              value={request.assignedVehicle ?? ""}
+              onChange={(e) =>
+                patch({
+                  id: request._id,
+                  assignedVehicle: e.target.value
+                    ? (e.target.value as Id<"vehicles">)
+                    : null,
+                })
+              }
+            >
+              <option value="">Aucun véhicule</option>
+              {availableVehicles.map((vehicle) => (
+                <option key={vehicle._id} value={vehicle._id}>
+                  {vehicle.name}
+                  {vehicle.plate ? ` · ${vehicle.plate}` : ""}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <p className="text-xs text-amber-400">
+              Programmez une date pour affecter un véhicule disponible ce jour-là.
+            </p>
+          )}
+        </section>
+      )}
 
       {request.type === "collecte" && (
         <section>

@@ -14,6 +14,7 @@ import {
   Warehouse,
   Boxes,
   Sparkles,
+  Star,
   Loader2,
   Check,
   Printer,
@@ -481,7 +482,7 @@ export function Articles() {
                                 }`}
                                 title={a.productOfDay ? "Retirer le produit du jour" : "Définir comme produit du jour"}
                               >
-                                <Sparkles className={`h-4 w-4 ${a.productOfDay ? "fill-current" : ""}`} />
+                                <Star className={`h-4 w-4 ${a.productOfDay ? "fill-current" : ""}`} />
                               </button>
                             )}
                             {canPrint && (
