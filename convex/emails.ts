@@ -341,6 +341,34 @@ export const sendPhotoRequest = internalAction({
   },
 });
 
+/** Notification au client qu'un document a été ajouté à sa demande. */
+export const sendNewDocument = internalAction({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    reference: v.string(),
+    type: v.string(),
+    requestId: v.string(),
+    docName: v.string(),
+  },
+  handler: async (_ctx, { email, name, reference, type, requestId, docName }) => {
+    const label = typeLabel(type);
+    const url = `${appUrl()}/compte/commandes/${requestId}`;
+    const html = shell({
+      preheader: `Un nouveau document est disponible pour votre demande ${label} #${reference}.`,
+      heading: "Un nouveau document est disponible 📄",
+      intro: `Bonjour ${esc(name)},<br/><br/>L'équipe Cycle en Bray a ajouté un document à votre demande <strong>${esc(label)}</strong> (référence <strong>#${esc(reference)}</strong>).`,
+      contentHtml: `
+        <div style="margin:0 0 20px;padding:14px 18px;background:#faf8f5;border:1px solid #ece9e4;border-radius:12px;font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#3f3f46;">📎 ${esc(docName)}</div>
+        <div style="margin:0 0 22px;">${button(url, "Voir mes documents")}</div>
+        <p style="margin:0 0 10px;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:#71717a;">Accès rapides :</p>
+        ${quickLinks()}
+      `,
+    });
+    await resendSend(email, `Nouveau document · ${label} #${reference}`, html);
+  },
+});
+
 /** Notification au client que sa demande a été programmée à une date. */
 export const sendScheduled = internalAction({
   args: {

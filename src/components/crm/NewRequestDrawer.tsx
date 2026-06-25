@@ -1607,7 +1607,7 @@ function LivraisonForm({
                   <div>
                     <p className="text-sm font-semibold text-zinc-100">Frais de livraison</p>
                     <p className="mt-1 text-xs text-zinc-500">
-                      1 € / km depuis le dépôt de Lachapelle-aux-Pots.
+                      0,50 € / km · aller-retour depuis le dépôt de Lachapelle-aux-Pots.
                     </p>
                   </div>
                   {(computingFee || loadingSlots) && (
@@ -1619,7 +1619,7 @@ function LivraisonForm({
                 {feeError && <p className="mt-3 text-sm text-red-400">{feeError}</p>}
                 {fee && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <SummaryPill label="Distance" value={`${fee.distanceKm} km`} />
+                    <SummaryPill label="Distance A/R" value={`${fee.distanceKm} km`} />
                     <SummaryPill label="Livraison" value={formatPrice(fee.deliveryFee)} />
                     {effectiveAcompte !== null && <SummaryPill label="Acompte 20%" value={formatPrice(effectiveAcompte)} />}
                   </div>
@@ -1651,7 +1651,7 @@ function LivraisonForm({
                     <div>
                       <p className="text-sm font-semibold text-zinc-100">Livraison standard</p>
                       <p className="mt-1 text-xs text-zinc-500">
-                        Trajet direct depuis le depot jusqu'au client.
+                        Aller-retour depuis le dépôt jusqu'au client.
                       </p>
                     </div>
                     <span className={cn(

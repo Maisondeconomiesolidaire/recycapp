@@ -347,7 +347,7 @@ export const analyzePhotos = action({
   },
 });
 
-// ─── Calcul des frais de livraison (1 € / km, dépôt → adresse) ───────────────
+// ─── Calcul des frais de livraison (0,50 € / km aller-retour) ────────────────
 
 export const computeDeliveryFee = action({
   args: {
@@ -375,10 +375,11 @@ export const computeDeliveryFee = action({
       geocode(DEPOT_ADDRESS, accessToken),
       geocode(destination, accessToken),
     ]);
-    const km = await drivingDistanceKm(depot, target, accessToken);
-    const distanceKm = Math.round(km * 10) / 10;
-    // Tarif : 1 € du kilomètre, arrondi à l'euro.
-    const deliveryFee = Math.max(0, Math.round(distanceKm));
+    const oneWayKm = await drivingDistanceKm(depot, target, accessToken);
+    // Distance aller-retour (le véhicule fait l'aller et le retour au dépôt).
+    const distanceKm = Math.round(oneWayKm * 2 * 10) / 10;
+    // Tarif : 0,50 € du kilomètre (aller-retour).
+    const deliveryFee = Math.max(0, Math.round(distanceKm * 0.5 * 100) / 100);
     return { distanceKm, deliveryFee };
   },
 });
@@ -488,11 +489,16 @@ export const advantageousSlots = action({
       }
       const km = haversineKm(target, point);
       if (km <= ADVANTAGEOUS_RADIUS_KM) {
-        const groupedKm = await drivingDistanceKm(point, target, accessToken);
-        const reducedDeliveryFee = Math.max(0, Math.round(groupedKm));
-        if (reducedDeliveryFee > ADVANTAGEOUS_RADIUS_KM) {
+        const groupedOneWay = await drivingDistanceKm(point, target, accessToken);
+        if (groupedOneWay > ADVANTAGEOUS_RADIUS_KM) {
           continue;
         }
+        // Frais réduits : 0,50 €/km aller-retour entre la collecte et le client.
+        const groupedRoundTrip = Math.round(groupedOneWay * 2 * 10) / 10;
+        const reducedDeliveryFee = Math.max(
+          0,
+          Math.round(groupedRoundTrip * 0.5 * 100) / 100,
+        );
         slots.push({
           requestReference: candidate.reference,
           scheduledDate: candidate.scheduledDate,

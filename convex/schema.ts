@@ -425,6 +425,9 @@ export default defineSchema({
     ),
     mimeType: v.optional(v.string()),
     uploadedByRole: v.union(v.literal("client"), v.literal("staff")),
+    // Si le document provient du gestionnaire (partage) : on référence le
+    // fichier source sans dupliquer le blob, et on ne le supprime pas au retrait.
+    sourceDocumentId: v.optional(v.id("documents")),
     createdAt: v.number(),
   }).index("by_requestId", ["requestId"]),
 

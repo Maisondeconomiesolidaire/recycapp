@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -11,8 +11,10 @@ import {
   Pencil,
   Plus,
   Search,
+  Share2,
   Trash2,
   UploadCloud,
+  Check,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
@@ -21,6 +23,9 @@ import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { FileTypePreview } from "../../components/ui/FileTypePreview";
 import { FullSpinner } from "../../components/ui/Spinner";
+import { Modal } from "../../components/ui/Modal";
+import { TypeBadge } from "../../components/crm/TypeBadge";
+import { TYPE_LABELS } from "../../lib/constants";
 import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
 
@@ -46,6 +51,10 @@ export function Documents() {
   const [folderId, setFolderId] = useState<FolderId | undefined>(undefined);
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [assignFile, setAssignFile] = useState<{
+    _id: Id<"documents">;
+    name: string;
+  } | null>(null);
   const tree = useQuery(api.documents.listTree);
   const allEntries = useQuery(api.documents.listAll);
   const folder = useQuery(api.documents.listFolder, { folderId });
@@ -259,6 +268,7 @@ export function Documents() {
                   onDeleteFolder={handleDeleteFolder}
                   onRenameFile={handleRenameFile}
                   onDeleteFile={handleDeleteFile}
+                  onAssignFile={setAssignFile}
                 />
               ) : folder.folders.length === 0 && folder.files.length === 0 ? (
                 <EmptyState
@@ -293,6 +303,7 @@ export function Documents() {
                         href={item.url ?? undefined}
                         onRename={() => handleRenameFile(item)}
                         onDelete={() => handleDeleteFile(item)}
+                        onAssign={() => setAssignFile(item)}
                       />
                     ))}
                   </div>
@@ -302,6 +313,7 @@ export function Documents() {
           )}
         </main>
       </div>
+      <AssignToRequestModal file={assignFile} onClose={() => setAssignFile(null)} />
     </div>
   );
 }
@@ -441,6 +453,7 @@ function SearchResults({
   onDeleteFolder,
   onRenameFile,
   onDeleteFile,
+  onAssignFile,
 }: {
   folders: FolderDoc[];
   files: Array<{
@@ -458,6 +471,7 @@ function SearchResults({
   onDeleteFolder: (target: { _id: FolderId; name: string }) => void;
   onRenameFile: (target: { _id: Id<"documents">; name: string }) => void;
   onDeleteFile: (target: { _id: Id<"documents">; name: string }) => void;
+  onAssignFile: (target: { _id: Id<"documents">; name: string }) => void;
 }) {
   if (folders.length === 0 && files.length === 0) {
     return (
@@ -499,6 +513,7 @@ function SearchResults({
             href={item.url ?? undefined}
             onRename={() => onRenameFile(item)}
             onDelete={() => onDeleteFile(item)}
+            onAssign={() => onAssignFile(item)}
           />
         ))}
       </SearchSection>
@@ -538,6 +553,171 @@ function SearchSection({
   );
 }
 
+function AssignToRequestModal({
+  file,
+  onClose,
+}: {
+  file: { _id: Id<"documents">; name: string } | null;
+  onClose: () => void;
+}) {
+  const requests = useQuery(api.requests.listForPicker, file ? {} : "skip");
+  const assign = useMutation(api.documents.assignFileToRequest);
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState<Id<"requests"> | null>(null);
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSearch("");
+    setSelectedId(null);
+    setDone(false);
+    setError(null);
+  }, [file?._id]);
+
+  const filtered = useMemo(() => {
+    const list = requests ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return list.slice(0, 100);
+    return list
+      .filter((r) => {
+        const hay = [
+          r.firstName,
+          r.lastName,
+          r.reference,
+          r.email,
+          r.city,
+          TYPE_LABELS[r.type],
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      })
+      .slice(0, 100);
+  }, [requests, search]);
+
+  async function confirm() {
+    if (!file || !selectedId) return;
+    setSending(true);
+    setError(null);
+    try {
+      await assign({ fileId: file._id, requestId: selectedId });
+      setDone(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Partage impossible.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Modal
+      dark
+      open={file !== null}
+      onClose={onClose}
+      title="Assigner à une demande"
+      className="max-w-2xl"
+    >
+      {done ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+            <Check className="h-6 w-6" />
+          </span>
+          <p className="text-sm font-semibold text-zinc-100">
+            Document partagé dans la demande
+          </p>
+          <p className="text-xs text-zinc-500">
+            Le client a été prévenu par email.
+          </p>
+          <Button onClick={onClose} className="mt-2">
+            Fermer
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-500">
+            Fichier : <span className="font-medium text-zinc-300">{file?.name}</span>
+          </p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher par nom, prénom, référence, type…"
+              className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] py-2.5 pl-9 pr-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+
+          <div className="max-h-[50vh] space-y-1.5 overflow-y-auto pr-1">
+            {requests === undefined ? (
+              <p className="py-6 text-center text-sm text-zinc-500">Chargement…</p>
+            ) : filtered.length === 0 ? (
+              <p className="py-6 text-center text-sm text-zinc-500">
+                Aucune demande trouvée.
+              </p>
+            ) : (
+              filtered.map((r) => {
+                const active = selectedId === r._id;
+                return (
+                  <button
+                    key={r._id}
+                    type="button"
+                    onClick={() => setSelectedId(r._id)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition",
+                      active
+                        ? "border-brand-500 bg-brand-500/10"
+                        : "border-[var(--crm-border)] bg-[var(--crm-surface-2)] hover:border-zinc-600",
+                    )}
+                  >
+                    <TypeBadge
+                      type={r.type}
+                      collecteType={r.collecteType ?? undefined}
+                      size="sm"
+                      solid
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-zinc-100">
+                        {r.firstName} {r.lastName}
+                      </p>
+                      <p className="truncate text-xs text-zinc-500">
+                        #{r.reference}
+                        {r.city ? ` · ${r.city}` : ""}
+                      </p>
+                    </div>
+                    {active && <Check className="h-4 w-4 shrink-0 text-brand-400" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          <div className="flex justify-end gap-2 border-t border-[var(--crm-border)] pt-3">
+            <Button variant="outline" onClick={onClose}>
+              Annuler
+            </Button>
+            <Button onClick={confirm} disabled={!selectedId || sending}>
+              {sending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Partage…
+                </>
+              ) : (
+                <>
+                  <Share2 className="h-4 w-4" /> Partager dans la demande
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function ExplorerItem({
   icon,
   title,
@@ -546,6 +726,7 @@ function ExplorerItem({
   onOpen,
   onRename,
   onDelete,
+  onAssign,
 }: {
   icon: ReactNode;
   title: string;
@@ -554,6 +735,7 @@ function ExplorerItem({
   onOpen?: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onAssign?: () => void;
 }) {
   const content = (
     <>
@@ -588,6 +770,17 @@ function ExplorerItem({
             >
               <Download className="h-4 w-4" />
             </a>
+          )}
+          {onAssign && (
+            <button
+              type="button"
+              onClick={onAssign}
+              className="rounded-lg p-2 text-zinc-500 hover:bg-brand-500/10 hover:text-brand-300"
+              aria-label="Assigner à une demande"
+              title="Assigner à une demande"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
           )}
           <button
             type="button"

@@ -226,7 +226,9 @@ export function RequestDrawer({
           )}
           {activeTab === "documents" && (
             <div className="space-y-4">
-              <PhotoRequestButton request={request} />
+              {(request.type === "collecte" || request.type === "aerogommage") && (
+                <PhotoRequestButton request={request} />
+              )}
               <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
             </div>
           )}
@@ -1732,11 +1734,11 @@ function RequestDetails({ request }: { request: RequestDoc }) {
               value={l.articlePrice !== undefined ? formatPrice(l.articlePrice) : undefined}
             />
             <Row
-              label="Distance (dépôt → livraison)"
+              label="Distance aller-retour (dépôt ↔ livraison)"
               value={l.distanceKm !== undefined ? `${l.distanceKm} km` : undefined}
             />
             <Row
-              label="Frais (1 € / km)"
+              label="Frais (0,50 € / km · A/R)"
               value={l.deliveryFee !== undefined ? formatPrice(l.deliveryFee) : undefined}
             />
             <Row

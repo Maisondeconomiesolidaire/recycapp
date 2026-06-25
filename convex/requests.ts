@@ -594,6 +594,32 @@ export const list = query({
   },
 });
 
+/** Liste légère des demandes pour le sélecteur « Assigner à une demande ». */
+export const listForPicker = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAnyCrmPermission(ctx, [
+      ["documents", "share"],
+      ["demandes", "read"],
+    ]);
+    const requests = await ctx.db.query("requests").order("desc").take(500);
+    return requests.map((r) => {
+      const c = normalizeCustomer(r.customer);
+      return {
+        _id: r._id,
+        reference: r.reference ?? String(r._id).slice(-6),
+        type: r.type,
+        collecteType: r.collecteType ?? null,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        city: c.city ?? null,
+        createdAt: r.createdAt,
+      };
+    });
+  },
+});
+
 export const counts = query({
   args: {},
   handler: async (ctx) => {

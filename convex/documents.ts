@@ -1,11 +1,31 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import {
+  customerFullName,
   hasCrmPermission,
+  requireAnyCrmPermission,
   requireCrmPermission,
   requireRequestParticipant,
 } from "./lib";
-import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+
+/** Planifie l'email « nouveau document » au client propriétaire de la demande. */
+async function notifyClientNewDocument(
+  ctx: MutationCtx,
+  request: Doc<"requests">,
+  docName: string,
+) {
+  if (!request.customer.email) return;
+  await ctx.scheduler.runAfter(0, internal.emails.sendNewDocument, {
+    email: request.customer.email,
+    name: customerFullName(request.customer),
+    reference: request.reference ?? String(request._id).slice(-6),
+    type: request.type,
+    requestId: String(request._id),
+    docName,
+  });
+}
 
 const docType = v.union(
   v.literal("devis"),
@@ -59,16 +79,63 @@ export const addToRequest = mutation({
     mimeType: v.optional(v.string()),
   },
   handler: async (ctx, { requestId, storageId, name, docType: type, mimeType }) => {
-    const { staff } = await requireRequestParticipant(ctx, requestId, "demandes", "update");
-    return await ctx.db.insert("requestDocuments", {
+    const { request, staff } = await requireRequestParticipant(
+      ctx,
+      requestId,
+      "demandes",
+      "update",
+    );
+    const finalName = name.trim() || "Document";
+    const id = await ctx.db.insert("requestDocuments", {
       requestId,
       storageId,
-      name: name.trim() || "Document",
+      name: finalName,
       docType: type,
       mimeType,
       uploadedByRole: staff ? "staff" : "client",
       createdAt: Date.now(),
     });
+    // Quand le staff dépose un document, on prévient le client par email.
+    if (staff) {
+      await notifyClientNewDocument(ctx, request, finalName);
+    }
+    return id;
+  },
+});
+
+/**
+ * Partage un fichier du gestionnaire de documents vers une demande.
+ * Le blob source n'est pas dupliqué (référence via sourceDocumentId), et le
+ * client est prévenu par email.
+ */
+export const assignFileToRequest = mutation({
+  args: {
+    fileId: v.id("documents"),
+    requestId: v.id("requests"),
+    docType: v.optional(docType),
+  },
+  handler: async (ctx, { fileId, requestId, docType: type }) => {
+    await requireAnyCrmPermission(ctx, [
+      ["documents", "share"],
+      ["demandes", "update"],
+    ]);
+    const file = await ctx.db.get(fileId);
+    if (!file) throw new Error("Fichier introuvable.");
+    const request = await ctx.db.get(requestId);
+    if (!request) throw new Error("Demande introuvable.");
+
+    await ctx.db.insert("requestDocuments", {
+      requestId,
+      storageId: file.storageId,
+      name: file.name,
+      docType: type ?? "autre",
+      mimeType: file.mimeType,
+      uploadedByRole: "staff",
+      sourceDocumentId: fileId,
+      createdAt: Date.now(),
+    });
+    await notifyClientNewDocument(ctx, request, file.name);
+    return { ok: true };
   },
 });
 
@@ -81,7 +148,11 @@ export const removeFromRequest = mutation({
     if (!staff && doc.uploadedByRole !== "client") {
       throw new Error("Seule l'équipe peut supprimer ce document.");
     }
-    await ctx.storage.delete(doc.storageId).catch(() => {});
+    // On ne supprime le blob que s'il appartient à cette demande : un document
+    // partagé depuis le gestionnaire garde son fichier source intact.
+    if (!doc.sourceDocumentId) {
+      await ctx.storage.delete(doc.storageId).catch(() => {});
+    }
     await ctx.db.delete(documentId);
   },
 });
