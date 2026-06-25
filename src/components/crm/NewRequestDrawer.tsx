@@ -1124,6 +1124,19 @@ function LivraisonForm({
   const effectiveAcompte =
     effectiveTotal !== null ? Math.round(effectiveTotal * 0.2 * 100) / 100 : null;
 
+  // Champs à compléter manuellement : uniquement ceux que l'IA n'a pas renseignés.
+  const needArticleTitle = !resolvedArticleTitle;
+  const needReference = !resolvedReference;
+  const needCategory = !resolvedCategory;
+  const needSubcategory = !resolvedSubcategory;
+  const needArticlePrice = articlePrice === null;
+  const showManualFields =
+    needArticleTitle ||
+    needReference ||
+    needCategory ||
+    needSubcategory ||
+    needArticlePrice;
+
   const steps = [
     {
       eyebrow: "Livraison",
@@ -1494,50 +1507,62 @@ function LivraisonForm({
                 )}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
-                <p className="text-sm font-semibold text-zinc-100">Compléter ou corriger manuellement</p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Utilisez ces champs si l'IA n'a pas trouvé toutes les informations.
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <Field label="Nom de l'article">
-                    <Input {...register("articleTitle")} placeholder="Ex : Table basse scandinave" />
-                  </Field>
-                  <Field label="Référence">
-                    <Input {...register("reference")} placeholder="Ex : 123456" />
-                  </Field>
-                  <Field label="Catégorie">
-                    <Select
-                      {...register("category")}
-                      value={manualCategory}
-                      onChange={(e) => {
-                        setValue("category", e.target.value);
-                        setValue("subcategory", "");
-                      }}
-                    >
-                      <option value="">Sélectionner…</option>
-                      {ARTICLE_CATEGORIES.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Sous-catégorie">
-                    <Select {...register("subcategory")} value={manualSubcategory}>
-                      <option value="">Sélectionner…</option>
-                      {(ARTICLE_SUBCATEGORIES[manualCategory] ?? []).map((subcategory) => (
-                        <option key={subcategory} value={subcategory}>
-                          {subcategory}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Prix article">
-                    <Input type="number" min="0" step="0.01" {...register("articlePrice")} placeholder="Ex : 49" />
-                  </Field>
+              {showManualFields && (
+                <div className="mt-4 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+                  <p className="text-sm font-semibold text-zinc-100">Compléter manuellement</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    L'IA n'a pas tout renseigné. Complétez les champs manquants ci-dessous.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {needArticleTitle && (
+                      <Field label="Nom de l'article">
+                        <Input {...register("articleTitle")} placeholder="Ex : Table basse scandinave" />
+                      </Field>
+                    )}
+                    {needReference && (
+                      <Field label="Référence">
+                        <Input {...register("reference")} placeholder="Ex : 123456" />
+                      </Field>
+                    )}
+                    {needCategory && (
+                      <Field label="Catégorie">
+                        <Select
+                          {...register("category")}
+                          value={manualCategory}
+                          onChange={(e) => {
+                            setValue("category", e.target.value);
+                            setValue("subcategory", "");
+                          }}
+                        >
+                          <option value="">Sélectionner…</option>
+                          {ARTICLE_CATEGORIES.map((category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    )}
+                    {needSubcategory && (
+                      <Field label="Sous-catégorie">
+                        <Select {...register("subcategory")} value={manualSubcategory}>
+                          <option value="">Sélectionner…</option>
+                          {(ARTICLE_SUBCATEGORIES[resolvedCategory] ?? []).map((subcategory) => (
+                            <option key={subcategory} value={subcategory}>
+                              {subcategory}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    )}
+                    {needArticlePrice && (
+                      <Field label="Prix article">
+                        <Input type="number" min="0" step="0.01" {...register("articlePrice")} placeholder="Ex : 49" />
+                      </Field>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </WizardStepIntro>
           </div>
         )}
