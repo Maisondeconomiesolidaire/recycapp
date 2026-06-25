@@ -7,6 +7,7 @@ import {
   requireRequestParticipant,
   titleCaseName,
 } from "./lib";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 
 function serializeMessage(message: Doc<"messages">) {
@@ -92,6 +93,15 @@ export const sendMessage = mutation({
         customerName: customerFullName(request.customer),
         read: false,
         createdAt: now,
+      });
+    } else if (request.customer.email) {
+      // Prévenir le client par email quand le staff répond (Resend).
+      await ctx.scheduler.runAfter(0, internal.emails.sendNewMessage, {
+        email: request.customer.email,
+        name: customerFullName(request.customer),
+        reference: request.reference ?? String(request._id).slice(-6),
+        type: request.type,
+        snippet: trimmed.length > 160 ? `${trimmed.slice(0, 160)}…` : trimmed,
       });
     }
 

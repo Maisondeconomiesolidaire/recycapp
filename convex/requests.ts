@@ -22,6 +22,7 @@ import {
 } from "./schema";
 import { resolveProcess } from "./processes";
 import { vehicleBusyReason } from "./fleet";
+import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 const customerArg = v.object({
@@ -64,6 +65,17 @@ async function createNewRequestNotification(
     read: false,
     createdAt: Date.now(),
   });
+
+  // Email de confirmation au client (Resend).
+  const request = await ctx.db.get(args.requestId);
+  if (request?.customer.email) {
+    await ctx.scheduler.runAfter(0, internal.emails.sendRequestConfirmation, {
+      email: request.customer.email,
+      name: customerFullName(request.customer),
+      reference: request.reference ?? String(request._id).slice(-6),
+      type: request.type,
+    });
+  }
 }
 
 async function generateReference(ctx: MutationCtx): Promise<string> {
@@ -762,7 +774,22 @@ export const schedule = mutation({
   args: { id: v.id("requests"), scheduledDate: v.optional(v.number()) },
   handler: async (ctx, { id, scheduledDate }) => {
     await requireAnyCrmPermission(ctx, [["demandes", "update"], ["calendrier", "update"]]);
+    const previous = await ctx.db.get(id);
     await ctx.db.patch(id, { scheduledDate, updatedAt: Date.now() });
+    // Prévenir le client par email quand une date est (re)programmée.
+    if (
+      scheduledDate &&
+      scheduledDate !== previous?.scheduledDate &&
+      previous?.customer.email
+    ) {
+      await ctx.scheduler.runAfter(0, internal.emails.sendScheduled, {
+        email: previous.customer.email,
+        name: customerFullName(previous.customer),
+        reference: previous.reference ?? String(previous._id).slice(-6),
+        type: previous.type,
+        date: scheduledDate,
+      });
+    }
   },
 });
 
