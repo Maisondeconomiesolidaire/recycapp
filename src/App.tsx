@@ -8,6 +8,7 @@ import { TourneeTracking } from "./pages/public/TourneeTracking";
 import { AerogommageForm } from "./pages/public/AerogommageForm";
 import { CollecteForm } from "./pages/public/CollecteForm";
 import { VeloForm } from "./pages/public/VeloForm";
+import { LivraisonForm } from "./pages/public/LivraisonForm";
 import { Merci } from "./pages/public/Merci";
 import {
   AccountLayout,
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/aerogommage" element={<AerogommageForm />} />
         <Route path="/collecte" element={<CollecteForm />} />
         <Route path="/velo" element={<VeloForm />} />
+        <Route path="/livraison" element={<LivraisonForm />} />
         <Route path="/merci" element={<Merci />} />
 
         {/* Espace client */}

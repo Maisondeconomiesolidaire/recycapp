@@ -80,7 +80,10 @@ export const list = query({
               : reason
                 ? "sur_collecte"
                 : "disponible";
-        return { ...vehicle, status, reason };
+        const photoUrl = vehicle.photo
+          ? await ctx.storage.getUrl(vehicle.photo)
+          : null;
+        return { ...vehicle, status, reason, photoUrl };
       }),
     );
   },
@@ -108,14 +111,80 @@ export const availableOn = query({
         ? null
         : await vehicleBusyReason(ctx, vehicle._id, date);
       if (reason && !isCurrent) continue;
+      const photoUrl = vehicle.photo
+        ? await ctx.storage.getUrl(vehicle.photo)
+        : null;
       result.push({
         _id: vehicle._id,
         name: vehicle.name,
         plate: vehicle.plate ?? null,
         kind: vehicle.kind,
+        photoUrl,
       });
     }
     return result;
+  },
+});
+
+/** Véhicules pris (demandes + tournées) sur une période, pour le calendrier. */
+export const takenInRange = query({
+  args: { from: v.number(), to: v.number() },
+  handler: async (ctx, { from, to }) => {
+    await requireAnyCrmPermission(ctx, [
+      ["flotte", "read"],
+      ["tournees", "read"],
+      ["demandes", "read"],
+      ["calendrier", "read"],
+    ]);
+    const vehicles = await ctx.db.query("vehicles").collect();
+    const nameById = new Map(vehicles.map((v) => [String(v._id), v.name]));
+
+    const entries: Array<{
+      date: number;
+      vehicleId: string;
+      vehicleName: string;
+      source: "demande" | "tournee";
+      label: string;
+    }> = [];
+
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_scheduledDate", (q) =>
+        q.gte("scheduledDate", from).lte("scheduledDate", to),
+      )
+      .collect();
+    for (const r of requests) {
+      if (!r.assignedVehicle || !r.scheduledDate || r.outcome !== "open") continue;
+      const name = nameById.get(String(r.assignedVehicle));
+      if (!name) continue;
+      entries.push({
+        date: r.scheduledDate,
+        vehicleId: String(r.assignedVehicle),
+        vehicleName: name,
+        source: "demande",
+        label: r.reference ? `#${r.reference}` : "Demande",
+      });
+    }
+
+    const tournees = await ctx.db
+      .query("tournees")
+      .withIndex("by_date", (q) => q.gte("date", from).lte("date", to))
+      .collect();
+    for (const t of tournees) {
+      if (!t.fleetVehicleId || t.status === "terminee" || t.status === "annulee")
+        continue;
+      const name = nameById.get(String(t.fleetVehicleId));
+      if (!name) continue;
+      entries.push({
+        date: t.date,
+        vehicleId: String(t.fleetVehicleId),
+        vehicleName: name,
+        source: "tournee",
+        label: t.label,
+      });
+    }
+
+    return entries;
   },
 });
 
@@ -124,9 +193,8 @@ export const create = mutation({
     name: v.string(),
     plate: v.optional(v.string()),
     kind: vehicleKind,
-    capacityM3: v.optional(v.number()),
+    photo: v.optional(v.id("_storage")),
     site: v.optional(v.union(v.literal("60"), v.literal("76"))),
-    notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, "flotte", "create");
@@ -144,14 +212,16 @@ export const update = mutation({
     name: v.string(),
     plate: v.optional(v.string()),
     kind: vehicleKind,
-    capacityM3: v.optional(v.number()),
+    photo: v.optional(v.union(v.id("_storage"), v.null())),
     site: v.optional(v.union(v.literal("60"), v.literal("76"))),
     active: v.boolean(),
-    notes: v.optional(v.string()),
   },
-  handler: async (ctx, { id, ...rest }) => {
+  handler: async (ctx, { id, photo, ...rest }) => {
     await requireCrmPermission(ctx, "flotte", "update");
-    await ctx.db.patch(id, rest);
+    await ctx.db.patch(id, {
+      ...rest,
+      ...(photo !== undefined ? { photo: photo ?? undefined } : {}),
+    });
   },
 });
 

@@ -285,6 +285,56 @@ export const submitVelo = mutation({
   },
 });
 
+export const submitLivraison = mutation({
+  args: {
+    customer: customerArg,
+    comment: v.optional(v.string()),
+    articlePhoto: v.optional(v.id("_storage")),
+    referencePhoto: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, { customer, comment, articlePhoto, referencePhoto }) => {
+    customer = normalizeCustomer(customer);
+    const now = Date.now();
+    const reference = await generateReference(ctx);
+    const details = {
+      deliveryAddress: {
+        address: customer.address,
+        postalCode: customer.postalCode,
+        city: customer.city,
+      },
+      sameAsBilling: true,
+      articlePhoto,
+      referencePhoto,
+    };
+    const photos = [articlePhoto, referencePhoto].filter(
+      (p): p is Id<"_storage"> => Boolean(p),
+    );
+    const requestId = await ctx.db.insert("requests", {
+      type: "livraison",
+      stage: "nouveau",
+      outcome: "open",
+      requestOrigin: "external",
+      complete: isLivraisonComplete(customer, details),
+      processSteps: resolveProcess("livraison"),
+      completedSteps: 0,
+      customer,
+      userId: (await ctx.auth.getUserIdentity())?.subject,
+      comment,
+      photos,
+      livraison: details,
+      createdAt: now,
+      updatedAt: now,
+      reference,
+    });
+    await createNewRequestNotification(ctx, {
+      requestId,
+      requestType: "livraison",
+      customerName: customerFullName(customer),
+    });
+    return requestId;
+  },
+});
+
 export const submitArticleReservation = mutation({
   args: {
     customer: customerArg,
@@ -804,11 +854,33 @@ export const patchManagement = mutation({
 
 /** Planifie (ou déplanifie) la prestation pour le calendrier. */
 export const schedule = mutation({
-  args: { id: v.id("requests"), scheduledDate: v.optional(v.number()) },
-  handler: async (ctx, { id, scheduledDate }) => {
+  args: {
+    id: v.id("requests"),
+    scheduledDate: v.optional(v.number()),
+    assignedVehicle: v.optional(v.union(v.id("vehicles"), v.null())),
+  },
+  handler: async (ctx, { id, scheduledDate, assignedVehicle }) => {
     await requireAnyCrmPermission(ctx, [["demandes", "update"], ["calendrier", "update"]]);
     const previous = await ctx.db.get(id);
-    await ctx.db.patch(id, { scheduledDate, updatedAt: Date.now() });
+    const patch: Record<string, unknown> = {
+      scheduledDate,
+      updatedAt: Date.now(),
+    };
+    if (assignedVehicle !== undefined) {
+      if (assignedVehicle && scheduledDate) {
+        const reason = await vehicleBusyReason(
+          ctx,
+          assignedVehicle,
+          scheduledDate,
+          { excludeRequestId: id },
+        );
+        if (reason) {
+          throw new Error(`Véhicule indisponible à cette date : ${reason}`);
+        }
+      }
+      patch.assignedVehicle = assignedVehicle ?? undefined;
+    }
+    await ctx.db.patch(id, patch);
     // Prévenir le client par email quand une date est (re)programmée.
     if (
       scheduledDate &&

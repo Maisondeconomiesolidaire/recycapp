@@ -312,9 +312,11 @@ export default defineSchema({
       v.literal("camion"),
       v.literal("voiture"),
     ),
-    capacityM3: v.optional(v.number()),
+    photo: v.optional(v.id("_storage")),
     site: v.optional(v.union(v.literal("60"), v.literal("76"))),
     active: v.boolean(),
+    // Champs hérités (conservés pour compatibilité des anciens véhicules).
+    capacityM3: v.optional(v.number()),
     notes: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_active", ["active"]),

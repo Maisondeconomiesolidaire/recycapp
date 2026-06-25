@@ -905,8 +905,14 @@ function GestionTab({
           open={scheduleOpen}
           onClose={() => setScheduleOpen(false)}
           value={request.scheduledDate}
-          onChange={(scheduledDate) => {
-            schedule({ id: request._id, scheduledDate });
+          vehicleSelection={usesVehicle}
+          vehicleId={request.assignedVehicle ?? null}
+          onChange={(scheduledDate, vehicleId) => {
+            schedule({
+              id: request._id,
+              scheduledDate,
+              ...(usesVehicle ? { assignedVehicle: vehicleId ?? null } : {}),
+            });
             setScheduleOpen(false);
           }}
         />

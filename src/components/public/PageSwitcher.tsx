@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bike, ChevronDown, SprayCan, Store, Truck } from "lucide-react";
+import { Bike, ChevronDown, PackageCheck, SprayCan, Store, Truck } from "lucide-react";
 
 const PAGES = [
   { to: "/boutique", label: "Boutique", icon: Store },
   { to: "/collecte", label: "Collecte", icon: Truck },
   { to: "/aerogommage", label: "Aérogommage", icon: SprayCan },
   { to: "/velo", label: "Cycle en Bray", icon: Bike },
+  { to: "/livraison", label: "Livraison", icon: PackageCheck },
 ];
 
 function matchPage(pathname: string) {
@@ -88,5 +89,10 @@ export const PAGE_HEADERS: Record<string, { icon: typeof Store; title: string; s
     icon: Bike,
     title: "Cycle en Bray",
     subtitle: "Réparation et reconditionnement de vélos.",
+  },
+  "/livraison": {
+    icon: PackageCheck,
+    title: "Livraison d'un article",
+    subtitle: "Faites-vous livrer un article à votre adresse.",
   },
 };

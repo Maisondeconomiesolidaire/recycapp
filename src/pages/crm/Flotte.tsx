@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Truck, Plus, Pencil, Trash2 } from "lucide-react";
+import { Truck, Plus, Pencil, Trash2, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../../components/ui/Modal";
 import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
+import { PhotoUpload } from "../../components/ui/PhotoUpload";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { SITE_LABELS, Site } from "../../lib/constants";
 
@@ -38,12 +40,13 @@ const STATUS_LABELS: Record<string, string> = {
 type Vehicle = Doc<"vehicles"> & {
   status: string;
   reason: string | null;
+  photoUrl: string | null;
 };
 
 export function Flotte() {
   const vehicles = useQuery(api.fleet.list) as Vehicle[] | undefined;
   const remove = useMutation(api.fleet.remove);
-  const [editing, setEditing] = useState<Doc<"vehicles"> | null>(null);
+  const [editing, setEditing] = useState<Vehicle | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<Doc<"vehicles"> | null>(null);
 
@@ -86,9 +89,17 @@ export function Flotte() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] text-zinc-300">
-                      <Truck className="h-5 w-5" />
-                    </span>
+                    {v.photoUrl ? (
+                      <img
+                        src={v.photoUrl}
+                        alt={v.name}
+                        className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-[var(--crm-border)]"
+                      />
+                    ) : (
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] text-zinc-300">
+                        <Truck className="h-5 w-5" />
+                      </span>
+                    )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-zinc-100">{v.name}</p>
                       <p className="text-xs text-zinc-500">
@@ -126,7 +137,6 @@ export function Flotte() {
                   </span>
                   <span className="text-xs text-zinc-500">
                     {v.site ? SITE_LABELS[v.site] : ""}
-                    {v.capacityM3 ? `${v.site ? " · " : ""}${v.capacityM3} m³` : ""}
                   </span>
                 </div>
 
@@ -171,7 +181,7 @@ function VehicleForm({
   vehicle,
   onClose,
 }: {
-  vehicle: Doc<"vehicles"> | null;
+  vehicle: Vehicle | null;
   onClose: () => void;
 }) {
   const create = useMutation(api.fleet.create);
@@ -179,38 +189,38 @@ function VehicleForm({
   const [name, setName] = useState(vehicle?.name ?? "");
   const [plate, setPlate] = useState(vehicle?.plate ?? "");
   const [kind, setKind] = useState<VehicleKind>(vehicle?.kind ?? "utilitaire");
-  const [capacityM3, setCapacityM3] = useState(
-    vehicle?.capacityM3 != null ? String(vehicle.capacityM3) : "",
-  );
   const [site, setSite] = useState<Site | "">(vehicle?.site ?? "");
   const [active, setActive] = useState(vehicle?.active ?? true);
-  const [notes, setNotes] = useState(vehicle?.notes ?? "");
+  const [photoId, setPhotoId] = useState<Id<"_storage"> | null>(
+    vehicle?.photo ?? null,
+  );
   const [saving, setSaving] = useState(false);
+
+  // Aperçu de la photo existante (tant qu'elle n'a pas été remplacée/retirée).
+  const currentPhotoUrl =
+    vehicle && photoId === vehicle.photo ? vehicle.photoUrl : null;
 
   async function save() {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const capacity = capacityM3.trim() ? Number(capacityM3) : undefined;
       if (vehicle) {
         await update({
           id: vehicle._id,
           name: name.trim(),
           plate: plate.trim() || undefined,
           kind,
-          capacityM3: capacity,
+          photo: photoId,
           site: site || undefined,
           active,
-          notes: notes.trim() || undefined,
         });
       } else {
         await create({
           name: name.trim(),
           plate: plate.trim() || undefined,
           kind,
-          capacityM3: capacity,
+          photo: photoId ?? undefined,
           site: site || undefined,
-          notes: notes.trim() || undefined,
         });
       }
       onClose();
@@ -244,27 +254,35 @@ function VehicleForm({
             </Select>
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Volume (m³)">
-            <Input
-              type="number"
-              min="0"
-              step="0.5"
-              value={capacityM3}
-              onChange={(e) => setCapacityM3(e.target.value)}
-              placeholder="12"
+        <Field label="Site de rattachement">
+          <Select value={site} onChange={(e) => setSite(e.target.value as Site | "")}>
+            <option value="">Sélectionner un site</option>
+            <option value="60">{SITE_LABELS["60"]}</option>
+            <option value="76">{SITE_LABELS["76"]}</option>
+          </Select>
+        </Field>
+        <Field label="Photo du véhicule">
+          {currentPhotoUrl ? (
+            <div className="relative w-32">
+              <img
+                src={currentPhotoUrl}
+                alt={name}
+                className="aspect-square w-32 rounded-xl object-cover ring-1 ring-[var(--crm-border)]"
+              />
+              <button
+                type="button"
+                onClick={() => setPhotoId(null)}
+                className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1 text-white transition hover:bg-black/80"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <PhotoUpload
+              value={photoId ? [photoId] : []}
+              onChange={(ids) => setPhotoId(ids[ids.length - 1] ?? null)}
             />
-          </Field>
-          <Field label="Site de rattachement">
-            <Select value={site} onChange={(e) => setSite(e.target.value as Site | "")}>
-              <option value="">Sélectionner un site</option>
-              <option value="60">{SITE_LABELS["60"]}</option>
-              <option value="76">{SITE_LABELS["76"]}</option>
-            </Select>
-          </Field>
-        </div>
-        <Field label="Notes">
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Hayon, gabarit, remarques…" />
+          )}
         </Field>
         {vehicle && (
           <Checkbox
