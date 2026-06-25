@@ -101,6 +101,7 @@ export const sendMessage = mutation({
         name: customerFullName(request.customer),
         reference: request.reference ?? String(request._id).slice(-6),
         type: request.type,
+        requestId: String(request._id),
         snippet: trimmed.length > 160 ? `${trimmed.slice(0, 160)}…` : trimmed,
       });
     }

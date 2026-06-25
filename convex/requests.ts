@@ -23,7 +23,7 @@ import {
 import { resolveProcess } from "./processes";
 import { vehicleBusyReason } from "./fleet";
 import { internal } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 
 const customerArg = v.object({
   firstName: v.string(),
@@ -47,6 +47,41 @@ const aerogommageOptionsArg = v.object({
   pickupAddress: v.optional(addressArg),
   deliveryAddress: v.optional(addressArg),
 });
+
+/** Aperçu article pour l'email (carte avec image, prix, lien boutique). */
+async function emailArticlePreview(ctx: MutationCtx, request: Doc<"requests">) {
+  if (request.type === "article") {
+    const articleId =
+      request.article?.articleId ?? request.articles?.[0]?.articleId;
+    if (!articleId) return undefined;
+    const article = await ctx.db.get(articleId);
+    if (!article) return undefined;
+    const imageUrl = article.images?.[0]
+      ? await ctx.storage.getUrl(article.images[0])
+      : null;
+    return {
+      title: article.title,
+      price: article.price,
+      condition: article.condition,
+      imageUrl: imageUrl ?? undefined,
+      articleId: String(articleId),
+    };
+  }
+  if (request.type === "livraison" && request.livraison) {
+    const l = request.livraison;
+    if (!l.articleTitle) return undefined;
+    const imageUrl = l.articlePhoto
+      ? await ctx.storage.getUrl(l.articlePhoto)
+      : null;
+    return {
+      title: l.articleTitle,
+      price: l.articlePrice,
+      condition: l.condition,
+      imageUrl: imageUrl ?? undefined,
+    };
+  }
+  return undefined;
+}
 
 async function createNewRequestNotification(
   ctx: MutationCtx,
@@ -74,6 +109,8 @@ async function createNewRequestNotification(
       name: customerFullName(request.customer),
       reference: request.reference ?? String(request._id).slice(-6),
       type: request.type,
+      requestId: String(request._id),
+      article: await emailArticlePreview(ctx, request),
     });
   }
 }
@@ -787,7 +824,9 @@ export const schedule = mutation({
         name: customerFullName(previous.customer),
         reference: previous.reference ?? String(previous._id).slice(-6),
         type: previous.type,
+        requestId: String(previous._id),
         date: scheduledDate,
+        article: await emailArticlePreview(ctx, previous),
       });
     }
   },
