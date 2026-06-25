@@ -23,20 +23,6 @@ const KIND_LABELS: Record<VehicleKind, string> = {
   voiture: "Voiture",
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  disponible: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-  sur_collecte: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  en_tournee: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  inactif: "bg-zinc-600/20 text-zinc-400 ring-zinc-500/30",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  disponible: "Disponible",
-  sur_collecte: "Sur collecte",
-  en_tournee: "En tournée",
-  inactif: "Inactif",
-};
-
 type Vehicle = Doc<"vehicles"> & {
   status: string;
   reason: string | null;
@@ -127,18 +113,11 @@ export function Flotte() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${
-                      STATUS_STYLES[v.status] ?? STATUS_STYLES.inactif
-                    }`}
-                  >
-                    {STATUS_LABELS[v.status] ?? v.status}
-                  </span>
+                {v.site ? (
                   <span className="text-xs text-zinc-500">
-                    {v.site ? SITE_LABELS[v.site] : ""}
+                    {SITE_LABELS[v.site]}
                   </span>
-                </div>
+                ) : null}
 
                 {v.reason && (
                   <p className="text-xs text-zinc-500">{v.reason}</p>

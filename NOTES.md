@@ -333,7 +333,7 @@ CRM (protégées `requireStaff`) :
 
 1. `npm install`
 2. **Convex** : `npx convex dev` (laisser tourner). Remplit `CONVEX_DEPLOYMENT` et
-   `VITE_CONVEX_URL`. Déploiement actuel : `nautical-eagle-786`.
+   `VITE_CONVEX_URL`. Déploiement actuel : `sensible-gull-961`.
 3. **Clerk** :
    - Copier la **Publishable key** dans `.env.local` → `VITE_CLERK_PUBLISHABLE_KEY`.
    - Créer un **JWT Template** nommé `convex`.

@@ -16,6 +16,12 @@ function sameUtcDay(a: number, b: number): boolean {
   return Math.floor(a / 86_400_000) === Math.floor(b / 86_400_000);
 }
 
+function overlapsUtcDay(start: number, end: number, day: number) {
+  const dayStart = Math.floor(day / 86_400_000) * 86_400_000;
+  const dayEnd = dayStart + 86_400_000;
+  return start < dayEnd && end > dayStart;
+}
+
 /**
  * Raison d'indisponibilité d'un véhicule à une date donnée, sinon `null`.
  * - Occupé s'il est affecté à une collecte/livraison planifiée ce jour-là.
@@ -55,6 +61,30 @@ export async function vehicleBusyReason(
     if (tournee.status === "terminee" || tournee.status === "annulee") continue;
     if (tournee.status === "en_cours" || sameUtcDay(tournee.date, date)) {
       return `En tournée (${tournee.label})`;
+    }
+  }
+
+  const reservations = await ctx.db
+    .query("vehicleReservations")
+    .withIndex("by_vehicleId", (q) => q.eq("vehicleId", vehicleId))
+    .collect();
+  for (const reservation of reservations) {
+    if (reservation.status !== "approved") continue;
+    if (overlapsUtcDay(reservation.start, reservation.end, date)) {
+      return "Réservé via Mes Outils";
+    }
+  }
+
+  // Une tâche de maintenance non terminée planifiée ce jour-là bloque le véhicule.
+  const tasks = await ctx.db
+    .query("vehicleMaintenanceTasks")
+    .withIndex("by_vehicleId", (q) => q.eq("vehicleId", vehicleId))
+    .collect();
+  for (const task of tasks) {
+    if (task.status === "done" || !task.dueDate) continue;
+    const taskEnd = Math.max(task.dueDate, task.endDate ?? task.dueDate);
+    if (overlapsUtcDay(task.dueDate, taskEnd, date)) {
+      return `En maintenance (${task.title})`;
     }
   }
 

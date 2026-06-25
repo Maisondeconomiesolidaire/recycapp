@@ -315,6 +315,33 @@ export default defineSchema({
     photo: v.optional(v.id("_storage")),
     site: v.optional(v.union(v.literal("60"), v.literal("76"))),
     active: v.boolean(),
+    sourceKey: v.optional(v.string()),
+    model: v.optional(v.string()),
+    statusLabel: v.optional(v.string()),
+    vehicleFamily: v.optional(v.string()),
+    vehicleSubfamily: v.optional(v.string()),
+    siteLabel: v.optional(v.string()),
+    seats: v.optional(v.number()),
+    reservablePro: v.optional(v.boolean()),
+    reservablePersonal: v.optional(v.boolean()),
+    structure: v.optional(v.string()),
+    acronym: v.optional(v.string()),
+    brand: v.optional(v.string()),
+    monthlyCost: v.optional(v.number()),
+    insuranceCompany: v.optional(v.string()),
+    insurancePolicy: v.optional(v.string()),
+    odometerKm: v.optional(v.number()),
+    odometerUpdatedAt: v.optional(v.string()),
+    purchaseDate: v.optional(v.string()),
+    saleDate: v.optional(v.string()),
+    allocation: v.optional(v.string()),
+    year: v.optional(v.number()),
+    assignedTo: v.optional(v.string()),
+    technicalControlDate: v.optional(v.string()),
+    pollutionControlDate: v.optional(v.string()),
+    sourceCreatedAt: v.optional(v.string()),
+    photoUrl: v.optional(v.string()),
+    documentationUrl: v.optional(v.string()),
     // Champs hérités (conservés pour compatibilité des anciens véhicules).
     capacityM3: v.optional(v.number()),
     notes: v.optional(v.string()),
@@ -378,6 +405,7 @@ export default defineSchema({
     email: v.string(),
     name: v.optional(v.string()),
     active: v.boolean(),
+    role: v.optional(v.union(v.literal("client"), v.literal("staff"), v.literal("admin"))),
     grants: v.array(
       v.object({
         pageKey: v.string(),
@@ -689,4 +717,182 @@ export default defineSchema({
     speedKmh: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_tourneeId", ["tourneeId"]),
+
+  /* ─── App « Mes Outils » : portail d'entreprise ──────────────────────────── */
+
+  /** Fil d'actualité interne (style réseau social). */
+  posts: defineTable({
+    authorClerkId: v.string(),
+    authorName: v.string(),
+    authorImageUrl: v.optional(v.string()),
+    body: v.string(),
+    images: v.array(v.id("_storage")),
+    pinned: v.optional(v.boolean()),
+    createdAt: v.number(),
+    editedAt: v.optional(v.number()),
+  }).index("by_createdAt", ["createdAt"]),
+
+  postComments: defineTable({
+    postId: v.id("posts"),
+    authorClerkId: v.string(),
+    authorName: v.string(),
+    authorImageUrl: v.optional(v.string()),
+    body: v.string(),
+    createdAt: v.number(),
+  }).index("by_postId", ["postId"]),
+
+  postLikes: defineTable({
+    postId: v.id("posts"),
+    clerkId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_postId", ["postId"])
+    .index("by_post_and_user", ["postId", "clerkId"]),
+
+  /** Salles réservables (réservation immédiate si le créneau est libre). */
+  rooms: defineTable({
+    name: v.string(),
+    site: v.optional(v.union(v.literal("60"), v.literal("76"))),
+    capacity: v.optional(v.number()),
+    color: v.optional(v.string()),
+    sourceKey: v.optional(v.string()),
+    photo: v.optional(v.id("_storage")),
+    photoUrl: v.optional(v.string()),
+    siteLabel: v.optional(v.string()),
+    buildingLabel: v.optional(v.string()),
+    reservationSummaryRaw: v.optional(v.string()),
+    services: v.optional(v.array(v.string())),
+    slotsCount: v.optional(v.number()),
+    reservable: v.optional(v.boolean()),
+    unavailabilityNotes: v.optional(v.string()),
+    active: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_active", ["active"]),
+
+  roomReservations: defineTable({
+    roomId: v.id("rooms"),
+    clerkId: v.string(),
+    userName: v.string(),
+    bookedByName: v.optional(v.string()),
+    bookedForClerkId: v.optional(v.string()),
+    title: v.string(),
+    start: v.number(),
+    end: v.number(),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_roomId", ["roomId"])
+    .index("by_start", ["start"]),
+
+  /**
+   * Réservations de véhicules via Mes Outils (approbation requise). Les
+   * réservations `approved` rendent le véhicule indisponible côté recyclerie
+   * (cf. `vehicleBusyReason` dans fleet.ts).
+   */
+  vehicleReservations: defineTable({
+    vehicleId: v.id("vehicles"),
+    clerkId: v.string(),
+    userName: v.string(),
+    bookedByName: v.optional(v.string()),
+    bookedForClerkId: v.optional(v.string()),
+    purpose: v.string(),
+    start: v.number(),
+    end: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    ),
+    decisionNote: v.optional(v.string()),
+    decidedBy: v.optional(v.string()),
+    decidedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_vehicleId", ["vehicleId"])
+    .index("by_status", ["status"])
+    .index("by_start", ["start"]),
+
+  vehicleMaintenanceTasks: defineTable({
+    vehicleId: v.id("vehicles"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+    status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done")),
+    dueDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_vehicleId", ["vehicleId"])
+    .index("by_status", ["status"])
+    .index("by_dueDate", ["dueDate"]),
+
+  /** Documents rattachés à un véhicule (carte grise, facture, devis, assurance...). */
+  vehicleDocuments: defineTable({
+    vehicleId: v.id("vehicles"),
+    name: v.string(),
+    category: v.union(
+      v.literal("carte_grise"),
+      v.literal("facture"),
+      v.literal("devis"),
+      v.literal("assurance"),
+      v.literal("controle_technique"),
+      v.literal("autre"),
+    ),
+    storageId: v.id("_storage"),
+    uploadedBy: v.string(),
+    createdAt: v.number(),
+  }).index("by_vehicleId", ["vehicleId"]),
+
+  /** Espace partage — événements internes. */
+  events: defineTable({
+    authorClerkId: v.string(),
+    authorName: v.string(),
+    authorImageUrl: v.optional(v.string()),
+    title: v.string(),
+    description: v.optional(v.string()),
+    location: v.optional(v.string()),
+    start: v.number(),
+    end: v.optional(v.number()),
+    images: v.array(v.id("_storage")),
+    createdAt: v.number(),
+  }).index("by_start", ["start"]),
+
+  /** Espace partage — bons plans internes (prêt, don, vente, échange). */
+  dealPosts: defineTable({
+    authorClerkId: v.string(),
+    authorName: v.string(),
+    authorImageUrl: v.optional(v.string()),
+    title: v.string(),
+    description: v.string(),
+    dealType: v.union(
+      v.literal("pret"),
+      v.literal("don"),
+      v.literal("vente"),
+      v.literal("echange"),
+    ),
+    price: v.optional(v.number()),
+    availableFrom: v.optional(v.number()),
+    availableTo: v.optional(v.number()),
+    images: v.array(v.id("_storage")),
+    status: v.union(v.literal("open"), v.literal("closed")),
+    createdAt: v.number(),
+  }).index("by_createdAt", ["createdAt"]),
+
+  /** Messagerie interne entre utilisateurs. */
+  directMessages: defineTable({
+    pairKey: v.string(),
+    fromClerkId: v.string(),
+    fromName: v.string(),
+    fromImageUrl: v.optional(v.string()),
+    toClerkId: v.string(),
+    toName: v.string(),
+    body: v.string(),
+    readAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_pair", ["pairKey", "createdAt"])
+    .index("by_to", ["toClerkId"])
+    .index("by_from", ["fromClerkId"]),
 });

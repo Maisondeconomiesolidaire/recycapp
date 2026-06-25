@@ -1,9 +1,10 @@
 import { v } from "convex/values";
-import { action, env, mutation, query } from "./_generated/server";
+import { action, env, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import {
   getCrmAccessForIdentity,
+  hasCrmPermission,
   isAdminIdentity,
-  isStaffIdentity,
   requireAdmin,
   requireUser,
 } from "./lib";
@@ -28,6 +29,15 @@ function normalizeGrants(grants: { pageKey: string; actions: string[] }[]) {
     .filter((grant) => grant.pageKey && grant.actions.length > 0);
 }
 
+async function requirePermissionManager(ctx: Parameters<typeof requireAdmin>[0]) {
+  const identity = await requireUser(ctx);
+  if (isAdminIdentity(identity)) return identity;
+  if ("db" in ctx && await hasCrmPermission(ctx, "mesoutils:admin", "manage")) {
+    return identity;
+  }
+  throw new Error("Accès réservé aux administrateurs.");
+}
+
 export const myAccess = query({
   args: {},
   handler: async (ctx) => {
@@ -45,10 +55,18 @@ export const myAccess = query({
   },
 });
 
+export const canManagePermissions = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    await requirePermissionManager(ctx);
+    return true;
+  },
+});
+
 export const listManaged = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requirePermissionManager(ctx);
     const permissionRecords = await ctx.db
       .query("crmPermissions")
       .order("desc")
@@ -59,6 +77,7 @@ export const listManaged = query({
         .map((record) => ({
           email: record.email,
           name: record.name,
+          role: record.role ?? "staff",
           permissionActive: record.active,
           grants: record.grants,
           updatedAt: record.updatedAt,
@@ -143,7 +162,7 @@ export const listClerkUsers = action({
     query: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await ctx.runQuery(internal.permissions.canManagePermissions);
     const secretKey = env.CLERK_SECRET_KEY;
     if (!secretKey) {
       return {
@@ -209,7 +228,7 @@ export const updateClerkRole = action({
     role: roleValidator,
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await ctx.runQuery(internal.permissions.canManagePermissions);
     const secretKey = env.CLERK_SECRET_KEY;
     if (!secretKey) {
       return { ok: false, setupError: "missing_clerk_secret_key" };
@@ -243,11 +262,12 @@ export const upsert = mutation({
   args: {
     email: v.string(),
     name: v.optional(v.string()),
+    role: v.optional(roleValidator),
     active: v.boolean(),
     grants: v.array(grantValidator),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requirePermissionManager(ctx);
     const email = normalizeEmail(args.email);
     if (!email) throw new Error("Email requis.");
 
@@ -258,6 +278,7 @@ export const upsert = mutation({
     const payload = {
       email,
       name: args.name?.trim() || undefined,
+      role: args.role ?? "staff",
       active: args.active,
       grants: normalizeGrants(args.grants),
       updatedAt: Date.now(),
@@ -279,7 +300,7 @@ export const upsert = mutation({
 export const remove = mutation({
   args: { email: v.string() },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requirePermissionManager(ctx);
     const email = normalizeEmail(args.email);
     const existing = await ctx.db
       .query("crmPermissions")
@@ -293,10 +314,11 @@ export const debugRole = query({
   args: {},
   handler: async (ctx) => {
     const identity = await requireUser(ctx);
+    const access = await getCrmAccessForIdentity(ctx, identity);
     return {
-      email: identity.email ?? null,
-      isStaff: isStaffIdentity(identity),
-      isAdmin: isAdminIdentity(identity),
+      email: access.email,
+      isStaff: access.staff,
+      isAdmin: access.admin,
     };
   },
 });
