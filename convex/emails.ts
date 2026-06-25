@@ -312,6 +312,35 @@ export const sendNewMessage = internalAction({
   },
 });
 
+/** Demande de photos au client (déclenchée par le staff depuis le CRM). */
+export const sendPhotoRequest = internalAction({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    reference: v.string(),
+    type: v.string(),
+    requestId: v.string(),
+    note: v.optional(v.string()),
+  },
+  handler: async (_ctx, { email, name, reference, type, requestId, note }) => {
+    const label = typeLabel(type);
+    const url = `${appUrl()}/compte/commandes/${requestId}`;
+    const html = shell({
+      preheader: `Nous avons besoin de photos pour votre demande ${label} #${reference}.`,
+      heading: "Pouvez-vous nous envoyer des photos ? 📸",
+      intro: `Bonjour ${esc(name)},<br/><br/>Pour avancer sur votre demande <strong>${esc(label)}</strong> (référence <strong>#${esc(reference)}</strong>), notre équipe a besoin de quelques photos.`,
+      contentHtml: `
+        ${note ? `<blockquote style="margin:0 0 20px;padding:14px 18px;background:#faf8f5;border-left:3px solid ${BRAND};border-radius:10px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#3f3f46;">${esc(note)}</blockquote>` : ""}
+        <p style="margin:0 0 18px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#3f3f46;">Cliquez ci-dessous pour importer vos photos directement dans votre demande, dans l'onglet <strong>Documents</strong> :</p>
+        <div style="margin:0 0 22px;">${button(url, "Ajouter mes photos")}</div>
+        <p style="margin:0 0 10px;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:#71717a;">Accès rapides :</p>
+        ${quickLinks()}
+      `,
+    });
+    await resendSend(email, `Photos demandées · ${label} #${reference}`, html);
+  },
+});
+
 /** Notification au client que sa demande a été programmée à une date. */
 export const sendScheduled = internalAction({
   args: {

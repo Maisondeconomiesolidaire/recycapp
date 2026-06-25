@@ -828,6 +828,28 @@ export const schedule = mutation({
   },
 });
 
+/** Envoie au client un email lui demandant d'importer des photos (Resend). */
+export const requestPhotos = mutation({
+  args: { id: v.id("requests"), note: v.optional(v.string()) },
+  handler: async (ctx, { id, note }) => {
+    await requireCrmPermission(ctx, "demandes", "update");
+    const request = await ctx.db.get(id);
+    if (!request) throw new Error("Demande introuvable.");
+    if (!request.customer.email) {
+      throw new Error("Ce client n'a pas d'adresse email renseignée.");
+    }
+    await ctx.scheduler.runAfter(0, internal.emails.sendPhotoRequest, {
+      email: request.customer.email,
+      name: customerFullName(request.customer),
+      reference: request.reference ?? String(request._id).slice(-6),
+      type: request.type,
+      requestId: String(request._id),
+      note: note?.trim() || undefined,
+    });
+    return { ok: true };
+  },
+});
+
 /**
  * Coche l'étape suivante du process (une seule à la fois, pas de saut).
  * Quand la dernière étape est cochée, la demande passe automatiquement en gagnée.

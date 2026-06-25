@@ -225,7 +225,10 @@ export function RequestDrawer({
             <C3QuoteCalculator key={request._id} request={request} />
           )}
           {activeTab === "documents" && (
-            <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
+            <div className="space-y-4">
+              <PhotoRequestButton request={request} />
+              <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
+            </div>
           )}
           {activeTab === "client" && (
             <ClientTab key={request._id} request={request} canUpdate={canUpdate} />
@@ -570,6 +573,75 @@ function PhotoGrid({
         </div>
       ))}
     </div>
+  );
+}
+
+/* --------------------------------------------------------- Demande de photos */
+
+function PhotoRequestButton({ request }: { request: RequestDoc }) {
+  const requestPhotos = useMutation(api.requests.requestPhotos);
+  const [note, setNote] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const noEmail = !request.customer.email;
+
+  async function send() {
+    setState("sending");
+    setError(null);
+    try {
+      await requestPhotos({ id: request._id, note: note.trim() || undefined });
+      setState("sent");
+    } catch (e) {
+      setState("error");
+      setError(e instanceof Error ? e.message : "Envoi impossible.");
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500/15 text-brand-400">
+          <ImagePlus className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-zinc-100">Demande de photos</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Envoie au client un email avec un lien direct vers sa demande pour qu'il importe
+            ses photos dans l'onglet Documents.
+          </p>
+          {noEmail ? (
+            <p className="mt-3 text-xs text-amber-400">
+              Ce client n'a pas d'adresse email renseignée.
+            </p>
+          ) : state === "sent" ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400">
+              <Check className="h-4 w-4" /> Email envoyé à {request.customer.email}
+            </p>
+          ) : (
+            <>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Précisions (facultatif) : quelles photos demandez-vous ?"
+                className="mt-3"
+              />
+              {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+              <Button onClick={send} disabled={state === "sending"} className="mt-3">
+                {state === "sending" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Envoi…
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="h-4 w-4" /> Envoyer la demande de photos
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
