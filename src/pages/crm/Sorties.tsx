@@ -14,6 +14,7 @@ import {
   SummaryPill,
   type SlideDirection,
 } from "../../components/crm/Wizard";
+import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { COLLECTE_CATEGORIES } from "../../lib/constants";
 
 const CameraScanner = lazy(() =>
@@ -74,6 +75,7 @@ type ExitItem = {
 };
 
 export function Sorties() {
+  const [tab, setTab] = useState<"new" | "history" | "stats">("new");
   const [exitMode, setExitMode] = useState<"individual" | "flow">("individual");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ExitItem | null>(null);
@@ -158,195 +160,166 @@ export function Sorties() {
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Sorties</p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-100">Nouvelle sortie</h1>
-        <p className="mt-1 text-sm text-zinc-500">Scannez ou recherchez un article arrivé, puis indiquez la raison de sa sortie.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Collecte</p>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-100">Sorties</h1>
+        <p className="mt-1 text-sm text-zinc-500">Enregistrez les sorties d'articles et de flux, consultez l'historique et les statistiques.</p>
       </div>
 
-      <div className="space-y-5">
-        {/* Compteurs */}
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard icon={<PackageMinus className="h-5 w-5" />} label="Articles sortis (12 mois)" value={String(exits?.totalArticles ?? "…")} />
-          <StatCard icon={<Weight className="h-5 w-5" />} label="Poids total sorti" value={exits ? `${exits.totalWeight} kg` : "…"} />
-          <StatCard
-            icon={<BarChart3 className="h-5 w-5" />}
-            label="Motif principal"
-            value={topEntryLabel(exits?.byMotif, {})}
-          />
-          <StatCard
-            icon={<ArrowUpRight className="h-5 w-5" />}
-            label="Destination principale"
-            value={topEntryLabel(exits?.byOrientation, ORIENTATION_LABELS)}
-          />
-        </div>
+      <UnderlineTabs
+        className="mb-6"
+        items={[
+          { key: "new", label: "Nouvelle sortie" },
+          { key: "history", label: "Dernières sorties" },
+          { key: "stats", label: "Statistiques" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
-        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-          <DistributionPanel
-            title="Motifs de sortie"
-            entries={exits?.byMotif}
-            labels={{}}
-            accent="bg-rose-500"
-          />
-          <DistributionPanel
-            title="Destinations d'origine"
-            entries={exits?.byOrientation}
-            labels={ORIENTATION_LABELS}
-            accent="bg-emerald-500"
-          />
-          <DistributionPanel
-            title="Provenances"
-            entries={exits?.byOrigin}
-            labels={ORIGIN_LABELS}
-            accent="bg-sky-500"
-          />
-          <DistributionPanel
-            title="Catégories sorties"
-            entries={exits?.byCategory}
-            labels={{}}
-            accent="bg-amber-500"
-          />
-        </div>
+      {tab === "new" && (
+        <div className="space-y-5">
+          <div className="flex w-fit rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
+            <ModeTab active={exitMode === "individual"} onClick={() => setExitMode("individual")}>
+              Sortie individuelle
+            </ModeTab>
+            <ModeTab active={exitMode === "flow"} onClick={() => setExitMode("flow")}>
+              Sortie de flux
+            </ModeTab>
+          </div>
 
-        <div className="flex w-fit rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
-          <ModeTab active={exitMode === "individual"} onClick={() => setExitMode("individual")}>
-            Sortie individuelle
-          </ModeTab>
-          <ModeTab active={exitMode === "flow"} onClick={() => setExitMode("flow")}>
-            Sortie de flux
-          </ModeTab>
-        </div>
+          {exitMode === "flow" && (
+            <FlowExitForm
+              origin={flowOrigin}
+              setOrigin={setFlowOrigin}
+              category={flowCategory}
+              setCategory={setFlowCategory}
+              orientation={flowOrientation}
+              setOrientation={setFlowOrientation}
+              weightKg={flowWeightKg}
+              setWeightKg={setFlowWeightKg}
+              motif={flowMotif}
+              setMotif={setFlowMotif}
+              note={flowNote}
+              setNote={setFlowNote}
+              saving={saving}
+              onSubmit={confirmFlowExit}
+            />
+          )}
 
-        {exitMode === "flow" && (
-          <FlowExitForm
-            origin={flowOrigin}
-            setOrigin={setFlowOrigin}
-            category={flowCategory}
-            setCategory={setFlowCategory}
-            orientation={flowOrientation}
-            setOrientation={setFlowOrientation}
-            weightKg={flowWeightKg}
-            setWeightKg={setFlowWeightKg}
-            motif={flowMotif}
-            setMotif={setFlowMotif}
-            note={flowNote}
-            setNote={setFlowNote}
-            saving={saving}
-            onSubmit={confirmFlowExit}
-          />
-        )}
-
-        {/* Recherche / scan */}
-        {exitMode === "individual" && !selected && (
-          <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                <input
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setNotFound(null); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" && search.trim()) setScannedRef(search.trim()); }}
-                  placeholder="Code-barres, référence ou nom de l'article arrivé…"
-                  className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] py-2 pl-9 pr-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
+          {/* Recherche / scan */}
+          {exitMode === "individual" && !selected && (
+            <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    value={search}
+                    onChange={(e) => { setSearch(e.target.value); setNotFound(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" && search.trim()) setScannedRef(search.trim()); }}
+                    placeholder="Code-barres, référence ou nom de l'article arrivé…"
+                    className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] py-2 pl-9 pr-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScanOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--crm-border)] px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-[var(--crm-surface-2)]"
+                >
+                  <ScanLine className="h-4 w-4" />
+                  Scanner
+                </button>
               </div>
+
+              {notFound && <p className="text-sm text-amber-400">{notFound}</p>}
+
+              {results && results.length > 0 && (
+                <div className="divide-y divide-[var(--crm-border)] overflow-hidden rounded-lg border border-[var(--crm-border)]">
+                  {results.map((r) => (
+                    <button
+                      key={r._id}
+                      type="button"
+                      onClick={() => { setSelected(r as ExitItem); setSearch(""); setNotFound(null); }}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-[var(--crm-surface-2)]"
+                    >
+                      <Package className="h-4 w-4 shrink-0 text-zinc-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-zinc-100">{r.name}</p>
+                        <p className="text-xs text-zinc-500">
+                          Réf. {r.reference}
+                          {r.weightKg != null && ` · ${r.weightKg} kg`}
+                          {r.quantity > 1 && ` · ×${r.quantity}`}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {results && results.length === 0 && search.trim().length >= 2 && (
+                <p className="text-sm text-zinc-500">Aucun article arrivé (non sorti) trouvé.</p>
+              )}
+            </div>
+          )}
+
+          {/* Article sélectionné → raison → confirmer */}
+          {exitMode === "individual" && selected && (
+            <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-zinc-100">{selected.name}</p>
+                  <p className="mt-0.5 text-xs text-zinc-400">
+                    Réf. {selected.reference}
+                    {selected.weightKg != null && ` · ${selected.weightKg} kg`}
+                    {selected.quantity > 1 && ` · ×${selected.quantity}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
+                  aria-label="Changer d'article"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Raison de la sortie</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {EXIT_MOTIFS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMotif(m)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ring-1 ${
+                        motif === m ? "bg-brand-500 text-white ring-transparent" : "ring-[var(--crm-border)] text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setScanOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-[var(--crm-border)] px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-[var(--crm-surface-2)]"
+                onClick={confirmExit}
+                disabled={saving}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
               >
-                <ScanLine className="h-4 w-4" />
-                Scanner
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Enregistrer la sortie
               </button>
             </div>
+          )}
+        </div>
+      )}
 
-            {notFound && <p className="text-sm text-amber-400">{notFound}</p>}
-
-            {results && results.length > 0 && (
-              <div className="divide-y divide-[var(--crm-border)] overflow-hidden rounded-lg border border-[var(--crm-border)]">
-                {results.map((r) => (
-                  <button
-                    key={r._id}
-                    type="button"
-                    onClick={() => { setSelected(r as ExitItem); setSearch(""); setNotFound(null); }}
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-[var(--crm-surface-2)]"
-                  >
-                    <Package className="h-4 w-4 shrink-0 text-zinc-500" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-zinc-100">{r.name}</p>
-                      <p className="text-xs text-zinc-500">
-                        Réf. {r.reference}
-                        {r.weightKg != null && ` · ${r.weightKg} kg`}
-                        {r.quantity > 1 && ` · ×${r.quantity}`}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-            {results && results.length === 0 && search.trim().length >= 2 && (
-              <p className="text-sm text-zinc-500">Aucun article arrivé (non sorti) trouvé.</p>
-            )}
-          </div>
-        )}
-
-        {/* Article sélectionné → raison → confirmer */}
-        {exitMode === "individual" && selected && (
-          <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-4 space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-zinc-100">{selected.name}</p>
-                <p className="mt-0.5 text-xs text-zinc-400">
-                  Réf. {selected.reference}
-                  {selected.weightKg != null && ` · ${selected.weightKg} kg`}
-                  {selected.quantity > 1 && ` · ×${selected.quantity}`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
-                aria-label="Changer d'article"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-zinc-500">Raison de la sortie</label>
-              <div className="flex flex-wrap gap-1.5">
-                {EXIT_MOTIFS.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMotif(m)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ring-1 ${
-                      motif === m ? "bg-brand-500 text-white ring-transparent" : "ring-[var(--crm-border)] text-zinc-400 hover:text-zinc-200"
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={confirmExit}
-              disabled={saving}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Enregistrer la sortie
-            </button>
-          </div>
-        )}
-
-        {/* Sorties récentes */}
-        {exits && exits.recent.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
-            <p className="border-b border-[var(--crm-border)] px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Sorties récentes
-            </p>
+      {/* Dernières sorties */}
+      {tab === "history" && (
+        <div className="overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
+          {!exits || exits.recent.length === 0 ? (
+            <p className="px-4 py-5 text-xs text-zinc-500">Aucune sortie enregistrée pour le moment.</p>
+          ) : (
             <div className="divide-y divide-[var(--crm-border)]">
               {exits.recent.map((e) => (
                 <div key={e._id} className="flex items-center gap-3 px-4 py-2.5">
@@ -372,9 +345,56 @@ export function Sorties() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Statistiques */}
+      {tab === "stats" && (
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard icon={<PackageMinus className="h-5 w-5" />} label="Articles sortis (12 mois)" value={String(exits?.totalArticles ?? "…")} />
+            <StatCard icon={<Weight className="h-5 w-5" />} label="Poids total sorti" value={exits ? `${exits.totalWeight} kg` : "…"} />
+            <StatCard
+              icon={<BarChart3 className="h-5 w-5" />}
+              label="Motif principal"
+              value={topEntryLabel(exits?.byMotif, {})}
+            />
+            <StatCard
+              icon={<ArrowUpRight className="h-5 w-5" />}
+              label="Destination principale"
+              value={topEntryLabel(exits?.byOrientation, ORIENTATION_LABELS)}
+            />
           </div>
-        )}
-      </div>
+
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+            <DistributionPanel
+              title="Motifs de sortie"
+              entries={exits?.byMotif}
+              labels={{}}
+              accent="bg-rose-500"
+            />
+            <DistributionPanel
+              title="Destinations d'origine"
+              entries={exits?.byOrientation}
+              labels={ORIENTATION_LABELS}
+              accent="bg-emerald-500"
+            />
+            <DistributionPanel
+              title="Provenances"
+              entries={exits?.byOrigin}
+              labels={ORIGIN_LABELS}
+              accent="bg-sky-500"
+            />
+            <DistributionPanel
+              title="Catégories sorties"
+              entries={exits?.byCategory}
+              labels={{}}
+              accent="bg-amber-500"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Scanner caméra */}
       {scanOpen && (
