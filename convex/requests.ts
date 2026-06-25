@@ -56,28 +56,24 @@ async function emailArticlePreview(ctx: MutationCtx, request: Doc<"requests">) {
     if (!articleId) return undefined;
     const article = await ctx.db.get(articleId);
     if (!article) return undefined;
-    const imageUrl = article.images?.[0]
-      ? await ctx.storage.getUrl(article.images[0])
-      : null;
     return {
       title: article.title,
       price: article.price,
       condition: article.condition,
-      imageUrl: imageUrl ?? undefined,
+      imageStorageId: article.images?.[0]
+        ? String(article.images[0])
+        : undefined,
       articleId: String(articleId),
     };
   }
   if (request.type === "livraison" && request.livraison) {
     const l = request.livraison;
     if (!l.articleTitle) return undefined;
-    const imageUrl = l.articlePhoto
-      ? await ctx.storage.getUrl(l.articlePhoto)
-      : null;
     return {
       title: l.articleTitle,
       price: l.articlePrice,
       condition: l.condition,
-      imageUrl: imageUrl ?? undefined,
+      imageStorageId: l.articlePhoto ? String(l.articlePhoto) : undefined,
     };
   }
   return undefined;

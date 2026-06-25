@@ -11,6 +11,25 @@ function appUrl() {
   return (process.env.APP_URL ?? "https://recycapp.vercel.app").replace(/\/$/, "");
 }
 
+/** URL du déploiement Convex (HTTP actions), pour servir les images d'emails. */
+function siteUrl() {
+  return (
+    process.env.CONVEX_SITE_URL ??
+    "https://nautical-eagle-786.eu-west-1.convex.site"
+  ).replace(/\/$/, "");
+}
+
+/** URL directe (octets, sans redirection) d'un fichier du stockage Convex. */
+function storageImageUrl(storageId: string) {
+  return `${siteUrl()}/email/image?id=${encodeURIComponent(storageId)}`;
+}
+
+/** URL du logo (servi depuis le stockage Convex via EMAIL_LOGO_ID). */
+function logoUrl() {
+  const id = process.env.EMAIL_LOGO_ID;
+  return id ? storageImageUrl(id) : `${appUrl()}/recyclerie-logo.png`;
+}
+
 const BRAND = "#f1104f";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -137,7 +156,7 @@ function shell(opts: {
           <tr>
             <td style="background:linear-gradient(135deg,#ffffff,#fff7ef,#ffe9d6);padding:22px 28px;border-bottom:1px solid #f1ece5;">
               <a href="${base}/boutique" target="_blank" style="text-decoration:none;">
-                <img src="${base}/recyclerie-logo.png" height="40" alt="Cycle en Bray" style="display:block;height:40px;" />
+                <img src="${logoUrl()}" height="40" alt="Cycle en Bray" style="display:block;height:40px;" />
               </a>
             </td>
           </tr>
@@ -200,6 +219,7 @@ const articleArg = v.optional(
     title: v.string(),
     price: v.optional(v.number()),
     condition: v.optional(v.string()),
+    imageStorageId: v.optional(v.string()),
     imageUrl: v.optional(v.string()),
     articleId: v.optional(v.string()),
   }),
@@ -211,6 +231,7 @@ function buildArticleCard(
         title: string;
         price?: number;
         condition?: string;
+        imageStorageId?: string;
         imageUrl?: string;
         articleId?: string;
       }
@@ -220,7 +241,16 @@ function buildArticleCard(
   const href = article.articleId
     ? `${appUrl()}/boutique/${article.articleId}`
     : undefined;
-  return `<div style="margin:0 0 22px;">${articleCard({ ...article, href })}</div>`;
+  const imageUrl = article.imageStorageId
+    ? storageImageUrl(article.imageStorageId)
+    : article.imageUrl;
+  return `<div style="margin:0 0 22px;">${articleCard({
+    title: article.title,
+    price: article.price,
+    condition: article.condition,
+    imageUrl,
+    href,
+  })}</div>`;
 }
 
 // ─── Emails transactionnels ──────────────────────────────────────────────────
