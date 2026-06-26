@@ -1,11 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
 import {
   SignedIn,
   SignedOut,
   SignIn,
-  UserButton,
   useUser,
 } from "@clerk/clerk-react";
 import {
@@ -216,8 +215,10 @@ function Sidebar({
       </nav>
 
       <div className="border-t border-[var(--crm-border)] p-3 space-y-2">
-        <div className="flex items-center gap-3 rounded-lg bg-[var(--crm-surface-2)] px-3 py-2">
-          <UserButton afterSignOutUrl="/crm" />
+        <Link to="/compte" className="flex items-center gap-3 rounded-lg bg-[var(--crm-surface-2)] px-3 py-2 transition-colors hover:bg-[var(--crm-surface-3)]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-500 text-xs font-semibold text-white">
+            {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName ?? "Moi").slice(0, 2).toUpperCase()}
+          </span>
           <div className="min-w-0">
             <p className="text-sm font-medium truncate">
               {user?.fullName ?? user?.primaryEmailAddress?.emailAddress}
@@ -226,7 +227,7 @@ function Sidebar({
               {user?.primaryEmailAddress?.emailAddress}
             </p>
           </div>
-        </div>
+        </Link>
 
         <button
           type="button"

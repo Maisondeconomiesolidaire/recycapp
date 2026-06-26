@@ -4,6 +4,7 @@ import { SignedIn, SignedOut, SignInButton, useClerk, useUser } from "@clerk/cle
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowLeft,
+  Camera,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -129,6 +130,7 @@ export function AccountLayout() {
 
 export function AccountInfo() {
   const { user } = useUser();
+  const photoRef = useRef<HTMLInputElement>(null);
   const profile = useQuery(api.users.getMyProfile);
   const updateProfile = useMutation(api.users.updateMyProfile);
   const [form, setForm] = useState({
@@ -141,6 +143,7 @@ export function AccountInfo() {
   });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -167,6 +170,17 @@ export function AccountInfo() {
     }
   }
 
+  async function handlePhoto(file?: File) {
+    if (!file || !user) return;
+    setUploadingPhoto(true);
+    try {
+      await user.setProfileImage({ file });
+      await user.reload();
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   const field = (label: string, key: keyof typeof form, placeholder = "") => (
     <div>
       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -183,6 +197,28 @@ export function AccountInfo() {
 
   return (
     <div className="max-w-2xl space-y-5">
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-500 text-xl font-semibold text-white">
+            {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName ?? "Moi").slice(0, 2).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-zinc-900">{user?.fullName ?? "Mon profil"}</p>
+            <p className="text-sm text-zinc-500">{user?.primaryEmailAddress?.emailAddress}</p>
+            <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(event) => handlePhoto(event.target.files?.[0])} />
+            <button
+              type="button"
+              onClick={() => photoRef.current?.click()}
+              disabled={uploadingPhoto}
+              className="mt-3 inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60"
+            >
+              <Camera className="h-4 w-4" />
+              {uploadingPhoto ? "Envoi..." : "Changer la photo"}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-zinc-200 bg-white p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Adresse e-mail</p>
         <p className="mt-1 text-sm font-medium text-zinc-900">

@@ -240,7 +240,6 @@ export const analyzePhotos = action({
     articleTitle: string;
     category: string;
     subcategory: string;
-    condition: string;
     reference: string;
     referenceFromBarcode: boolean;
     articlePrice: number | null;
@@ -339,7 +338,6 @@ export const analyzePhotos = action({
       articleTitle: matchedTitle ?? vision.title?.slice(0, 80) ?? "Article",
       category,
       subcategory,
-      condition: "",
       reference,
       referenceFromBarcode,
       articlePrice,

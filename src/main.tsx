@@ -10,6 +10,18 @@ import { MissingConfig } from "./components/MissingConfig";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 
+// Lorsqu'un onglet reste ouvert pendant un redéploiement, les anciens chunks
+// hashés disparaissent du serveur : tout import dynamique (ex. le détourage via
+// @imgly/background-removal) échoue alors avec « Failed to fetch dynamically
+// imported module ». On recharge une seule fois pour récupérer les assets frais.
+window.addEventListener("vite:preloadError", () => {
+  // Garde-fou anti-boucle : on ne recharge pas plus d'une fois toutes les 10 s.
+  const last = Number(sessionStorage.getItem("preload-error-reload-at") ?? 0);
+  if (Date.now() - last < 10_000) return;
+  sessionStorage.setItem("preload-error-reload-at", String(Date.now()));
+  window.location.reload();
+});
+
 const convexUrl = import.meta.env.VITE_CONVEX_URL;
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
