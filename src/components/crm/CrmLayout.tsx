@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
 import {
@@ -8,7 +8,6 @@ import {
   useUser,
 } from "@clerk/clerk-react";
 import {
-  ChevronDown,
   Menu,
   Sun,
   Moon,
@@ -25,37 +24,24 @@ export function useThemeContext() { return useContext(ThemeContext); }
 
 type NavItem = (typeof CRM_PAGES)[number];
 
-const NAV_GROUPS: Array<{
-  key: string;
-  label: string;
-  items: CrmPageKey[];
-}> = [
-  {
-    key: "pilotage",
-    label: "Pilotage",
-    items: ["dashboard", "notifications", "messages"],
-  },
-  {
-    key: "demandes",
-    label: "Demandes & planning",
-    items: ["demandes", "calendrier", "clients", "tournees", "flotte"],
-  },
-  {
-    key: "stock",
-    label: "Boutique & stock",
-    items: ["articles", "caisse", "arrivages", "sorties", "ateliers"],
-  },
-  {
-    key: "documents",
-    label: "Documents",
-    items: ["documents"],
-  },
-  {
-    key: "admin",
-    label: "Administration",
-    items: ["equipe", "admin"],
-  },
+// Modules temporairement masqués de la navigation (les pages/routes restent
+// accessibles et seront réintégrées plus tard).
+const HIDDEN_NAV_KEYS: CrmPageKey[] = [
+  "tournees",
+  "caisse",
+  "arrivages",
+  "sorties",
+  "ateliers",
+  "documents",
 ];
+
+function visibleNav(access: ReturnType<typeof useQuery<typeof api.permissions.myAccess>>) {
+  return CRM_PAGES.filter(
+    (item) =>
+      !HIDDEN_NAV_KEYS.includes(item.key) &&
+      (item.adminOnly ? access?.isAdmin : canAccess(access, item.key)),
+  );
+}
 
 function useTheme() {
   const [isDark, setIsDark] = useState<boolean>(() => {
@@ -114,9 +100,7 @@ function MobileTopBar({ onToggleTheme }: { onToggleTheme: () => void }) {
   const access = useQuery(api.permissions.myAccess);
   const onNotificationsPage = location.pathname === "/crm/notifications";
   const isDark = useThemeContext();
-  const nav = CRM_PAGES.filter((item) =>
-    item.adminOnly ? access?.isAdmin : canAccess(access, item.key),
-  );
+  const nav = visibleNav(access);
 
   return (
     <>
@@ -156,7 +140,7 @@ function MobileTopBar({ onToggleTheme }: { onToggleTheme: () => void }) {
         bodyClassName="p-3"
       >
         <nav className="space-y-2">
-          <GroupedNav
+          <FlatNav
             nav={nav}
             counts={counts}
             unreadNotifications={unreadNotifications}
@@ -192,9 +176,7 @@ function Sidebar({
   const unreadNotifications = useQuery(api.notifications.unreadCount);
   const unreadMessages = useQuery(api.messages.staffUnreadCount);
   const access = useQuery(api.permissions.myAccess);
-  const nav = CRM_PAGES.filter((item) =>
-    item.adminOnly ? access?.isAdmin : canAccess(access, item.key),
-  );
+  const nav = visibleNav(access);
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[var(--crm-border)] bg-[var(--crm-surface)] lg:flex">
       <div className="flex h-16 items-center justify-center border-b border-[var(--crm-border)] px-5">
@@ -205,8 +187,8 @@ function Sidebar({
         />
       </div>
 
-      <nav className="flex-1 space-y-2 overflow-y-auto p-3">
-        <GroupedNav
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <FlatNav
           nav={nav}
           counts={counts}
           unreadNotifications={unreadNotifications}
@@ -246,7 +228,7 @@ function Sidebar({
   );
 }
 
-function GroupedNav({
+function FlatNav({
   nav,
   counts,
   unreadNotifications,
@@ -261,113 +243,45 @@ function GroupedNav({
   onNavigate?: () => void;
   itemClassName?: string;
 }) {
-  const location = useLocation();
-  const lastNavigationSync = useRef<string | null>(null);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(NAV_GROUPS.map((group) => [group.key, false])),
-  );
-
-  const groups = useMemo(() => {
-    const navByKey = new Map(nav.map((item) => [item.key, item]));
-    return NAV_GROUPS.map((group) => ({
-      ...group,
-      navItems: group.items
-        .map((key) => navByKey.get(key))
-        .filter((item): item is NavItem => Boolean(item)),
-    })).filter((group) => group.navItems.length > 0);
-  }, [nav]);
-
-  const activeGroupKey = groups.find((group) =>
-    group.navItems.some((item) => isPathActive(location.pathname, item)),
-  )?.key;
-  const groupsSignature = groups.map((group) => group.key).join("|");
-
-  useEffect(() => {
-    if (!activeGroupKey) return;
-    const syncKey = `${location.pathname}:${groupsSignature}`;
-    if (lastNavigationSync.current === syncKey) return;
-    lastNavigationSync.current = syncKey;
-    setOpenGroups(
-      Object.fromEntries(groups.map((group) => [group.key, group.key === activeGroupKey])),
-    );
-  }, [activeGroupKey, groups, groupsSignature, location.pathname]);
-
   return (
-    <>
-      {groups.map((group) => {
-        const isOpen = openGroups[group.key] ?? true;
-        const hasActiveItem = group.navItems.some((item) => isPathActive(location.pathname, item));
-
-        return (
-          <div key={group.key} className="rounded-2xl border border-transparent">
-            <button
-              type="button"
-              onClick={() => setOpenGroups((current) => ({ ...current, [group.key]: !isOpen }))}
-              className={cn(
-                "grid w-full grid-cols-[minmax(0,1fr)_20px] items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
-                hasActiveItem
-                  ? "bg-[var(--crm-surface-2)] text-zinc-100"
-                  : "text-zinc-500 hover:bg-[var(--crm-surface-2)] hover:text-zinc-200",
-              )}
-              aria-expanded={isOpen}
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-[11px] font-bold uppercase tracking-[0.16em]">
-                  {group.label}
-                </span>
-              </span>
-              <ChevronDown
+    <div className="space-y-1">
+      {nav.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            cn(
+              "grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-colors",
+              isActive
+                ? "border-brand-500 bg-brand-600/15 text-brand-300"
+                : "border-transparent text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
+              itemClassName,
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <item.icon
                 className={cn(
-                  "h-4 w-4 justify-self-end text-zinc-500 transition-transform",
-                  isOpen && "rotate-180",
+                  "h-5 w-5 shrink-0 justify-self-center",
+                  isActive ? "text-brand-300" : "text-zinc-500",
                 )}
               />
-            </button>
-
-            {isOpen && (
-              <div className="mt-1 space-y-1">
-                {group.navItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    onClick={onNavigate}
-                    className={({ isActive }) =>
-                      cn(
-                        "grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-colors",
-                        isActive
-                          ? "border-brand-500 bg-brand-600/15 text-brand-300"
-                          : "border-transparent text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
-                        itemClassName,
-                      )
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <item.icon
-                          className={cn(
-                            "h-5 w-5 shrink-0 justify-self-center",
-                            isActive ? "text-brand-300" : "text-zinc-500",
-                          )}
-                        />
-                        <span className="min-w-0 truncate">{item.label}</span>
-                        <NavBadge
-                          item={item}
-                          isActive={isActive}
-                          counts={counts}
-                          unreadNotifications={unreadNotifications}
-                          unreadMessages={unreadMessages}
-                        />
-                      </>
-                    )}
-                  </NavLink>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </>
+              <span className="min-w-0 truncate">{item.label}</span>
+              <NavBadge
+                item={item}
+                isActive={isActive}
+                counts={counts}
+                unreadNotifications={unreadNotifications}
+                unreadMessages={unreadMessages}
+              />
+            </>
+          )}
+        </NavLink>
+      ))}
+    </div>
   );
 }
 
@@ -409,11 +323,6 @@ function NavBadge({
   }
 
   return <span aria-hidden="true" />;
-}
-
-function isPathActive(pathname: string, item: NavItem) {
-  if (item.end) return pathname === item.to;
-  return pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
 function SignInScreen() {
