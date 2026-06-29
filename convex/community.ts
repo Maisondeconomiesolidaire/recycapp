@@ -226,6 +226,20 @@ export const listConversations = query({
   },
 });
 
+/** Nombre de messages directs non lus reçus par l'utilisateur courant. */
+export const unreadDirectCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return 0;
+    const received = await ctx.db
+      .query("directMessages")
+      .withIndex("by_to", (q) => q.eq("toClerkId", identity.subject))
+      .collect();
+    return received.filter((message) => !message.readAt).length;
+  },
+});
+
 export const listThread = query({
   args: { otherClerkId: v.string() },
   handler: async (ctx, args) => {

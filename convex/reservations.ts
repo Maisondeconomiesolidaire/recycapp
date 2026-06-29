@@ -369,6 +369,30 @@ export const listVehicleReservations = query({
   },
 });
 
+/** Nombre de demandes de réservation de véhicule en attente (badge gestionnaire). */
+export const pendingVehicleReservationsCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return 0;
+    const canManage = await (async () => {
+      try {
+        await requireCrmPermission(ctx, PAGE_KEY, "manage");
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    if (!canManage) return 0;
+    const reservations = await ctx.db
+      .query("vehicleReservations")
+      .order("desc")
+      .take(500);
+    return reservations.filter((reservation) => reservation.status === "pending")
+      .length;
+  },
+});
+
 export const requestVehicle = mutation({
   args: {
     vehicleId: v.id("vehicles"),

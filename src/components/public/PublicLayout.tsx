@@ -20,7 +20,7 @@ import { Input } from "../ui/Field";
 import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
 import { AccountMenu } from "./AccountMenu";
-import { PageSwitcher, PAGE_HEADERS } from "./PageSwitcher";
+import { PageSwitcher } from "./PageSwitcher";
 
 const PUBLIC_CONTAINER = "mx-auto w-full max-w-[92rem] px-5 sm:px-7 lg:px-8";
 const BRAND = "#f1104f";
@@ -78,33 +78,10 @@ export function PublicLayout() {
       <main className="relative z-10 flex-1">
         {/* `key` = pathname : le contenu se remonte et « balaie » à chaque page. */}
         <div key={location.pathname} className="animate-page-sweep">
-          <PageHeaderBand pathname={location.pathname} />
           <Outlet />
         </div>
       </main>
       {!embed && <Footer />}
-    </div>
-  );
-}
-
-/** Petit en-tête (pictogramme + nom de page) pour les pages hors boutique. */
-function PageHeaderBand({ pathname }: { pathname: string }) {
-  const header = PAGE_HEADERS[pathname];
-  if (!header) return null;
-  const Icon = header.icon;
-  return (
-    <div className={`${PUBLIC_CONTAINER} pt-8 sm:pt-10`}>
-      <div className="flex flex-col items-center gap-3 text-center">
-        <span
-          className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-[0_10px_26px_rgba(241,16,79,0.28)] sm:h-16 sm:w-16"
-          style={{ backgroundColor: BRAND }}
-        >
-          <Icon className="h-7 w-7 sm:h-8 sm:w-8" />
-        </span>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">
-          {header.title}
-        </h1>
-      </div>
     </div>
   );
 }

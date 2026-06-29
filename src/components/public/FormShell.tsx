@@ -4,28 +4,17 @@ import { ReactNode } from "react";
 export function FormShell({
   title,
   subtitle,
-  accent,
   children,
 }: {
   title: string;
   subtitle: string;
-  accent?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="mx-auto w-full max-w-[92rem] px-5 py-10 sm:px-7 lg:px-8">
-      <div className="mb-6">
-        <div className="flex items-start gap-3">
-          {accent ? (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600">
-              {accent}
-            </span>
-          ) : null}
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-            <p className="text-sm text-zinc-500">{subtitle}</p>
-          </div>
-        </div>
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
+        <p className="mt-2 text-base text-zinc-500">{subtitle}</p>
       </div>
       <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm p-6 sm:p-8">
         {children}
