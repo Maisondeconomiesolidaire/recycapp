@@ -548,6 +548,73 @@ Produis l'évaluation JSON complète basée sur les résultats trouvés.`;
   },
 });
 
+// ─── Description de lot générée par l'IA ──────────────────────────────────────
+
+export const generateLotDescription = action({
+  args: {
+    articleIds: v.array(v.id("articles")),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, { articleIds, title }): Promise<{ description: string }> => {
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "articles", "create")) {
+      throw new Error("Accès CRM insuffisant.");
+    }
+
+    const items = await ctx.runQuery(api.articles.getManyForLot, {
+      ids: articleIds,
+    });
+    if (items.length === 0) throw new Error("Aucun article dans ce lot.");
+
+    const cleanTitle = title?.trim();
+    const fallback = (): { description: string } => {
+      const lines = items.map((item) => `• ${item.title}`).join("\n");
+      return {
+        description: `Lot de ${items.length} articles${
+          cleanTitle ? ` — ${cleanTitle}` : ""
+        } :\n${lines}\n\nUn ensemble cohérent à petit prix, à récupérer en boutique. Un bon geste pour la planète comme pour le porte-monnaie.`,
+      };
+    };
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return fallback();
+
+    try {
+      const result = await callOpenAI<{ description: string }>(apiKey, {
+        model: "gpt-4o",
+        temperature: 0.6,
+        max_tokens: 400,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Tu es rédacteur produit pour une recyclerie française. Tu rédiges des descriptions de lots attractives, chaleureuses et honnêtes pour une boutique de seconde main. Retourne uniquement du JSON valide, sans commentaires.",
+          },
+          {
+            role: "user",
+            content: `Rédige une description de vente pour un lot${
+              cleanTitle ? ` intitulé "${cleanTitle}"` : ""
+            } composé des articles suivants :
+${JSON.stringify(items, null, 0)}
+
+Consignes :
+- 3 à 5 phrases, ton chaleureux et vendeur, en français.
+- Mets en valeur la cohérence du lot (univers, thème, usage commun) et l'intérêt d'acheter l'ensemble plutôt que séparément.
+- Mentionne le nombre d'articles (${items.length}) et donne envie, sans inventer de caractéristiques absentes.
+- Termine par une phrase courte sur la démarche solidaire et de seconde main.
+
+Retourne ce JSON exact : { "description": "texte de la description" }`,
+          },
+        ],
+      });
+      const description = result.description?.trim();
+      return description ? { description } : fallback();
+    } catch {
+      return fallback();
+    }
+  },
+});
+
 // ─── Premium background generation via gpt-image-1 ────────────────────────────
 
 function imageFilenameForContentType(contentType: string) {

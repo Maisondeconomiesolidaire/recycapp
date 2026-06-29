@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   CircleDollarSign,
@@ -23,7 +23,7 @@ import {
 import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
-import { Doc } from "../../../convex/_generated/dataModel";
+import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 
 const CameraScanner = lazy(() =>
@@ -37,7 +37,8 @@ import { ArticleForm } from "../../components/crm/ArticleForm";
 import { formatPrice } from "../../lib/format";
 import { ARTICLE_CATEGORIES, ARTICLE_STATUS_LABELS } from "../../lib/constants";
 import { useEffect, useRef } from "react";
-import { Input } from "../../components/ui/Field";
+import { Input, Field, Textarea } from "../../components/ui/Field";
+import { Modal } from "../../components/ui/Modal";
 import { MultiSelectChips } from "../../components/ui/MultiSelectChips";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
@@ -174,6 +175,7 @@ export function Articles() {
   const publishLot = useMutation(api.articles.publishLot);
   const toggleProductOfDay = useMutation(api.articles.toggleProductOfDay);
   const analyzePotentialLots = useAction(api.ai.analyzePotentialLots);
+  const generateLotDescription = useAction(api.ai.generateLotDescription);
   const [editing, setEditing] = useState<ArticleDoc | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<ArticleDoc | null>(null);
@@ -338,17 +340,23 @@ export function Articles() {
             loading={analyzingLots}
             error={lotAnalysisError}
             canPublish={canCreate}
-            onPublish={async (group) => {
+            generateDescription={(articleIds, title) =>
+              generateLotDescription({ articleIds: articleIds as Id<"articles">[], title })
+            }
+            onPublish={async (group, overrides) => {
               if (!canCreate) return;
               await publishLot({
                 articleIds: group.items.map((article) => article._id),
                 title:
-                  group.title ??
+                  overrides.title.trim() ||
+                  group.title ||
                   `Lot ${group.subcategory === "Général" ? group.category : group.subcategory}`,
-                description: `${group.reason}\n\n${group.items
-                  .map((article) => `- ${article.title}`)
-                  .join("\n")}`,
-                price: group.suggestedPrice,
+                description:
+                  overrides.description.trim() ||
+                  `${group.reason ?? ""}\n\n${group.items
+                    .map((article) => `- ${article.title}`)
+                    .join("\n")}`.trim(),
+                price: overrides.price,
               });
               setAiGroups((current) =>
                 current?.filter((item) => item.title !== group.title) ?? null,
@@ -433,10 +441,22 @@ export function Articles() {
                               )}
                             </span>
                             <div className="min-w-0">
-                              <p className="font-medium text-zinc-100 line-clamp-1">
-                                {a.title}
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium text-zinc-100 line-clamp-1">
+                                  {a.title}
+                                </p>
+                                {a.isLot && (
+                                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-300">
+                                    <Boxes className="h-3 w-3" />
+                                    Lot
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-zinc-500">
+                                {a.isLot
+                                  ? `${a.bundledArticleIds?.length ?? 0} articles`
+                                  : a.condition}
                               </p>
-                              <p className="text-xs text-zinc-500">{a.condition}</p>
                             </div>
                           </div>
                         </td>
@@ -791,14 +811,23 @@ function PotentialLots({
   error,
   canPublish,
   onPublish,
+  generateDescription,
 }: {
   articles: ArticleDoc[];
   aiGroups: AiLotGroup[] | null;
   loading: boolean;
   error: string;
   canPublish: boolean;
-  onPublish: (group: PotentialLotGroup) => Promise<void>;
+  onPublish: (
+    group: PotentialLotGroup,
+    overrides: { title: string; description: string; price: number },
+  ) => Promise<void>;
+  generateDescription: (
+    articleIds: string[],
+    title?: string,
+  ) => Promise<{ description: string }>;
 }) {
+  const [publishGroup, setPublishGroup] = useState<PotentialLotGroup | null>(null);
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
   const [hiddenLotKeys, setHiddenLotKeys] = useState<string[]>([]);
   const [removedArticleIdsByLot, setRemovedArticleIdsByLot] = useState<
@@ -849,10 +878,14 @@ function PotentialLots({
     })
     .filter((group) => group.items.length >= 2);
 
-  async function handlePublish(group: PotentialLotGroup) {
+  async function handlePublish(
+    group: PotentialLotGroup,
+    overrides: { title: string; description: string; price: number },
+  ) {
     setPublishingKey(group.key);
     try {
-      await onPublish(group);
+      await onPublish(group, overrides);
+      setPublishGroup(null);
     } finally {
       setPublishingKey(null);
     }
@@ -998,7 +1031,7 @@ function PotentialLots({
           {canPublish && (
             <div className="mt-5 flex justify-end">
               <Button
-                onClick={() => handlePublish(group)}
+                onClick={() => setPublishGroup(group)}
                 disabled={publishingKey === group.key}
               >
                 {publishingKey === group.key ? (
@@ -1012,7 +1045,148 @@ function PotentialLots({
           )}
         </div>
       ))}
+
+      {publishGroup && (
+        <PublishLotDialog
+          group={publishGroup}
+          publishing={publishingKey === publishGroup.key}
+          generateDescription={generateDescription}
+          onCancel={() => setPublishGroup(null)}
+          onConfirm={(overrides) => handlePublish(publishGroup, overrides)}
+        />
+      )}
     </div>
+  );
+}
+
+function PublishLotDialog({
+  group,
+  publishing,
+  generateDescription,
+  onCancel,
+  onConfirm,
+}: {
+  group: PotentialLotGroup;
+  publishing: boolean;
+  generateDescription: (
+    articleIds: string[],
+    title?: string,
+  ) => Promise<{ description: string }>;
+  onCancel: () => void;
+  onConfirm: (overrides: {
+    title: string;
+    description: string;
+    price: number;
+  }) => void;
+}) {
+  const [title, setTitle] = useState(group.title ?? "");
+  const [price, setPrice] = useState(String(group.suggestedPrice));
+  const [description, setDescription] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+
+  const articleIds = useMemo(
+    () => group.items.map((article) => article._id as string),
+    [group.items],
+  );
+
+  const runGenerate = useCallback(async () => {
+    setGenerating(true);
+    setGenError("");
+    try {
+      const result = await generateDescription(articleIds, title || undefined);
+      setDescription(result.description);
+    } catch (err) {
+      setGenError(
+        err instanceof Error ? err.message : "Génération IA impossible.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }, [articleIds, generateDescription, title]);
+
+  // Génère automatiquement une première description à l'ouverture.
+  useEffect(() => {
+    void runGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Modal open onClose={onCancel} title="Mettre le lot en ligne">
+      <div className="space-y-4">
+        <Field label="Titre du lot">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+
+        <Field label="Prix (€)">
+          <Input
+            type="number"
+            min={1}
+            step="0.5"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        </Field>
+
+        <Field label="Description">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-zinc-500">
+              Générée par l'IA à partir des {group.items.length} articles du lot.
+            </p>
+            <button
+              type="button"
+              onClick={() => void runGenerate()}
+              disabled={generating}
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-xs font-semibold text-brand-300 transition hover:bg-brand-500/15 disabled:opacity-50"
+            >
+              {generating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              Régénérer
+            </button>
+          </div>
+          <Textarea
+            rows={7}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={
+              generating ? "Génération de la description en cours…" : ""
+            }
+          />
+        </Field>
+
+        {genError && (
+          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            {genError}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onCancel} disabled={publishing}>
+            Annuler
+          </Button>
+          <Button
+            onClick={() =>
+              onConfirm({
+                title,
+                description,
+                price: Math.max(1, Number(price) || group.suggestedPrice),
+              })
+            }
+            disabled={publishing || generating}
+          >
+            {publishing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShoppingBag className="h-4 w-4" />
+            )}
+            Publier le lot
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

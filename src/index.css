@@ -270,12 +270,17 @@ body {
 /* Transition de page « balayée » : le nouveau contenu glisse vers la gauche
    (depuis la droite) en fondu — effet premium à chaque changement de page. */
 @keyframes page-sweep-in {
-  0% { transform: translate3d(26px, 0, 0); opacity: 0; }
+  0% { transform: translate3d(0, 28px, 0); opacity: 0; }
   100% { transform: translate3d(0, 0, 0); opacity: 1; }
 }
 .animate-page-sweep {
-  animation: page-sweep-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: page-sweep-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-sweep {
+    animation: none;
+  }
 }
 
 /* La barre de navigation balaie aussi ses infos qui changent. */

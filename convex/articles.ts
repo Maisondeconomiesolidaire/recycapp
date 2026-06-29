@@ -178,11 +178,6 @@ function areLotCompatible(a: Doc<"articles">, b: Doc<"articles">) {
   return keywordOverlap(deriveKeywords(a), deriveKeywords(b)).length >= 2;
 }
 
-function discountedBundlePrice(total: number) {
-  const discountRate = total >= 40 ? 0.82 : 0.85;
-  return Math.max(10, Math.round(total * discountRate));
-}
-
 function normalizeDigits(value: string) {
   return value.replace(/\D/g, "");
 }
@@ -384,6 +379,29 @@ export const getManyPublic = query({
   },
 });
 
+/** CRM : détails des articles d'un lot (pour la génération IA de description). */
+export const getManyForLot = query({
+  args: { ids: v.array(v.id("articles")) },
+  handler: async (ctx, { ids }) => {
+    await requireCrmPermission(ctx, "articles", "read");
+    const out = [];
+    for (const id of ids.slice(0, 30)) {
+      const article = await ctx.db.get(id);
+      if (!article) continue;
+      out.push({
+        title: article.title,
+        description: article.description.slice(0, 200),
+        category: article.category,
+        subcategory: article.subcategory,
+        condition: article.condition,
+        price: article.price,
+        keywords: article.keywords?.slice(0, 8),
+      });
+    }
+    return out;
+  },
+});
+
 /** CRM : tous les articles, quel que soit le statut. */
 export const listAll = query({
   args: {
@@ -515,7 +533,6 @@ export const publishLot = mutation({
       (article) => article.subcategory === first.subcategory,
     );
     const sameCategory = articles.every((article) => article.category === first.category);
-    const total = articles.reduce((sum, article) => sum + article.price, 0);
     const totalWeight = articles.reduce(
       (sum, article) => sum + (article.weightKg ?? 0),
       0,
@@ -530,7 +547,7 @@ export const publishLot = mutation({
     const lotId = await ctx.db.insert("articles", {
       title: args.title.trim() || `Lot ${first.subcategory || first.category}`,
       description: args.description.trim(),
-      price: Math.max(10, Math.min(args.price, discountedBundlePrice(total))),
+      price: Math.max(1, args.price),
       weightKg: normalizeWeightKg(totalWeight),
       internalReference,
       category: sameCategory ? first.category : "Loisirs",
@@ -617,6 +634,20 @@ export const update = mutation({
         ? normalizeKeyword(rest.themeKey).replace(/\s+/g, "-")
         : undefined,
     });
+  },
+});
+
+/** CRM : renseigne uniquement la référence externe (GDR) d'un article.
+ *  Raccourci utilisé depuis le suivi d'une demande boutique. */
+export const setGdrReference = mutation({
+  args: { id: v.id("articles"), gdrReference: v.string() },
+  handler: async (ctx, { id, gdrReference }) => {
+    await requireCrmPermission(ctx, "articles", "update");
+    const trimmed = gdrReference.trim();
+    if (trimmed && !/^\d{15}$/.test(trimmed)) {
+      throw new Error("La référence GDR doit contenir exactement 15 chiffres.");
+    }
+    await ctx.db.patch(id, { gdrReference: trimmed || undefined });
   },
 });
 

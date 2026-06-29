@@ -36,6 +36,21 @@ export function PublicLayout() {
   const [params] = useSearchParams();
   const location = useLocation();
   const embed = params.get("embed") === "1";
+
+  // À chaque changement de page (ou de catégorie / recherche), on ramène
+  // l'utilisateur en haut avec un défilement fluide : la page « remonte »
+  // au lieu de rester bloquée en bas après une navigation.
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
+  }, [location.pathname, location.search]);
+
   const isBoutiqueListing =
     location.pathname === "/boutique" ||
     location.pathname.startsWith("/boutique/categorie/");
