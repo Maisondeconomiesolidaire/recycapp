@@ -194,6 +194,7 @@ export function ArticleForm({
   const create = useMutation(api.articles.create);
   const update = useMutation(api.articles.update);
   const analyzeImage = useAction(api.ai.analyzeArticleImage);
+  const generateFromKeywords = useAction(api.ai.generateArticleFromKeywords);
   const upload = useUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<ArticlePhoto[]>([]);
@@ -206,6 +207,7 @@ export function ArticleForm({
   );
   const [location, setLocation] = useState(article?.location ?? "");
   const [aiDetails, setAiDetails] = useState("");
+  const [aiBrief, setAiBrief] = useState("");
   const [originalPrice, setOriginalPrice] = useState(
     article?.originalPrice !== undefined ? String(article.originalPrice) : "",
   );
@@ -233,7 +235,9 @@ export function ArticleForm({
   );
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [generatingStep, setGeneratingStep] = useState<null | "analyse" | "visuels">(null);
+  const [generatingStep, setGeneratingStep] = useState<
+    null | "analyse" | "visuels" | "champs"
+  >(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
   const [error, setError] = useState("");
@@ -307,6 +311,51 @@ export function ArticleForm({
     });
   }
 
+  function applyAnalysis(
+    result: Awaited<ReturnType<typeof generateFromKeywords>>,
+  ) {
+    setTitle(result.title);
+    setDescription(result.description);
+    setPrice(String(result.price));
+    // prix barré = toujours notre prix × 1.7 (nos prix sont à -70% du prix barré)
+    setOriginalPrice(String(Math.round(result.price * 1.7)));
+    if (result.weightKg != null && result.weightKg > 0) {
+      setWeightKg(String(result.weightKg));
+    }
+    setCategory(result.category);
+    setSubcategory(result.subcategory ?? "");
+    setCondition(result.condition);
+    setKeywords((result.keywords ?? []).join(", "));
+    setThemeKey(result.themeKey ?? "");
+    setValueColor(result.valueColor);
+    setValueLabel(result.valueLabel);
+    setPriceRationale(result.priceRationale ?? null);
+    setPriceJustification(result.priceJustification ?? null);
+    setSources(result.sources ?? []);
+    setOnlineEligible(result.onlineEligible ?? result.price >= 10);
+    setRecommendedSaleMode(
+      result.recommendedSaleMode ?? (result.price >= 10 ? "single" : "bundle"),
+    );
+    setSingleSaleNote(
+      result.singleSaleNote ??
+        (result.price >= 10
+          ? "Peut être vendu seul car il atteint le seuil minimum de 10 €."
+          : "Vente seule déconseillée car le prix estimé est inférieur au minimum de mise en ligne."),
+    );
+    setBundleSaleNote(
+      result.bundleSaleNote ??
+        (result.price >= 10
+          ? "Peut aussi renforcer un lot thématique si des articles proches existent."
+          : "À conserver pour un lot avec des articles similaires afin d'atteindre un prix vendable."),
+    );
+    setListingRecommendation(
+      result.listingRecommendation ??
+        (result.price >= 10
+          ? "Cet article atteint le seuil minimum de 10 € et peut être mis en ligne seul."
+          : "Cet article ne vaut pas la peine d'être mis en ligne seul : il sera conservé pour un lot futur."),
+    );
+  }
+
   async function runAnalysis() {
     if (photos.length === 0) return;
     setError("");
@@ -316,43 +365,28 @@ export function ArticleForm({
         storageId: photos[0].id,
         extraDetails: aiDetails.trim() || undefined,
       });
-      setTitle(result.title);
-      setDescription(result.description);
-      setPrice(String(result.price));
-      // prix barré = toujours notre prix × 1.7 (nos prix sont à -70% du prix barré)
-      setOriginalPrice(String(Math.round(result.price * 1.7)));
-      setCategory(result.category);
-      setSubcategory(result.subcategory ?? "");
-      setCondition(result.condition);
-      setKeywords((result.keywords ?? []).join(", "));
-      setThemeKey(result.themeKey ?? "");
-      setValueColor(result.valueColor);
-      setValueLabel(result.valueLabel);
-      setPriceRationale(result.priceRationale ?? null);
-      setPriceJustification(result.priceJustification ?? null);
-      setSources(result.sources ?? []);
-      setOnlineEligible(result.onlineEligible ?? result.price >= 10);
-      setRecommendedSaleMode(result.recommendedSaleMode ?? (result.price >= 10 ? "single" : "bundle"));
-      setSingleSaleNote(
-        result.singleSaleNote ??
-          (result.price >= 10
-            ? "Peut être vendu seul car il atteint le seuil minimum de 10 €."
-            : "Vente seule déconseillée car le prix estimé est inférieur au minimum de mise en ligne."),
-      );
-      setBundleSaleNote(
-        result.bundleSaleNote ??
-          (result.price >= 10
-            ? "Peut aussi renforcer un lot thématique si des articles proches existent."
-            : "À conserver pour un lot avec des articles similaires afin d'atteindre un prix vendable."),
-      );
-      setListingRecommendation(
-        result.listingRecommendation ??
-          (result.price >= 10
-            ? "Cet article atteint le seuil minimum de 10 € et peut être mis en ligne seul."
-            : "Cet article ne vaut pas la peine d'être mis en ligne seul : il sera conservé pour un lot futur."),
-      );
+      applyAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'analyse IA.");
+    } finally {
+      setGeneratingStep(null);
+    }
+  }
+
+  async function runKeywordGeneration() {
+    if (!aiBrief.trim()) {
+      setError("Renseignez quelques mots-clés avant de générer.");
+      return;
+    }
+    setError("");
+    setGeneratingStep("champs");
+    try {
+      const result = await generateFromKeywords({ keywords: aiBrief.trim() });
+      applyAnalysis(result);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Erreur lors de la génération IA.",
+      );
     } finally {
       setGeneratingStep(null);
     }
@@ -509,6 +543,47 @@ export function ArticleForm({
       title={article ? "Modifier l'article" : "Nouvel article"}
     >
       <div className="space-y-4">
+
+        {/* ── Rédiger : génération de tous les champs depuis des mots-clés ── */}
+        <div className="rounded-2xl border border-brand-500/30 bg-brand-500/5 p-4">
+          <p className="text-sm font-medium text-zinc-200">
+            Rédiger l'article avec l'IA
+          </p>
+          <p className="mb-3 mt-0.5 text-xs text-zinc-500">
+            Saisissez des mots-clés (un par ligne ou séparés par des virgules) :
+            l'IA génère le titre, la description, le prix et tous les autres
+            champs — sauf les photos.
+          </p>
+          <Textarea
+            value={aiBrief}
+            onChange={(e) => setAiBrief(e.target.value)}
+            placeholder={"Ex :\nveste en jean Levi's taille M\névénement, textile, tout à -50%, déstockage\nlot de 3 cadres photo bois"}
+            rows={4}
+          />
+          <button
+            type="button"
+            onClick={runKeywordGeneration}
+            disabled={generatingStep !== null || !aiBrief.trim()}
+            className={cn(
+              "mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3.5 text-sm font-medium transition-colors",
+              generatingStep !== null || !aiBrief.trim()
+                ? "cursor-not-allowed border-brand-500/40 bg-brand-500/8 text-brand-300/70"
+                : "border-brand-500/50 bg-brand-500/10 text-brand-200 hover:border-brand-500/80 hover:bg-brand-500/15",
+            )}
+          >
+            {generatingStep === "champs" ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Génération des champs…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Générer tous les champs
+              </>
+            )}
+          </button>
+        </div>
 
         {/* ── Photos ─────────────────────────────────────────── */}
         <div>

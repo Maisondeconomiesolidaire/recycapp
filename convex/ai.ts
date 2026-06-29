@@ -496,55 +496,120 @@ Produis l'évaluation JSON complète basée sur les résultats trouvés.`;
     });
 
     // Sanity checks
-    if (!Object.keys(CATEGORIES).includes(result.category)) {
-      result.category = "Maison et Jardin";
-    }
-    result.price = Math.max(0, Number(result.price) || 0);
-    result.originalPrice =
-      result.originalPrice != null ? Number(result.originalPrice) || null : null;
-    result.onlineEligible = result.price >= 10;
-    result.recommendedSaleMode =
-      result.recommendedSaleMode === "bundle" || result.price < 10
-        ? "bundle"
-        : "single";
-    if (!result.singleSaleNote) {
-      result.singleSaleNote =
-        result.price >= 10
-          ? "Peut être vendu seul car il atteint le seuil minimum de 10 €."
-          : "Vente seule déconseillée car le prix estimé est inférieur au minimum de mise en ligne.";
-    }
-    if (!result.bundleSaleNote) {
-      result.bundleSaleNote =
-        result.price >= 10
-          ? "Peut aussi servir à renforcer un lot thématique si des articles proches existent."
-          : "À conserver pour un lot avec des articles similaires afin d'atteindre un prix vendable.";
-    }
-    if (!result.listingRecommendation) {
-      result.listingRecommendation =
-        result.recommendedSaleMode === "single"
-          ? "Cet article atteint le seuil minimum de 10 € et peut être mis en ligne seul."
-          : "Cet article est plus pertinent en attente pour un lot avec des articles du même univers.";
-    }
-    result.keywords = Array.from(
-      new Set((result.keywords ?? []).map(normalizeKeyword).filter(Boolean)),
-    ).slice(0, 12);
-    result.sources = Array.from(
-      new Set(
-        (Array.isArray(result.sources) ? result.sources : [])
-          .map((s) => (typeof s === "string" ? s.trim() : ""))
-          .filter((s) => /^https?:\/\//i.test(s)),
-      ),
-    ).slice(0, 6);
-    result.themeKey =
-      result.themeKey?.trim() || fallbackThemeKey({
-        title: result.title,
-        description: result.description,
-        keywords: result.keywords,
-      });
-
+    sanitizeArticleAnalysis(result);
     result.backgroundPrompt = identification.backgroundPrompt;
 
     return result;
+  },
+});
+
+// ─── Génération d'article à partir de mots-clés (sans photo) ───────────────────
+
+function sanitizeArticleAnalysis(
+  result: ArticleAIAnalysis & { weightKg?: number },
+): ArticleAIAnalysis & { weightKg?: number } {
+  if (!Object.keys(CATEGORIES).includes(result.category)) {
+    result.category = "Maison et Jardin";
+  }
+  result.price = Math.max(0, Number(result.price) || 0);
+  result.originalPrice =
+    result.originalPrice != null ? Number(result.originalPrice) || null : null;
+  result.weightKg =
+    result.weightKg != null ? Math.max(0, Number(result.weightKg) || 0) : undefined;
+  result.onlineEligible = result.price >= 10;
+  result.recommendedSaleMode =
+    result.recommendedSaleMode === "bundle" || result.price < 10
+      ? "bundle"
+      : "single";
+  if (!result.singleSaleNote) {
+    result.singleSaleNote =
+      result.price >= 10
+        ? "Peut être vendu seul car il atteint le seuil minimum de 10 €."
+        : "Vente seule déconseillée car le prix estimé est inférieur au minimum de mise en ligne.";
+  }
+  if (!result.bundleSaleNote) {
+    result.bundleSaleNote =
+      result.price >= 10
+        ? "Peut aussi servir à renforcer un lot thématique si des articles proches existent."
+        : "À conserver pour un lot avec des articles similaires afin d'atteindre un prix vendable.";
+  }
+  if (!result.listingRecommendation) {
+    result.listingRecommendation =
+      result.recommendedSaleMode === "single"
+        ? "Cet article atteint le seuil minimum de 10 € et peut être mis en ligne seul."
+        : "Cet article est plus pertinent en attente pour un lot avec des articles du même univers.";
+  }
+  result.keywords = Array.from(
+    new Set((result.keywords ?? []).map(normalizeKeyword).filter(Boolean)),
+  ).slice(0, 12);
+  result.sources = Array.from(
+    new Set(
+      (Array.isArray(result.sources) ? result.sources : [])
+        .map((s) => (typeof s === "string" ? s.trim() : ""))
+        .filter((s) => /^https?:\/\//i.test(s)),
+    ),
+  ).slice(0, 6);
+  result.themeKey =
+    result.themeKey?.trim() ||
+    fallbackThemeKey({
+      title: result.title,
+      description: result.description,
+      keywords: result.keywords,
+    });
+  return result;
+}
+
+export const generateArticleFromKeywords = action({
+  args: { keywords: v.string() },
+  handler: async (
+    ctx,
+    { keywords },
+  ): Promise<ArticleAIAnalysis & { weightKg?: number }> => {
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "articles", "analyze")) {
+      throw new Error("Accès CRM insuffisant.");
+    }
+
+    const brief = keywords.trim();
+    if (!brief) throw new Error("Renseignez au moins quelques mots-clés.");
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey)
+      throw new Error(
+        "Clé OpenAI non configurée. Exécutez : npx convex env set OPENAI_API_KEY sk-...",
+      );
+
+    const userPrompt = `Article à créer à partir des mots-clés / indications fournis par l'équipe (il n'y a PAS de photo, déduis l'article le plus probable) :
+"""
+${brief}
+"""
+
+Étapes :
+1. Déduis l'objet le plus probable décrit par ces mots-clés (marque, modèle, type, matière si possible).
+2. Choisis un état réaliste : "Bon état" par défaut, sauf si les mots-clés indiquent un autre état (neuf, à rénover, déstockage…).
+3. Recherche sur Leboncoin, Vinted, eBay France et Amazon France les prix actuels pour cet article en état similaire, puis applique TOUTE la méthodologie de valorisation et les décotes.
+
+En plus des champs JSON habituels, ajoute le champ "weightKg" : le poids estimé de l'article en kilogrammes (nombre, ex: 0.5, 2, 12).`;
+
+    const result = await callOpenAI<ArticleAIAnalysis & { weightKg?: number }>(
+      apiKey,
+      {
+        model: "gpt-4o-search-preview",
+        max_tokens: 1600,
+        web_search_options: { search_context_size: "medium" },
+        messages: [
+          {
+            role: "system",
+            content:
+              VALUATION_PROMPT +
+              `\n\nIMPORTANT : ajoute aussi le champ "weightKg" (poids estimé en kilogrammes, nombre) dans le JSON de réponse.`,
+          },
+          { role: "user", content: userPrompt },
+        ],
+      },
+    );
+
+    return sanitizeArticleAnalysis(result);
   },
 });
 
