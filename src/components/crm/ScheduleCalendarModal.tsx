@@ -53,6 +53,9 @@ export function ScheduleCalendarModal({
   const [selectedDay, setSelectedDay] = useState<Date | null>(
     value ? new Date(value) : null,
   );
+  const [selectedTime, setSelectedTime] = useState<string>(
+    value ? format(new Date(value), "HH:mm") : "09:00",
+  );
   const [selectedVehicle, setSelectedVehicle] = useState<Id<"vehicles"> | null>(
     vehicleId,
   );
@@ -125,8 +128,16 @@ export function ScheduleCalendarModal({
 
   function handleConfirm() {
     if (!selectedDay) return;
+    const [hours, minutes] = selectedTime.split(":").map((n) => parseInt(n, 10));
+    const dateTime = new Date(selectedDay);
+    dateTime.setHours(
+      Number.isFinite(hours) ? hours : 9,
+      Number.isFinite(minutes) ? minutes : 0,
+      0,
+      0,
+    );
     onChange(
-      selectedDay.getTime(),
+      dateTime.getTime(),
       vehicleSelection ? selectedVehicle : undefined,
     );
     onClose();
@@ -253,14 +264,29 @@ export function ScheduleCalendarModal({
           {selectedDay ? (
             <>
               <div className="border-b border-[var(--crm-border)] px-4 py-4">
-                <p className="font-semibold capitalize text-zinc-100">
+                <p className="font-semibold capitalize text-[var(--foreground)]">
                   {format(selectedDay, "EEEE d MMMM yyyy", { locale: fr })}
                 </p>
-                <p className="mt-0.5 text-xs text-zinc-500">
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
                   {dayRequests.length} demande
                   {dayRequests.length !== 1 ? "s" : ""} planifiée
                   {dayRequests.length !== 1 ? "s" : ""}
                 </p>
+                <div className="mt-3">
+                  <label
+                    htmlFor="schedule-time"
+                    className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]"
+                  >
+                    Heure
+                  </label>
+                  <input
+                    id="schedule-time"
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                  />
+                </div>
               </div>
 
               <div className="flex-1 space-y-4 overflow-y-auto p-3">

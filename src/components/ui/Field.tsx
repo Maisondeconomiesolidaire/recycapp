@@ -376,10 +376,7 @@ export function Checkbox({
       <span className="min-w-0">
         <span
           className={cn(
-            "block",
-            variant === "inline"
-              ? "text-sm font-medium text-foreground"
-              : "text-sm font-medium text-zinc-800 dark:text-foreground",
+            "block text-sm font-medium text-[var(--foreground)]",
           )}
         >
           {label}

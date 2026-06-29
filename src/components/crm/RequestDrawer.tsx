@@ -53,6 +53,17 @@ import { cn } from "../../lib/cn";
 type RequestDoc = NonNullable<ReturnType<typeof useQuery<typeof api.requests.get>>>;
 type Tab = "demande" | "gestion" | "calculDevis" | "documents" | "client" | "messages";
 
+/** Affiche la date programmée avec l'heure (sauf si minuit = heure non renseignée). */
+function formatScheduledDate(timestamp: number) {
+  const date = new Date(timestamp);
+  const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0;
+  return format(
+    date,
+    hasTime ? "EEEE d MMMM yyyy 'à' HH'h'mm" : "EEEE d MMMM yyyy",
+    { locale: fr },
+  );
+}
+
 const TABS: { key: Tab; label: string }[] = [
   { key: "demande", label: "Demande" },
   { key: "gestion", label: "Gestion" },
@@ -945,7 +956,7 @@ function GestionTab({
             <CalendarDays className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
             <span className={request.scheduledDate ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}>
               {request.scheduledDate
-                ? format(new Date(request.scheduledDate), "EEEE d MMMM yyyy", { locale: fr })
+                ? formatScheduledDate(request.scheduledDate)
                 : "Programmer une date"}
             </span>
           </button>

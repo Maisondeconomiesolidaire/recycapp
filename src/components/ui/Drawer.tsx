@@ -69,11 +69,11 @@ export function Drawer({
           style={headerStyle}
         >
           <div className="flex items-center justify-between px-5 py-4">
-            <div className="min-w-0 flex-1 text-zinc-100 font-semibold">{title}</div>
+            <div className="min-w-0 flex-1 text-[var(--foreground)] font-semibold">{title}</div>
             <button
               onClick={onClose}
               className={cn(
-                "rounded-lg p-1.5 text-zinc-400 hover:bg-[var(--crm-surface-2)] hover:text-zinc-200",
+                "rounded-lg p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--crm-surface-2)] hover:text-[var(--foreground)]",
                 closeButtonClassName,
               )}
             >
@@ -82,7 +82,7 @@ export function Drawer({
           </div>
           {headerContent && <div className="px-5 pb-4">{headerContent}</div>}
         </div>
-        <div className={cn("flex-1 overflow-y-auto p-5 text-zinc-200", bodyClassName)}>
+        <div className={cn("flex-1 overflow-y-auto p-5 text-[var(--foreground)]", bodyClassName)}>
           {children}
         </div>
         {footer && (
