@@ -189,7 +189,13 @@ const livraisonDetails = v.object({
   ),
 });
 
-export default defineSchema({
+// Déploiement Convex partagé avec l'app « mesoutils » : d'autres apps écrivent
+// dans certaines tables partagées (postLikes, roomReservations, etc.) des champs
+// que ce schéma ne déclare pas. On désactive la validation stricte des documents
+// pour ne pas rejeter ces champs ; les arguments des fonctions restent validés
+// par leurs `v.*`. À réactiver une fois les schémas des apps resynchronisés.
+export default defineSchema(
+  {
   articles: defineTable({
     title: v.string(),
     description: v.string(),
@@ -895,4 +901,6 @@ export default defineSchema({
     .index("by_pair", ["pairKey", "createdAt"])
     .index("by_to", ["toClerkId"])
     .index("by_from", ["fromClerkId"]),
-});
+  },
+  { schemaValidation: false },
+);
