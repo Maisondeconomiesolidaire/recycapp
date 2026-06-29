@@ -1,18 +1,22 @@
-> ⚠️ **BACKEND CONVEX PARTAGÉ — NE DÉPLOIE PAS DEPUIS CE DÉPÔT.**
+> ⚠️ **BACKEND CONVEX PARTAGÉ — LIS CECI AVANT TOUTE CHOSE.**
 >
-> Toutes nos applications (Mes Outils, Recyclerie/Recycapp, Klyde, Cycle en Bray)
-> partagent **un seul déploiement Convex**. Un déploiement reflète exactement UN
-> dossier `convex/` : déployer depuis ici **effacerait les fonctions des autres apps**.
+> Les 4 apps (Mes Outils, Recyclerie/Recycapp, Klyde, Cycle en Bray) partagent
+> **un seul déploiement Convex**. Le dossier `convex/` **canonique** (sur-ensemble
+> des 4 apps) vit dans **`~/mesoutils`** — c'est la SEULE source de vérité. Les
+> `convex/` des autres dépôts ne sont que des copies pour le typecheck local.
 >
-> Le `convex/` **canonique** (sur-ensemble de toutes les apps) vit dans le dépôt
-> **`mesoutils`** (`~/mesoutils`). Règles à respecter :
+> **🔁 Lance ce script AVANT *et* APRÈS toute intervention sur n'importe quelle app :**
 >
-> - On déploie le backend Convex **uniquement** depuis là :
->   `cd ~/mesoutils && npx convex deploy` (ou `npx convex dev` pendant le dev).
-> - Toute nouvelle fonction ou table backend — **même si elle concerne CETTE app** —
->   s'ajoute dans `~/mesoutils/convex/`, puis on déploie depuis mesoutils.
-> - Le dossier `convex/` de CE dépôt sert seulement au typecheck local du frontend.
->   **Ne lance jamais `npx convex dev` ni `npx convex deploy` ici.**
+> ```
+> bash ~/mesoutils/scripts/sync-convex.sh
+> ```
+>
+> Il réaligne les 4 dossiers `convex/` sur le canonique.
+>
+> **Règles impératives :**
+> - Toute fonction ou table backend — **même pour CETTE app** — s'écrit dans `~/mesoutils/convex/`, jamais ailleurs.
+> - On **déploie le backend uniquement depuis Mes Outils** : `cd ~/mesoutils && npx convex deploy`.
+> - Ne lance **jamais** `npx convex dev` ni `npx convex deploy` depuis un autre dépôt.
 
 ---
 

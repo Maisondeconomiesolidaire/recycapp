@@ -1,8 +1,16 @@
 import { v } from "convex/values";
-import { action, env, mutation, query } from "./_generated/server";
+import { action, env, internalQuery, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { requireCrmPermission, requireStaff, requireUser } from "./lib";
+import { internal } from "./_generated/api";
+import {
+  emailForClerkId,
+  hasCrmPermission,
+  requireCrmPermission,
+  requireStaff,
+  requireUser,
+} from "./lib";
+import { createMesoutilsNotification } from "./mesoutilsNotifications";
 
 const PAGE_KEY = "mesoutils:actualites";
 
@@ -63,7 +71,7 @@ export const createEvent = mutation({
     title: v.string(),
     description: v.optional(v.string()),
     location: v.optional(v.string()),
-    start: v.number(),
+    start: v.optional(v.number()),
     end: v.optional(v.number()),
     images: v.optional(v.array(v.id("_storage"))),
   },
@@ -98,6 +106,97 @@ export const removeEvent = mutation({
       throw new Error("Suppression non autorisée.");
     }
     await ctx.db.delete(args.eventId);
+  },
+});
+
+/* ─── Assistant IA pour les posts d'événements ───────────────────────────── */
+
+export const assertCanCreateEvent = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, PAGE_KEY, "create");
+    return true;
+  },
+});
+
+const EVENT_POST_SYSTEM_PROMPT = `Tu es un assistant IA spécialisé dans la rédaction de posts engageants pour un réseau social d'entreprise. Ton objectif est d'aider les collaborateurs à rédiger des publications claires, impactantes et dynamiques en fonction de quelques mots-clés fournis, n'hésite pas à visiter le site www.eco-solidaire.fr pour récupérer plus d'informations. Tu as le droit à un nombre de caractères maximum de 360.
+Ton & Style :
+Léger et accessible, avec une pointe d'humour bien dosée.
+Sérieux dans le fond, fun dans la forme.
+Inspirant et humain : on parle d'économie solidaire, d'impact social et d'innovation locale !
+Public :
+Principalement les collaborateurs (communication interne).
+Possibilité d'être partagé en externe sur notre site, donc un ton accessible au grand public.
+Structure suggérée :
+Accroche : Une phrase punchy ou une question qui capte l'attention.
+Message clé : Expliquer l'info de manière concise et engageante.
+Call-to-action (optionnel) : Encourager l'interaction (commentaire, partage, participation…).
+Exemples de styles attendus :
+"Besoin d'un coup de main pour ta pelouse ? Pas de panique, notre équipe de Pays de Bray Emploi a la main verte ! 🌿💪 #SolidaritéEnAction #JardinageSansStress"
+"Aujourd'hui, on a sauvé 12 fauteuils roulants de l'oubli ! 🦸‍♂️♻️ Direction la recyclerie pour une seconde vie. #ÉconomieCirculaire #SantéPourTous"
+"Chez Les Sens du Bray, on construit du solide... et du sens. 🌱🏗️ Envie de voir nos dernières réalisations ? Spoiler : c'est du bois, du local et du beau ! #ArchitectureDurable #MadeInBray"
+Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, au format exact :
+{
+  "title": "titre court et accrocheur de l'événement (max ~60 caractères, sans hashtag)",
+  "description": "le post complet prêt à publier, max 360 caractères, dans le ton décrit ci-dessus (accroche + message + call-to-action + hashtags)",
+  "location": "le lieu si mentionné ou déductible du contexte, sinon une chaîne vide"
+}`;
+
+type GeneratedEventPost = { title: string; description: string; location: string };
+
+/** Génère un post d'événement complet (titre, description, lieu) depuis un contexte libre. */
+export const generateEventPost = action({
+  args: { context: v.string() },
+  handler: async (ctx, { context }): Promise<GeneratedEventPost> => {
+    await ctx.runQuery(internal.community.assertCanCreateEvent, {});
+    const brief = context.trim();
+    if (!brief) throw new Error("Quelques éléments de contexte sont nécessaires.");
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Clé OpenAI absente du déploiement Convex partagé.");
+    }
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        temperature: 0.8,
+        max_tokens: 400,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: EVENT_POST_SYSTEM_PROMPT },
+          { role: "user", content: `Contexte de l'événement : ${brief}` },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Erreur OpenAI (${response.status}): ${(await response.text()).slice(0, 300)}`,
+      );
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    let parsed: { title?: string; description?: string; location?: string } = {};
+    try {
+      parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    } catch {
+      parsed = {};
+    }
+    const description = (parsed.description ?? "").trim();
+    return {
+      title: (parsed.title ?? "").trim().slice(0, 120),
+      description:
+        description.length > 360 ? `${description.slice(0, 359).trimEnd()}…` : description,
+      location: (parsed.location ?? "").trim().slice(0, 120),
+    };
   },
 });
 
@@ -182,6 +281,41 @@ export const removeDeal = mutation({
   },
 });
 
+/**
+ * Une personne se déclare intéressée par un bon plan : notifie l'auteur dans
+ * l'app et lui envoie un email « (nom) est intéressé·e par votre annonce ».
+ */
+export const expressDealInterest = mutation({
+  args: { dealId: v.id("dealPosts") },
+  handler: async (ctx, args) => {
+    const identity = await requireStaff(ctx);
+    const deal = await ctx.db.get(args.dealId);
+    if (!deal) throw new Error("Bon plan introuvable.");
+    // On ne se notifie pas soi-même.
+    if (deal.authorClerkId === identity.subject) return;
+
+    const interestedName = displayName(identity);
+    await createMesoutilsNotification(ctx, {
+      recipientClerkId: deal.authorClerkId,
+      kind: "deal_interest",
+      title: `${interestedName} est intéressé·e par votre annonce`,
+      body: deal.title,
+      actorName: interestedName,
+      href: `/messagerie?to=${encodeURIComponent(identity.subject)}&name=${encodeURIComponent(interestedName)}`,
+    });
+
+    const email = await emailForClerkId(ctx, deal.authorClerkId);
+    if (email) {
+      await ctx.scheduler.runAfter(0, internal.mesoutilsEmails.sendDealInterestEmail, {
+        email,
+        authorName: deal.authorName,
+        interestedName,
+        dealTitle: deal.title,
+      });
+    }
+  },
+});
+
 /* ─── Messagerie interne ─────────────────────────────────────────────────── */
 
 export const listConversations = query({
@@ -226,20 +360,6 @@ export const listConversations = query({
   },
 });
 
-/** Nombre de messages directs non lus reçus par l'utilisateur courant. */
-export const unreadDirectCount = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return 0;
-    const received = await ctx.db
-      .query("directMessages")
-      .withIndex("by_to", (q) => q.eq("toClerkId", identity.subject))
-      .collect();
-    return received.filter((message) => !message.readAt).length;
-  },
-});
-
 export const listThread = query({
   args: { otherClerkId: v.string() },
   handler: async (ctx, args) => {
@@ -266,7 +386,7 @@ export const sendMessage = mutation({
     const body = args.body.trim();
     if (!body) throw new Error("Message vide.");
     if (args.toClerkId === identity.subject) throw new Error("Destinataire invalide.");
-    return await ctx.db.insert("directMessages", {
+    const messageId = await ctx.db.insert("directMessages", {
       pairKey: pairKey(identity.subject, args.toClerkId),
       fromClerkId: identity.subject,
       fromName: displayName(identity),
@@ -276,6 +396,27 @@ export const sendMessage = mutation({
       body,
       createdAt: Date.now(),
     });
+    await createMesoutilsNotification(ctx, {
+      recipientClerkId: args.toClerkId,
+      kind: "new_direct_message",
+      title: `Nouveau message de ${displayName(identity)}`,
+      body,
+      actorName: displayName(identity),
+      href: `/messagerie?to=${encodeURIComponent(identity.subject)}&name=${encodeURIComponent(displayName(identity))}`,
+    });
+    return messageId;
+  },
+});
+
+export const unreadDirectCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireStaff(ctx);
+    const messages = await ctx.db
+      .query("directMessages")
+      .withIndex("by_to", (q) => q.eq("toClerkId", identity.subject))
+      .collect();
+    return messages.filter((message) => !message.readAt).length;
   },
 });
 
@@ -352,10 +493,5 @@ export const listStaffDirectory = action({
 });
 
 async function canManage(ctx: QueryCtx | MutationCtx) {
-  try {
-    await requireCrmPermission(ctx, PAGE_KEY, "manage");
-    return true;
-  } catch {
-    return false;
-  }
+  return await hasCrmPermission(ctx, PAGE_KEY, "manage");
 }

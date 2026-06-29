@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireCrmPermission, requireUser } from "./lib";
+import { createMesoutilsNotification } from "./mesoutilsNotifications";
 
 const POSTS_PAGE_KEY = "mesoutils:actualites";
 
@@ -46,12 +47,18 @@ async function enrichPost(
       canRemove:
         comment.authorClerkId === currentClerkId || post.authorClerkId === currentClerkId,
     }));
+  const latestLike = [...likes].sort((a, b) => b.createdAt - a.createdAt)[0];
+  const latestLikeName =
+    latestLike?.clerkId === currentClerkId
+      ? "Vous"
+      : latestLike?.actorName ?? "Quelqu'un";
 
   return {
     ...post,
     imageUrls,
     comments: commentsWithMeta,
     likesCount: likes.length,
+    latestLikeName: likes.length > 0 ? latestLikeName : undefined,
     likedByMe: likes.some((like) => like.clerkId === currentClerkId),
     commentsCount: commentsWithMeta.length,
     canManage: post.authorClerkId === currentClerkId,
@@ -106,20 +113,43 @@ export const create = mutation({
   },
 });
 
+export const update = mutation({
+  args: {
+    postId: v.id("posts"),
+    body: v.string(),
+    images: v.optional(v.array(v.id("_storage"))),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmPermission(ctx, POSTS_PAGE_KEY, "create");
+    const identity = await requireUser(ctx);
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Post introuvable.");
+    if (post.authorClerkId !== identity.subject) {
+      throw new Error("Modification non autorisée.");
+    }
+    const body = args.body.trim();
+    const images = args.images ?? post.images;
+    if (!body && images.length === 0) {
+      throw new Error("Le post est vide.");
+    }
+    await ctx.db.patch(args.postId, { body, images, editedAt: Date.now() });
+  },
+});
+
 export const addComment = mutation({
   args: {
     postId: v.id("posts"),
     body: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, POSTS_PAGE_KEY, "read");
+    await requireCrmPermission(ctx, POSTS_PAGE_KEY, "create");
     const identity = await requireUser(ctx);
     const post = await ctx.db.get(args.postId);
     if (!post) throw new Error("Post introuvable.");
     const body = args.body.trim();
     if (!body) throw new Error("Commentaire vide.");
 
-    return await ctx.db.insert("postComments", {
+    const commentId = await ctx.db.insert("postComments", {
       postId: args.postId,
       authorClerkId: identity.subject,
       authorName: displayName(identity),
@@ -128,6 +158,17 @@ export const addComment = mutation({
       body,
       createdAt: Date.now(),
     });
+    if (post.authorClerkId !== identity.subject) {
+      await createMesoutilsNotification(ctx, {
+        recipientClerkId: post.authorClerkId,
+        kind: "post_commented",
+        title: `${displayName(identity)} a commenté votre post`,
+        body,
+        actorName: displayName(identity),
+        href: "/actualites?v=publications",
+      });
+    }
+    return commentId;
   },
 });
 
@@ -163,7 +204,7 @@ export const toggleLike = mutation({
     postId: v.id("posts"),
   },
   handler: async (ctx, args) => {
-    await requireCrmPermission(ctx, POSTS_PAGE_KEY, "read");
+    await requireCrmPermission(ctx, POSTS_PAGE_KEY, "create");
     const identity = await requireUser(ctx);
     const existing = await ctx.db
       .query("postLikes")
@@ -178,8 +219,22 @@ export const toggleLike = mutation({
     await ctx.db.insert("postLikes", {
       postId: args.postId,
       clerkId: identity.subject,
+      actorName: displayName(identity),
+      actorImageUrl:
+        (identity as { pictureUrl?: string | null }).pictureUrl ?? undefined,
       createdAt: Date.now(),
     });
+    const post = await ctx.db.get(args.postId);
+    if (post && post.authorClerkId !== identity.subject) {
+      await createMesoutilsNotification(ctx, {
+        recipientClerkId: post.authorClerkId,
+        kind: "post_liked",
+        title: `${displayName(identity)} a liké votre post`,
+        body: post.body ? post.body.slice(0, 120) : "Publication avec photo",
+        actorName: displayName(identity),
+        href: "/actualites?v=publications",
+      });
+    }
     return { liked: true };
   },
 });
