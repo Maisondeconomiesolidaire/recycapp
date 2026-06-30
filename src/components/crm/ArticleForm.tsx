@@ -332,27 +332,19 @@ export function ArticleForm({
     setPriceRationale(result.priceRationale ?? null);
     setPriceJustification(result.priceJustification ?? null);
     setSources(result.sources ?? []);
-    setOnlineEligible(result.onlineEligible ?? result.price >= 10);
-    setRecommendedSaleMode(
-      result.recommendedSaleMode ?? (result.price >= 10 ? "single" : "bundle"),
-    );
+    setOnlineEligible(result.onlineEligible ?? true);
+    setRecommendedSaleMode(result.recommendedSaleMode ?? "single");
     setSingleSaleNote(
       result.singleSaleNote ??
-        (result.price >= 10
-          ? "Peut être vendu seul car il atteint le seuil minimum de 10 €."
-          : "Vente seule déconseillée car le prix estimé est inférieur au minimum de mise en ligne."),
+        "Peut être vendu seul si l'article est prêt pour la boutique.",
     );
     setBundleSaleNote(
       result.bundleSaleNote ??
-        (result.price >= 10
-          ? "Peut aussi renforcer un lot thématique si des articles proches existent."
-          : "À conserver pour un lot avec des articles similaires afin d'atteindre un prix vendable."),
+        "Peut aussi renforcer un lot thématique si des articles proches existent.",
     );
     setListingRecommendation(
       result.listingRecommendation ??
-        (result.price >= 10
-          ? "Cet article atteint le seuil minimum de 10 € et peut être mis en ligne seul."
-          : "Cet article ne vaut pas la peine d'être mis en ligne seul : il sera conservé pour un lot futur."),
+        "Cet article peut être mis en ligne seul ou gardé en attente selon le choix de l'équipe.",
     );
   }
 
@@ -528,12 +520,8 @@ export function ArticleForm({
     }
   }
 
-  const numericPrice = Number(price);
-  const priceBelowOnlineThreshold =
-    price.trim() !== "" && !Number.isNaN(numericPrice) && numericPrice < 10;
-  const resolvedOnlineEligible =
-    onlineEligible ?? (price.trim() !== "" && !Number.isNaN(numericPrice) ? numericPrice >= 10 : null);
-  const onlineDisabled = saving || priceBelowOnlineThreshold;
+  const resolvedOnlineEligible = onlineEligible ?? null;
+  const onlineDisabled = saving;
 
   return (
     <Modal
@@ -810,7 +798,7 @@ export function ArticleForm({
           </div>
         )}
 
-        {(listingRecommendation || singleSaleNote || bundleSaleNote || priceBelowOnlineThreshold) && (
+        {(listingRecommendation || singleSaleNote || bundleSaleNote) && (
           <div
             className={cn(
               "rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4",
@@ -841,22 +829,20 @@ export function ArticleForm({
                   )}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-zinc-400">
-                  {priceBelowOnlineThreshold
-                    ? "Impossible sous 10 € : l'article ne peut pas être publié seul."
-                    : singleSaleNote ?? "Option pertinente si l'article est assez fort pour être vendu seul."}
+                  {singleSaleNote ?? "Option pertinente si l'article est assez fort pour être vendu seul."}
                 </p>
               </div>
               <div
                 className={cn(
                   "rounded-2xl border p-3",
-                  recommendedSaleMode === "bundle" || priceBelowOnlineThreshold || resolvedOnlineEligible === false
+                  recommendedSaleMode === "bundle" || resolvedOnlineEligible === false
                     ? "border-amber-500/45 bg-amber-500/10"
                     : "border-[var(--crm-border)] bg-[var(--crm-surface)]",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-zinc-100">Mettre en attente</p>
-                  {(recommendedSaleMode === "bundle" || priceBelowOnlineThreshold || resolvedOnlineEligible === false) && (
+                  {(recommendedSaleMode === "bundle" || resolvedOnlineEligible === false) && (
                     <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
                       Conseillé
                     </span>
@@ -1042,11 +1028,6 @@ export function ArticleForm({
               <Button
                 onClick={() => handleSave("disponible")}
                 disabled={onlineDisabled}
-                title={
-                  priceBelowOnlineThreshold
-                    ? "Prix minimum de 10 € requis pour la mise en ligne seule."
-                    : undefined
-                }
               >
                 {saving ? "Enregistrement…" : "Mettre en ligne"}
               </Button>

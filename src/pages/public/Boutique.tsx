@@ -9,7 +9,6 @@ import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { HScroll } from "../../components/ui/HScroll";
-import { SparklesText } from "../../components/ui/SparklesText";
 import {
   ARTICLE_SLUG_TO_CATEGORY,
 } from "../../lib/constants";
@@ -488,13 +487,6 @@ function ProductOfDayHero({
           </Link>
 
           <div className="relative flex flex-col justify-center gap-5 p-8 sm:p-12 lg:p-14">
-            <SparklesText
-              className="w-fit text-xs font-extrabold uppercase tracking-[0.24em] text-brand-600"
-              colors={{ first: BRAND, second: "#f59e0b" }}
-              sparklesCount={8}
-            >
-              La pépite du moment
-            </SparklesText>
             <h2 className="text-4xl font-black leading-[1.05] tracking-tight text-zinc-950 sm:text-5xl lg:text-6xl">
               {product.title}
             </h2>
