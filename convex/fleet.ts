@@ -6,8 +6,6 @@ import { requireAnyCrmPermission, requireCrmPermission } from "./lib";
 
 const vehicleKind = v.union(
   v.literal("utilitaire"),
-  v.literal("camionnette"),
-  v.literal("camion"),
   v.literal("voiture"),
 );
 
@@ -95,7 +93,9 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     await requireCrmPermission(ctx, "flotte", "read");
-    const vehicles = await ctx.db.query("vehicles").order("desc").collect();
+    const vehicles = (await ctx.db.query("vehicles").order("desc").collect()).filter(
+      (vehicle) => vehicle.recycappEnabled === true,
+    );
     const now = Date.now();
     return await Promise.all(
       vehicles.map(async (vehicle) => {

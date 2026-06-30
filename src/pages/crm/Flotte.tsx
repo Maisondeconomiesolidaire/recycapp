@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Truck, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Truck, Plus, Pencil, Trash2, X, CarFront, Users } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
@@ -14,12 +14,10 @@ import { PhotoUpload } from "../../components/ui/PhotoUpload";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { SITE_LABELS, Site } from "../../lib/constants";
 
-type VehicleKind = "utilitaire" | "camionnette" | "camion" | "voiture";
+type VehicleKind = "utilitaire" | "voiture";
 
 const KIND_LABELS: Record<VehicleKind, string> = {
   utilitaire: "Utilitaire",
-  camionnette: "Camionnette",
-  camion: "Camion",
   voiture: "Voiture",
 };
 
@@ -67,62 +65,85 @@ export function Flotte() {
             }
           />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {vehicles.map((v) => (
-              <div
+              <article
                 key={v._id}
-                className="flex flex-col gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4"
+                className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-sm transition hover:shadow-md"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    {v.photoUrl ? (
-                      <img
-                        src={v.photoUrl}
-                        alt={v.name}
-                        className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-[var(--crm-border)]"
-                      />
-                    ) : (
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--crm-surface-2)] text-zinc-300">
-                        <Truck className="h-5 w-5" />
-                      </span>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-zinc-100">{v.name}</p>
-                      <p className="text-xs text-zinc-500">
-                        {KIND_LABELS[v.kind as VehicleKind]}
-                        {v.plate ? ` · ${v.plate}` : ""}
-                      </p>
+                <div className="relative aspect-video bg-[var(--crm-surface-2)]">
+                  {v.photoUrl ? (
+                    <img src={v.photoUrl} alt={v.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-500">
+                      <CarFront className="h-10 w-10" />
+                      <span className="text-sm font-semibold">Photo à ajouter</span>
                     </div>
+                  )}
+                  <span
+                    className={`absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-bold text-white ${
+                      v.active ? "bg-brand-500" : "bg-zinc-500"
+                    }`}
+                  >
+                    {v.active ? "Actif" : "Immobilisé"}
+                  </span>
+                  {v.plate ? (
+                    <span className="absolute right-3 top-3 rounded-md border-2 border-black bg-white px-2.5 py-1 text-xs font-black text-black">
+                      {v.plate}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="text-lg font-bold text-zinc-100">{v.name}</h2>
+                    <span className="text-sm font-semibold text-zinc-500">
+                      {KIND_LABELS[v.kind as VehicleKind]}
+                    </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="inline-flex items-center gap-1.5 text-zinc-500">
+                        <Users className="h-4 w-4" />Places
+                      </dt>
+                      <dd className="font-semibold text-zinc-100">{v.seats ?? "—"}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-zinc-500">Kilométrage</dt>
+                      <dd className="font-semibold text-zinc-100">
+                        {v.odometerKm ? `${v.odometerKm.toLocaleString("fr-FR")} km` : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-zinc-500">Site</dt>
+                      <dd className="font-semibold text-zinc-100">
+                        {v.site ? SITE_LABELS[v.site] : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                  {v.reason ? (
+                    <p className="mt-3 text-xs text-zinc-500">{v.reason}</p>
+                  ) : null}
+                  <div className="mt-4 flex gap-2">
+                    <Button
+                      variant="secondary"
+                      className="flex-1"
                       onClick={() => {
                         setEditing(v);
                         setFormOpen(true);
                       }}
-                      className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
                     >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
+                      <Pencil className="h-4 w-4" /> Modifier
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => setDeleting(v)}
-                      className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-red-400"
+                      className="text-zinc-400 hover:text-red-400"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
-
-                {v.site ? (
-                  <span className="text-xs text-zinc-500">
-                    {SITE_LABELS[v.site]}
-                  </span>
-                ) : null}
-
-                {v.reason && (
-                  <p className="text-xs text-zinc-500">{v.reason}</p>
-                )}
-              </div>
+              </article>
             ))}
           </div>
         )}
