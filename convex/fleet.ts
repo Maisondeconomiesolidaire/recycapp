@@ -132,7 +132,9 @@ export const availableOn = query({
       ["demandes", "read"],
     ]);
     const vehicles = (await ctx.db.query("vehicles").collect()).filter(
-      (vehicle) => vehicle.active || vehicle._id === includeVehicleId,
+      (vehicle) =>
+        (vehicle.recycappEnabled === true && vehicle.active) ||
+        vehicle._id === includeVehicleId,
     );
     const result = [];
     for (const vehicle of vehicles) {
@@ -166,7 +168,9 @@ export const takenInRange = query({
       ["demandes", "read"],
       ["calendrier", "read"],
     ]);
-    const vehicles = await ctx.db.query("vehicles").collect();
+    const vehicles = (await ctx.db.query("vehicles").collect()).filter(
+      (vehicle) => vehicle.recycappEnabled === true,
+    );
     const nameById = new Map(vehicles.map((v) => [String(v._id), v.name]));
 
     const entries: Array<{
