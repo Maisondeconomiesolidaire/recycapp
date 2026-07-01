@@ -38,17 +38,23 @@ export function PublicLayout() {
   const embed = params.get("embed") === "1";
 
   // À chaque changement de page (ou de catégorie / recherche), on ramène
-  // l'utilisateur en haut avec un défilement fluide : la page « remonte »
-  // au lieu de rester bloquée en bas après une navigation.
+  // l'utilisateur en haut : la page « remonte » au lieu de rester bloquée en
+  // bas après une navigation.
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: prefersReducedMotion ? "auto" : "smooth",
+    // Sur tactile (mobile), le défilement « smooth » est souvent annulé par
+    // l'élan tactile résiduel après un tap → la page ne remonte pas. On force
+    // donc un saut instantané, fiable, et on garde le fluide au pointeur fin.
+    const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+    const behavior = prefersReducedMotion || coarsePointer ? "auto" : "smooth";
+    // rAF : on scrolle après le montage/peinture de la nouvelle page, sinon
+    // certains navigateurs mobiles restaurent l'ancienne position juste après.
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior });
     });
+    return () => cancelAnimationFrame(id);
   }, [location.pathname, location.search]);
 
   const isBoutiqueListing =
