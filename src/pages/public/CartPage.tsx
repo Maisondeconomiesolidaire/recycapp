@@ -60,10 +60,14 @@ export function CartPage() {
   const [editingCustomer, setEditingCustomer] = useState(false);
   const {
     isSignedIn: customerSignedIn,
+    profileLoaded: customerProfileLoaded,
     customer: profileCustomer,
-    isComplete: customerComplete,
+    profileComplete: customerProfileComplete,
   } = useProfileAutofill({ watch, setValue, enabled: true, withAddress: true });
-  const showCustomerSummary = customerSignedIn && customerComplete && !editingCustomer;
+  // On n'affiche le résumé que si le profil *enregistré* est complet. Un nouvel
+  // inscrit (sans téléphone/adresse) voit le formulaire pour tout renseigner ;
+  // ses coordonnées sont ensuite sauvegardées sur son compte à la validation.
+  const showCustomerSummary = customerProfileComplete && !editingCustomer;
 
   if (submitted) return <Navigate to="/merci" replace />;
 
@@ -239,7 +243,11 @@ export function CartPage() {
 
           <SignedIn>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {showCustomerSummary ? (
+            {!customerProfileLoaded ? (
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-400">
+                Chargement de vos coordonnées…
+              </div>
+            ) : showCustomerSummary ? (
               <CustomerSummary
                 customer={profileCustomer}
                 withAddress
@@ -313,7 +321,7 @@ export function CartPage() {
             <div className="space-y-3">
               <button
                 type="submit"
-                disabled={isSubmitting || availableArticles.length === 0}
+                disabled={isSubmitting || availableArticles.length === 0 || !customerProfileLoaded}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-[0_8px_28px_rgba(241,16,79,0.32)] transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
                 style={{ backgroundColor: BRAND }}
               >

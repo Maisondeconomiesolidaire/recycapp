@@ -30,7 +30,7 @@ export function CustomerFields({
   autofillProfile?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const { isSignedIn, customer, isComplete } = useProfileAutofill({
+  const { isSignedIn, profileLoaded, customer, profileComplete } = useProfileAutofill({
     watch,
     setValue,
     enabled: Boolean(autofillProfile),
@@ -40,14 +40,25 @@ export function CustomerFields({
   const addressValue =
     withAddress && watch ? String(watch("customer.address") ?? "") : "";
 
-  // Client connecté avec des coordonnées complètes : on n'affiche qu'un résumé.
-  if (autofillProfile && isSignedIn && isComplete && !editing) {
+  // Client connecté dont le profil *enregistré* est complet : on n'affiche
+  // qu'un résumé. Un nouvel inscrit (sans téléphone/adresse) garde le
+  // formulaire pour compléter ses infos, sauvegardées ensuite sur son compte.
+  if (autofillProfile && isSignedIn && profileComplete && !editing) {
     return (
       <CustomerSummary
         customer={customer}
         withAddress={withAddress}
         onEdit={() => setEditing(true)}
       />
+    );
+  }
+
+  // Évite le clignotement « champs → résumé » le temps que le profil charge.
+  if (autofillProfile && isSignedIn && !profileLoaded) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-400">
+        Chargement de vos coordonnées…
+      </div>
     );
   }
 

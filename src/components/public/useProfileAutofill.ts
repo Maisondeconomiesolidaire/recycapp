@@ -66,10 +66,28 @@ export function useProfileAutofill({
     customer.address?.trim() && customer.postalCode?.trim() && customer.city?.trim(),
   );
 
+  // Complétude du profil *enregistré* (indépendante de la saisie en cours).
+  // C'est ce qui décide d'afficher le résumé plutôt que le formulaire : un
+  // client fraîchement inscrit (sans téléphone/adresse) voit toujours le
+  // formulaire pour compléter ses infos, qu'on sauvegarde ensuite sur son compte.
+  const profileBaseComplete = Boolean(
+    profile?.firstName?.trim() &&
+      profile?.lastName?.trim() &&
+      email.trim() &&
+      profile?.phone?.trim(),
+  );
+  const profileAddressComplete = Boolean(
+    profile?.address?.trim() && profile?.postalCode?.trim() && profile?.city?.trim(),
+  );
+  const profileComplete = Boolean(
+    isSignedIn && profileBaseComplete && (!withAddress || profileAddressComplete),
+  );
+
   return {
     isSignedIn: Boolean(isSignedIn),
     profileLoaded: !isSignedIn || profile !== undefined,
     customer,
     isComplete: baseComplete && (!withAddress || addressComplete),
+    profileComplete,
   };
 }
