@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/clerk-react";
 import { format } from "date-fns";
@@ -40,6 +40,7 @@ import {
   OUTCOME_LABELS,
   COLLECTE_TYPE_OPTIONS,
   COLLECTE_TYPE_LABELS,
+  COLLECTE_CATEGORIES,
   COLLECTE_CATEGORY_BY_KEY,
   CollecteType,
   TYPE_COLORS,
@@ -586,6 +587,162 @@ function PhotoGrid({
         </div>
       ))}
     </div>
+  );
+}
+
+/* ----------------------------------------------- Photos objets (collecte) */
+
+/**
+ * Photos des objets d'une collecte, groupées par catégorie. L'équipe peut en
+ * ajouter elle-même : « Ajouter une photo » ouvre le sélecteur de catégorie
+ * (pictogrammes), puis on importe des images pour la catégorie choisie.
+ */
+function CollecteCategoryPhotos({ request }: { request: RequestDoc }) {
+  const access = useCrmAccess();
+  const canUpdate = canAccess(access, "demandes", "update");
+  const addPhotos = useMutation(api.requests.addCollecteCategoryPhotos);
+  const removePhoto = useMutation(api.requests.removeCollecteCategoryPhoto);
+  const upload = useUpload();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pendingCategory = useRef<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [lb, setLb] = useState<{ urls: string[]; index: number } | null>(null);
+
+  const groups = (request.collecteCategoryPhotos ?? []).filter(
+    (g) => g.urls.length > 0,
+  );
+  const hasPhotos = groups.length > 0;
+
+  function pickCategory(category: string) {
+    pendingCategory.current = category;
+    setPickerOpen(false);
+    inputRef.current?.click();
+  }
+
+  async function handleFiles(files: FileList | null) {
+    const category = pendingCategory.current;
+    if (!files || files.length === 0 || !category) return;
+    setUploading(true);
+    try {
+      const ids: Id<"_storage">[] = [];
+      for (const file of Array.from(files)) ids.push(await upload(file));
+      await addPhotos({ id: request._id, category, photos: ids });
+    } finally {
+      setUploading(false);
+      pendingCategory.current = null;
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  if (!hasPhotos && !canUpdate) return null;
+
+  return (
+    <section>
+      <SectionTitle>Photos des objets</SectionTitle>
+      {hasPhotos && (
+        <div className="space-y-3">
+          {groups.map((entry) => {
+            const cat = COLLECTE_CATEGORY_BY_KEY[entry.category];
+            return (
+              <div key={entry.category}>
+                <div className="mb-1.5 flex items-center gap-2">
+                  {cat?.image && (
+                    <img src={cat.image} alt="" className="h-6 w-6 object-contain" />
+                  )}
+                  <span className="text-xs font-medium text-zinc-400">
+                    {cat?.label ?? entry.category}
+                  </span>
+                </div>
+                <PhotoGrid
+                  urls={entry.urls}
+                  onOpen={(index) => setLb({ urls: entry.urls, index })}
+                  onRemove={
+                    canUpdate
+                      ? (index) =>
+                          removePhoto({
+                            id: request._id,
+                            category: entry.category,
+                            index,
+                          })
+                      : undefined
+                  }
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {canUpdate && (
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => setPickerOpen(true)}
+          className={cn(
+            "mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm font-medium transition-colors",
+            uploading
+              ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-500 opacity-70"
+              : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/60 hover:text-zinc-100",
+          )}
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Envoi des images…
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-4 w-4" /> Ajouter une photo
+            </>
+          )}
+        </button>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+
+      <Modal
+        dark
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title="Type d'objet"
+        className="max-w-2xl"
+      >
+        <p className="mb-4 text-sm text-zinc-400">
+          Choisissez la catégorie de l'objet à photographier, puis sélectionnez
+          les images à importer.
+        </p>
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {COLLECTE_CATEGORIES.map((cat) => (
+            <button
+              key={cat.key}
+              type="button"
+              onClick={() => pickCategory(cat.key)}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3 text-center transition-colors hover:border-brand-500/60 hover:bg-[var(--crm-surface-3)]"
+            >
+              <img src={cat.image} alt="" className="h-12 w-12 object-contain" />
+              <span className="text-[11px] leading-tight text-zinc-300">
+                {cat.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      {lb && (
+        <Lightbox
+          images={lb.urls}
+          startIndex={lb.index}
+          onClose={() => setLb(null)}
+        />
+      )}
+    </section>
   );
 }
 
@@ -1676,35 +1833,7 @@ function RequestDetails({ request }: { request: RequestDoc }) {
           )}
         </section>
 
-        {(request.collecteCategoryPhotos?.length ?? 0) > 0 && (
-          <section>
-            <SectionTitle>Photos des objets</SectionTitle>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {request.collecteCategoryPhotos!.flatMap((entry) => {
-                const cat = COLLECTE_CATEGORY_BY_KEY[entry.category];
-                return entry.urls.map((url, i) => (
-                  <a
-                    key={`${entry.category}-${i}`}
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="relative aspect-square overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]"
-                  >
-                    <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                    {cat?.image && (
-                      <span
-                        title={cat.label}
-                        className="absolute left-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 shadow ring-1 ring-black/5"
-                      >
-                        <img src={cat.image} alt="" className="h-5 w-5 object-contain" />
-                      </span>
-                    )}
-                  </a>
-                ));
-              })}
-            </div>
-          </section>
-        )}
+        <CollecteCategoryPhotos request={request} />
       </>
     );
   }

@@ -65,7 +65,10 @@ export function Drawer({
         )}
       >
         <div
-          className={cn("border-b border-[var(--crm-border)]", headerClassName)}
+          className={cn(
+            "shrink-0 border-b border-[var(--crm-border)]",
+            headerClassName,
+          )}
           style={headerStyle}
         >
           <div className="flex items-center justify-between px-5 py-4">
@@ -82,7 +85,12 @@ export function Drawer({
           </div>
           {headerContent && <div className="px-5 pb-4">{headerContent}</div>}
         </div>
-        <div className={cn("flex-1 overflow-y-auto p-5 text-[var(--foreground)]", bodyClassName)}>
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 text-[var(--foreground)]",
+            bodyClassName,
+          )}
+        >
           {children}
         </div>
         {footer && (
