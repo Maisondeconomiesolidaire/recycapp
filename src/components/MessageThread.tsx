@@ -48,8 +48,8 @@ export function MessageThread({
   );
 
   useEffect(() => {
-    if (unreadFromOther) void markRead({ requestId });
-  }, [unreadFromOther, requestId, markRead]);
+    if (unreadFromOther) void markRead({ requestId, as: viewerRole });
+  }, [unreadFromOther, requestId, markRead, viewerRole]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -61,7 +61,7 @@ export function MessageThread({
     setSending(true);
     setBody("");
     try {
-      await sendMessage({ requestId, body: trimmed });
+      await sendMessage({ requestId, body: trimmed, as: viewerRole });
     } catch {
       setBody(trimmed);
     } finally {
