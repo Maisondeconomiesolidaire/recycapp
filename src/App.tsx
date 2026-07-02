@@ -13,6 +13,7 @@ import { Merci } from "./pages/public/Merci";
 import {
   AccountLayout,
   AccountInfo,
+  AccountApps,
   AccountOrders,
   AccountOrderDetail,
   AccountMessages,
@@ -59,6 +60,7 @@ export default function App() {
         {/* Espace client */}
         <Route path="/compte" element={<AccountLayout />}>
           <Route index element={<AccountInfo />} />
+          <Route path="applications" element={<AccountApps />} />
           <Route path="commandes" element={<AccountOrders />} />
           <Route path="commandes/:id" element={<AccountOrderDetail />} />
           <Route path="messagerie" element={<AccountMessages />} />

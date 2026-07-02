@@ -59,7 +59,6 @@ export function CartPage() {
 
   const [editingCustomer, setEditingCustomer] = useState(false);
   const {
-    isSignedIn: customerSignedIn,
     profileLoaded: customerProfileLoaded,
     customer: profileCustomer,
     profileComplete: customerProfileComplete,

@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock,
   ImagePlus,
+  LayoutGrid,
   Loader2,
   LogOut,
   MessageSquare,
@@ -20,6 +21,7 @@ import {
   User,
   XCircle,
 } from "lucide-react";
+import { MyAppsGrid, useMyApps } from "../../components/MyApps";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessageThread } from "../../components/MessageThread";
@@ -74,6 +76,8 @@ const TABS = [
 ];
 
 export function AccountLayout() {
+  const myApps = useMyApps();
+  const showApps = Boolean(myApps && myApps.length > 0);
   return (
     <>
       <SignedOut>
@@ -116,6 +120,21 @@ export function AccountLayout() {
                 {label}
               </NavLink>
             ))}
+            {showApps ? (
+              <NavLink
+                to="/compte/applications"
+                className={({ isActive }) =>
+                  `flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+                    isActive
+                      ? "border-brand-500 text-brand-600"
+                      : "border-transparent text-zinc-500 hover:text-zinc-800"
+                  }`
+                }
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Mes applications
+              </NavLink>
+            ) : null}
           </nav>
           <div className="mt-6">
             <Outlet />
@@ -124,6 +143,12 @@ export function AccountLayout() {
       </SignedIn>
     </>
   );
+}
+
+// ─── Mes applications ────────────────────────────────────────────────────────
+
+export function AccountApps() {
+  return <MyAppsGrid />;
 }
 
 // ─── Informations personnelles ──────────────────────────────────────────────
