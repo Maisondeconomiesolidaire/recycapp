@@ -271,7 +271,7 @@ export const Select = forwardRef<
           </span>
           <ChevronDown
             className={cn(
-              "h-4 w-4 shrink-0 text-zinc-500 transition-transform dark:text-muted-foreground",
+              "h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform",
               open && "rotate-180",
             )}
           />
@@ -291,10 +291,12 @@ export const Select = forwardRef<
                     onClick={() => commitValue(option.value)}
                     className={cn(
                       "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors",
-                      "text-zinc-700 hover:bg-zinc-100 dark:text-foreground dark:hover:bg-accent",
+                      // Jetons sémantiques : corrects en clair public, CRM sombre
+                      // ET CRM clair (où l'échelle zinc est inversée).
+                      "text-[var(--foreground)] hover:bg-[var(--accent)]",
                       active && "bg-brand-50 text-brand-700 dark:bg-primary/14 dark:text-primary",
                       option.disabled &&
-                        "cursor-not-allowed text-zinc-400 hover:bg-transparent dark:text-muted-foreground",
+                        "cursor-not-allowed text-[var(--muted-foreground)] hover:bg-transparent",
                     )}
                   >
                     <span className="truncate">{option.label}</span>
