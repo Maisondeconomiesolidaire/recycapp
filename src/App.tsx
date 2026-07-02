@@ -13,12 +13,12 @@ import { Merci } from "./pages/public/Merci";
 import {
   AccountLayout,
   AccountInfo,
-  AccountApps,
   AccountOrders,
   AccountOrderDetail,
   AccountMessages,
   AccountSettings,
 } from "./pages/public/Account";
+import { Compte } from "./pages/crm/Compte";
 import { CrmLayout } from "./components/crm/CrmLayout";
 import { RequireCrmPermission } from "./components/crm/RequireCrmPermission";
 import { Dashboard } from "./pages/crm/Dashboard";
@@ -60,7 +60,6 @@ export default function App() {
         {/* Espace client */}
         <Route path="/compte" element={<AccountLayout />}>
           <Route index element={<AccountInfo />} />
-          <Route path="applications" element={<AccountApps />} />
           <Route path="commandes" element={<AccountOrders />} />
           <Route path="commandes/:id" element={<AccountOrderDetail />} />
           <Route path="messagerie" element={<AccountMessages />} />
@@ -86,6 +85,7 @@ export default function App() {
         <Route path="flotte" element={<RequireCrmPermission page="flotte"><Flotte /></RequireCrmPermission>} />
         <Route path="equipe" element={<RequireCrmPermission page="equipe"><Equipe /></RequireCrmPermission>} />
         <Route path="admin" element={<RequireCrmPermission page="admin"><Admin /></RequireCrmPermission>} />
+        <Route path="compte" element={<Compte />} />
       </Route>
 
       {/* Mode conduite (plein écran mobile, protégé Clerk) */}

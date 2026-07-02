@@ -214,7 +214,7 @@ function Sidebar({
           <span className="truncate">Retour à la boutique</span>
         </Link>
 
-        <Link to="/compte" className="flex items-center gap-3 rounded-lg bg-[var(--crm-surface-2)] px-3 py-2 transition-colors hover:bg-[var(--crm-surface-3)]">
+        <Link to="/crm/compte" className="flex items-center gap-3 rounded-lg bg-[var(--crm-surface-2)] px-3 py-2 transition-colors hover:bg-[var(--crm-surface-3)]">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-500 text-xs font-semibold text-white">
             {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName ?? "Moi").slice(0, 2).toUpperCase()}
           </span>
