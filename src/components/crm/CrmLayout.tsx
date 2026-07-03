@@ -4,9 +4,9 @@ import { useQuery } from "convex/react";
 import {
   SignedIn,
   SignedOut,
-  SignIn,
   useUser,
 } from "@clerk/clerk-react";
+import { AuthPanel } from "../AuthPanel";
 import {
   Menu,
   Sun,
@@ -355,10 +355,7 @@ function SignInScreen() {
           Espace professionnel
         </p>
       </div>
-      <SignIn
-        routing="hash"
-        appearance={{ variables: { colorPrimary: "#ff7700" } }}
-      />
+      <AuthPanel />
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { SignedIn, SignedOut, SignIn } from "@clerk/clerk-react";
+import { SignedIn, SignedOut } from "@clerk/clerk-react";
+import { AuthPanel } from "../../components/AuthPanel";
 import {
   ArrowLeft,
   Check,
@@ -57,7 +58,7 @@ export function TourneeConduite() {
       </SignedIn>
       <SignedOut>
         <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6">
-          <SignIn />
+          <AuthPanel />
         </div>
       </SignedOut>
     </>
