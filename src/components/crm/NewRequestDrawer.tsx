@@ -210,7 +210,8 @@ export function NewRequestDrawer({
       onClose={handleClose}
       variant="modal"
       title={titleNode}
-      bodyClassName="p-0 flex flex-col overflow-hidden"
+      panelClassName="h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-2.5rem)] sm:max-h-[calc(100dvh-2.5rem)] lg:h-[calc(100dvh-3.5rem)] lg:max-h-[calc(100dvh-3.5rem)]"
+      bodyClassName="p-0 flex min-h-0 flex-col overflow-hidden"
       footer={
         type !== null && type !== "livraison" ? (
           <div className="flex items-center justify-end gap-3">
@@ -228,33 +229,33 @@ export function NewRequestDrawer({
         ) : undefined
       }
     >
-      <div className="flex-1 overflow-y-auto p-5">
-        <div className="mx-auto w-full max-w-2xl">
-        {type === null && <TypeChoice onSelect={setType} />}
-        {type === "aerogommage" && (
-          <AeroForm
-            onDone={handleClose}
-            onSubmittingChange={setIsSubmitting}
-          />
-        )}
-        {type === "collecte" && (
-          <CollecteForm
-            onDone={handleClose}
-            onSubmittingChange={setIsSubmitting}
-          />
-        )}
-        {type === "article" && (
-          <ArticleForm
-            onDone={handleClose}
-            onSubmittingChange={setIsSubmitting}
-          />
-        )}
-        {type === "livraison" && (
-          <LivraisonForm
-            onDone={handleClose}
-            onSubmittingChange={setIsSubmitting}
-          />
-        )}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+        <div className="mx-auto min-h-full w-full max-w-2xl">
+          {type === null && <TypeChoice onSelect={setType} />}
+          {type === "aerogommage" && (
+            <AeroForm
+              onDone={handleClose}
+              onSubmittingChange={setIsSubmitting}
+            />
+          )}
+          {type === "collecte" && (
+            <CollecteForm
+              onDone={handleClose}
+              onSubmittingChange={setIsSubmitting}
+            />
+          )}
+          {type === "article" && (
+            <ArticleForm
+              onDone={handleClose}
+              onSubmittingChange={setIsSubmitting}
+            />
+          )}
+          {type === "livraison" && (
+            <LivraisonForm
+              onDone={handleClose}
+              onSubmittingChange={setIsSubmitting}
+            />
+          )}
         </div>
       </div>
     </Drawer>

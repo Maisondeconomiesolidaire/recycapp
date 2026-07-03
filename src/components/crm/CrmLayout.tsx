@@ -94,6 +94,7 @@ export function CrmLayout() {
 
 function MobileTopBar({ onToggleTheme }: { onToggleTheme: () => void }) {
   const [open, setOpen] = useState(false);
+  const { user } = useUser();
   const location = useLocation();
   const counts = useQuery(api.requests.counts);
   const unreadNotifications = useQuery(api.notifications.unreadCount);
@@ -121,16 +122,18 @@ function MobileTopBar({ onToggleTheme }: { onToggleTheme: () => void }) {
           className="h-9 w-auto object-contain"
         />
 
-        <div className="flex min-w-[56px] items-center justify-end gap-2">
-          {!onNotificationsPage && (unreadNotifications ?? 0) > 0 && (
-            <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+        <Link
+          to="/crm/compte"
+          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:ring-2 hover:ring-brand-500/45"
+          aria-label="Ouvrir mon compte"
+        >
+          <CrmUserAvatar user={user} />
+          {!onNotificationsPage && (unreadNotifications ?? 0) > 0 ? (
+            <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-brand-500 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white ring-2 ring-[var(--crm-bg)]">
               {unreadNotifications}
             </span>
-          )}
-          <span className="rounded-full border border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] px-2 py-0.5 text-[11px] font-semibold text-zinc-300">
-            {counts?.complete ?? "…"}
-          </span>
-        </div>
+          ) : null}
+        </Link>
       </div>
 
       <Drawer
@@ -170,6 +173,20 @@ function MobileTopBar({ onToggleTheme }: { onToggleTheme: () => void }) {
         </nav>
       </Drawer>
     </>
+  );
+}
+
+function CrmUserAvatar({ user }: { user: ReturnType<typeof useUser>["user"] }) {
+  const label = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? "Moi";
+
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-500 text-xs font-semibold text-white">
+      {user?.imageUrl ? (
+        <img src={user.imageUrl} alt={label} className="h-full w-full object-cover" />
+      ) : (
+        label.slice(0, 2).toUpperCase()
+      )}
+    </span>
   );
 }
 
