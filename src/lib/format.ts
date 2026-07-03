@@ -16,6 +16,12 @@ export function formatDateTime(ts: number): string {
   return format(new Date(ts), "d MMM yyyy 'à' HH:mm", { locale: fr });
 }
 
+/** Avec le jour de la semaine : « Lundi 7 juillet à 10:30 ». */
+export function formatDateTimeWithDay(ts: number): string {
+  const label = format(new Date(ts), "EEEE d MMMM 'à' HH:mm", { locale: fr });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 export function formatRelative(ts: number): string {
   return formatDistanceToNow(new Date(ts), { addSuffix: true, locale: fr });
 }

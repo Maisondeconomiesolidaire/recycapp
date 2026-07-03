@@ -1,5 +1,6 @@
 import {
   Bell,
+  CalendarClock,
   CalendarDays,
   FolderOpen,
   KanbanSquare,
@@ -45,6 +46,7 @@ export type CrmPageKey =
   | "sorties"
   | "tournees"
   | "flotte"
+  | "reservations"
   | "equipe"
   | "admin";
 
@@ -200,6 +202,14 @@ export const CRM_PAGES: CrmPageDefinition[] = [
     to: "/crm/flotte",
     icon: Truck,
     actions: ["read", "create", "update", "delete"],
+  },
+  {
+    key: "reservations",
+    label: "Réservations",
+    description: "Demandes de réservation des véhicules mis à disposition de la Recyclerie.",
+    to: "/crm/reservations",
+    icon: CalendarClock,
+    actions: ["read", "manage"],
   },
   {
     key: "equipe",
