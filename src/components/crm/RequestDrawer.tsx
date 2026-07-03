@@ -30,6 +30,8 @@ import { MessageThread } from "../MessageThread";
 import { RequestDocumentsPanel } from "../RequestDocumentsPanel";
 import { useCrmAccess } from "./RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { usePersona } from "../../lib/persona";
+import { formatRelative } from "../../lib/format";
 import { Modal } from "../ui/Modal";
 import { TypeBadge } from "./TypeBadge";
 import { PhoneInput } from "../ui/PhoneInput";
@@ -213,14 +215,16 @@ export function RequestDrawer({
         </div>
       ) : (
         <div>
-          {/* Onglets */}
-          <UnderlineTabs
-            items={visibleTabs}
-            value={activeTab}
-            onChange={setTab}
-            className="mb-5"
-            size="sm"
-          />
+          {/* Onglets — collés en haut du panneau pendant le défilement. */}
+          <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-5 border-b border-zinc-800 bg-[var(--crm-surface)] px-5 pt-5">
+            <UnderlineTabs
+              items={visibleTabs}
+              value={activeTab}
+              onChange={setTab}
+              className="border-b-0"
+              size="sm"
+            />
+          </div>
 
           {activeTab === "demande" && <DemandeTab request={request} />}
           {activeTab === "gestion" && (
@@ -853,8 +857,10 @@ function GestionTab({
   const [gdrSaving, setGdrSaving] = useState(false);
   const [gdrError, setGdrError] = useState("");
   const num = (s: string) => (s.trim() === "" ? null : Number(s));
+  const persona = usePersona();
+  // Auteur des modifications : persona (compte accueil partagé) sinon le compte.
   const currentUser =
-    user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? undefined;
+    persona ?? user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? undefined;
 
   const linkedArticle = useQuery(
     api.articles.getPublic,
@@ -918,6 +924,7 @@ function GestionTab({
               setCollecteType({
                 id: request._id,
                 collecteType: e.target.value as CollecteType,
+                actorName: currentUser,
               })
             }
           >
@@ -930,6 +937,7 @@ function GestionTab({
               </option>
             ))}
           </Select>
+          <FieldMeta edit={request.fieldEdits?.collecteType} />
           {collecteUndefined && (
             <p className="mt-2 text-xs text-amber-400">
               Choisissez C1, C2 ou C3 pour démarrer le suivi du process.
@@ -1019,7 +1027,7 @@ function GestionTab({
           <Select
             value={request.site ?? ""}
             onChange={(e) =>
-              patch({ id: request._id, site: e.target.value as Site })
+              patch({ id: request._id, site: e.target.value as Site, actorName: currentUser })
             }
           >
             <option value="" disabled>
@@ -1031,6 +1039,7 @@ function GestionTab({
               </option>
             ))}
           </Select>
+          <FieldMeta edit={request.fieldEdits?.site} />
         </div>
         <div>
           <SectionTitle>Attribuée à</SectionTitle>
@@ -1042,6 +1051,7 @@ function GestionTab({
                 assignedTo: e.target.value
                   ? (e.target.value as Id<"teamMembers">)
                   : null,
+                actorName: currentUser,
               })
             }
           >
@@ -1052,6 +1062,7 @@ function GestionTab({
               </option>
             ))}
           </Select>
+          <FieldMeta edit={request.fieldEdits?.assignedTo} />
         </div>
       </section>
 
@@ -1067,6 +1078,7 @@ function GestionTab({
                   assignedVehicle: e.target.value
                     ? (e.target.value as Id<"vehicles">)
                     : null,
+                  actorName: currentUser,
                 })
               }
             >
@@ -1083,6 +1095,7 @@ function GestionTab({
               Programmez une date pour affecter un véhicule disponible ce jour-là.
             </p>
           )}
+          <FieldMeta edit={request.fieldEdits?.assignedVehicle} />
         </section>
       )}
 
@@ -1094,10 +1107,11 @@ function GestionTab({
             description="Une visite préalable est requise avant la collecte."
             checked={request.visitNeeded ?? false}
             onChange={(e) =>
-              patchVisit({ id: request._id, visitNeeded: e.target.checked })
+              patchVisit({ id: request._id, visitNeeded: e.target.checked, actorName: currentUser })
             }
             className="border-[var(--crm-border)] bg-[var(--crm-surface-2)] hover:bg-[var(--crm-surface-3)]"
           />
+          <FieldMeta edit={request.fieldEdits?.visitNeeded} />
         </section>
       )}
 
@@ -1122,13 +1136,14 @@ function GestionTab({
               variant="ghost"
               size="sm"
               onClick={() =>
-                schedule({ id: request._id, scheduledDate: undefined })
+                schedule({ id: request._id, scheduledDate: undefined, actorName: currentUser })
               }
             >
               Retirer
             </Button>
           )}
         </div>
+        <FieldMeta edit={request.fieldEdits?.scheduledDate} />
         <ScheduleCalendarModal
           open={scheduleOpen}
           onClose={() => setScheduleOpen(false)}
@@ -1139,6 +1154,7 @@ function GestionTab({
             schedule({
               id: request._id,
               scheduledDate,
+              actorName: currentUser,
               ...(usesVehicle ? { assignedVehicle: vehicleId ?? null } : {}),
             });
             setScheduleOpen(false);
@@ -1156,9 +1172,10 @@ function GestionTab({
             min="0"
             defaultValue={request.estimatedHours ?? ""}
             onBlur={(e) =>
-              patch({ id: request._id, estimatedHours: num(e.target.value) })
+              patch({ id: request._id, estimatedHours: num(e.target.value), actorName: currentUser })
             }
           />
+          <FieldMeta edit={request.fieldEdits?.estimatedHours} />
         </div>
         <div>
           <SectionTitle>Temps réel passé (h)</SectionTitle>
@@ -1169,9 +1186,10 @@ function GestionTab({
             min="0"
             defaultValue={request.actualHours ?? ""}
             onBlur={(e) =>
-              patch({ id: request._id, actualHours: num(e.target.value) })
+              patch({ id: request._id, actualHours: num(e.target.value), actorName: currentUser })
             }
           />
+          <FieldMeta edit={request.fieldEdits?.actualHours} />
         </div>
       </section>
 
@@ -1188,9 +1206,10 @@ function GestionTab({
               min="0"
               defaultValue={request.quoteAmount ?? ""}
               onBlur={(e) =>
-                patch({ id: request._id, quoteAmount: num(e.target.value) })
+                patch({ id: request._id, quoteAmount: num(e.target.value), actorName: currentUser })
               }
             />
+            <FieldMeta edit={request.fieldEdits?.quoteAmount} />
           </div>
           <div>
             <label className="block text-xs text-zinc-500 mb-1">
@@ -1204,9 +1223,11 @@ function GestionTab({
                 patch({
                   id: request._id,
                   quoteDetails: e.target.value.trim() || null,
+                  actorName: currentUser,
                 })
               }
             />
+            <FieldMeta edit={request.fieldEdits?.quoteDetails} />
           </div>
         </div>
       </section>
@@ -1218,6 +1239,10 @@ function GestionTab({
 
 function ClientTab({ request, canUpdate }: { request: RequestDoc; canUpdate: boolean }) {
   const update = useMutation(api.requests.updateCustomer);
+  const { user } = useUser();
+  const persona = usePersona();
+  const actorName =
+    persona ?? user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? undefined;
   const [c, setC] = useState({
     firstName: request.customer.firstName,
     lastName: request.customer.lastName,
@@ -1240,6 +1265,7 @@ function ClientTab({ request, canUpdate }: { request: RequestDoc; canUpdate: boo
     try {
       await update({
         id: request._id,
+        actorName,
         customer: {
           firstName: c.firstName,
           lastName: c.lastName,
@@ -1279,6 +1305,7 @@ function ClientTab({ request, canUpdate }: { request: RequestDoc; canUpdate: boo
             <PhoneInput value={c.phone} onChange={(e) => set("phone", e.target.value)} />
           </Field>
         </div>
+        <FieldMeta edit={request.fieldEdits?.customer} />
       </section>
 
       <section>
@@ -1688,6 +1715,18 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">
       {children}
     </h4>
+  );
+}
+
+/** « Modifié par … » affiché sous un champ, à partir du suivi `fieldEdits`. */
+function FieldMeta({ edit }: { edit?: { by: string; at: number } }) {
+  if (!edit?.by) return null;
+  return (
+    <p className="mt-1 text-[11px] text-zinc-500">
+      Modifié par <span className="font-medium text-zinc-400">{edit.by}</span>
+      {" · "}
+      {formatRelative(edit.at)}
+    </p>
   );
 }
 

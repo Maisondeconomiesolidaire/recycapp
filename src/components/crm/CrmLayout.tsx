@@ -19,6 +19,7 @@ import { Drawer } from "../ui/Drawer";
 import { GlobalScanner } from "./GlobalScanner";
 import { CRM_PAGES, canAccess } from "../../lib/crmPermissions";
 import type { CrmPageKey } from "../../lib/crmPermissions";
+import { PersonaProvider, usePersonaContext } from "../../lib/persona";
 
 export const ThemeContext = createContext(true); // true = dark
 export function useThemeContext() { return useContext(ThemeContext); }
@@ -75,14 +76,16 @@ export function CrmLayout() {
     <ThemeContext.Provider value={isDark}>
     <div className={isDark ? "dark" : "crm-light"}>
       <SignedIn>
-        <div className="min-h-screen bg-[var(--crm-bg)] text-zinc-100 flex transition-colors duration-200">
-          <Sidebar isDark={isDark} onToggleTheme={toggle} />
-          <div className="flex-1 min-w-0 lg:pl-64">
-            <MobileTopBar onToggleTheme={toggle} />
-            <Outlet />
+        <PersonaProvider>
+          <div className="min-h-screen bg-[var(--crm-bg)] text-zinc-100 flex transition-colors duration-200">
+            <Sidebar isDark={isDark} onToggleTheme={toggle} />
+            <div className="flex-1 min-w-0 lg:pl-64">
+              <MobileTopBar onToggleTheme={toggle} />
+              <Outlet />
+            </div>
           </div>
-        </div>
-        <GlobalScanner />
+          <GlobalScanner />
+        </PersonaProvider>
       </SignedIn>
       <SignedOut>
         <SignInScreen />
@@ -223,6 +226,7 @@ function Sidebar({
       </nav>
 
       <div className="border-t border-[var(--crm-border)] p-3 space-y-2">
+        <PersonaBar />
         <Link
           to="/boutique"
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
@@ -259,6 +263,30 @@ function Sidebar({
         </button>
       </div>
     </aside>
+  );
+}
+
+/** Persona actif du compte partagé « accueil » + bouton pour en changer. */
+function PersonaBar() {
+  const { persona, requiresPersona, setPersona } = usePersonaContext();
+  if (!requiresPersona) return null;
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-semibold text-white">
+        {(persona ?? "?").slice(0, 2).toUpperCase()}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] uppercase tracking-wide text-zinc-500">Connecté·e en tant que</p>
+        <p className="truncate text-sm font-semibold text-zinc-100">{persona ?? "—"}</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => setPersona(null)}
+        className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-brand-400 hover:bg-[var(--crm-surface-2)]"
+      >
+        Changer
+      </button>
+    </div>
   );
 }
 
