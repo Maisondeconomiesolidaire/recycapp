@@ -230,7 +230,7 @@ export function NewRequestDrawer({
       }
     >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
-        <div className="mx-auto min-h-full w-full max-w-2xl">
+        <div className="mx-auto w-full max-w-2xl">
           {type === null && <TypeChoice onSelect={setType} />}
           {type === "aerogommage" && (
             <AeroForm

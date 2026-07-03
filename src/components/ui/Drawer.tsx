@@ -94,7 +94,7 @@ export function Drawer({
           {children}
         </div>
         {footer && (
-          <div className={cn("border-t border-[var(--crm-border)] bg-[var(--crm-surface)] p-4", footerClassName)}>
+          <div className={cn("mt-auto shrink-0 border-t border-[var(--crm-border)] bg-[var(--crm-surface)] p-4", footerClassName)}>
             {footer}
           </div>
         )}
