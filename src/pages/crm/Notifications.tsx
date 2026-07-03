@@ -15,6 +15,7 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { TypeBadge } from "../../components/crm/TypeBadge";
 import { RequestDrawer } from "../../components/crm/RequestDrawer";
+import { RequestTypeFilter, type RequestTypeFilterValue } from "../../components/crm/RequestTypeFilter";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
 import { RequestOriginBadge } from "../../components/crm/RequestOriginBadge";
@@ -30,6 +31,7 @@ export function Notifications() {
   const unreadCount = useQuery(api.notifications.unreadCount);
   const markAllRead = useMutation(api.notifications.markAllRead);
   const [openRequestId, setOpenRequestId] = useState<Id<"requests"> | null>(null);
+  const [typeFilter, setTypeFilter] = useState<RequestTypeFilterValue>("all");
   const access = useCrmAccess();
   // L'ouverture de la demande depuis une notification exige l'accès Demandes.
   const canOpenRequest = canAccess(access, "demandes", "read");
@@ -71,14 +73,26 @@ export function Notifications() {
               </div>
             )}
 
+            <RequestTypeFilter value={typeFilter} onChange={setTypeFilter} />
+
             <div className="space-y-3">
-              {notifications.map((notification) => (
-                <NotificationCard
-                  key={notification._id}
-                  notification={notification}
-                  onOpenRequest={canOpenRequest ? setOpenRequestId : undefined}
-                />
-              ))}
+              {notifications.filter(
+                (n) => typeFilter === "all" || n.requestType === typeFilter,
+              ).length === 0 ? (
+                <p className="py-8 text-center text-sm text-zinc-500">
+                  Aucune notification pour ce type de demande.
+                </p>
+              ) : (
+                notifications
+                  .filter((n) => typeFilter === "all" || n.requestType === typeFilter)
+                  .map((notification) => (
+                    <NotificationCard
+                      key={notification._id}
+                      notification={notification}
+                      onOpenRequest={canOpenRequest ? setOpenRequestId : undefined}
+                    />
+                  ))
+              )}
             </div>
           </div>
         )}

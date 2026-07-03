@@ -10,16 +10,19 @@ import { Input } from "../../components/ui/Field";
 import { Drawer } from "../../components/ui/Drawer";
 import { TypeBadge } from "../../components/crm/TypeBadge";
 import { RequestDrawer } from "../../components/crm/RequestDrawer";
+import { RequestTypeFilter, type RequestTypeFilterValue } from "../../components/crm/RequestTypeFilter";
 import { formatDate, initials } from "../../lib/format";
 import { OUTCOME_LABELS } from "../../lib/constants";
 
 export function Clients() {
   const clients = useQuery(api.clients.list);
   const [q, setQ] = useState("");
+  const [typeFilter, setTypeFilter] = useState<RequestTypeFilterValue>("all");
   const [openEmail, setOpenEmail] = useState<string | null>(null);
   const [openRequest, setOpenRequest] = useState<Id<"requests"> | null>(null);
 
   const filtered = (clients ?? []).filter((c) => {
+    if (typeFilter !== "all" && !c.types.includes(typeFilter)) return false;
     const term = q.trim().toLowerCase();
     if (!term) return true;
     return (
@@ -49,6 +52,9 @@ export function Clients() {
       />
 
       <div className="p-4 sm:p-6">
+        <div className="mb-4">
+          <RequestTypeFilter value={typeFilter} onChange={setTypeFilter} />
+        </div>
         {clients === undefined ? (
           <FullSpinner label="Chargement…" />
         ) : filtered.length === 0 ? (
