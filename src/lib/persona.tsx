@@ -11,8 +11,6 @@ import { api } from "../../convex/_generated/api";
  * (« Modifié par … ») pour savoir qui, derrière le compte, a agi.
  */
 const ACCUEIL_EMAIL = "accueil.recyclerie@eco-solidaire.fr";
-const STORAGE_KEY = "recyclerie-persona";
-
 type PersonaContextValue = {
   persona: string | null;
   requiresPersona: boolean;
@@ -39,15 +37,10 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
   const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? "";
   const requiresPersona = email === ACCUEIL_EMAIL;
 
-  const [persona, setPersonaState] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : sessionStorage.getItem(STORAGE_KEY),
-  );
-
-  const setPersona = (name: string | null) => {
-    if (name) sessionStorage.setItem(STORAGE_KEY, name);
-    else sessionStorage.removeItem(STORAGE_KEY);
-    setPersonaState(name);
-  };
+  // Volontairement en mémoire uniquement (pas de storage) : à chaque refresh de
+  // la page, l'état est réinitialisé et le persona est redemandé (« Qui êtes-
+  // vous ? »). La navigation interne à l'app conserve le persona.
+  const [persona, setPersona] = useState<string | null>(null);
 
   const value: PersonaContextValue = {
     persona: requiresPersona ? persona : null,
