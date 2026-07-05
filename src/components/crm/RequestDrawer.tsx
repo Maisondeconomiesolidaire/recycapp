@@ -132,7 +132,7 @@ export function RequestDrawer({
       onClose={onClose}
       variant="modal"
       panelClassName="border-0 shadow-[0_28px_90px_rgba(0,0,0,0.18)]"
-      bodyClassName="p-6 sm:p-7"
+      bodyClassName="p-0"
       headerClassName={request ? "border-b-0" : "border-b-0"}
       headerStyle={
         request ? { backgroundColor: TYPE_COLORS[request.type] } : undefined
@@ -241,46 +241,48 @@ export function RequestDrawer({
       ) : (
         <div>
           {/* Onglets — collés en haut du panneau pendant le défilement. */}
-          <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 border-b border-zinc-800 bg-[var(--crm-surface)] px-5 pt-2">
+          <div className="sticky top-0 z-20 border-b border-zinc-800 bg-[var(--crm-surface)] px-6 pt-3 sm:px-7">
             <UnderlineTabs
               items={visibleTabs}
               value={activeTab}
               onChange={setTab}
-              className="border-b-0 [&_button]:pb-2"
+              className="border-b-0 [&_button]:pb-3"
               size="sm"
             />
           </div>
 
-          {activeTab === "demande" && <DemandeTab request={request} />}
-          {activeTab === "gestion" && (
-            <GestionTab
-              request={request}
-              collecteUndefined={!!collecteUndefined}
-              canUpdate={canUpdate}
-            />
-          )}
-          {activeTab === "calculDevis" && request.type === "aerogommage" && (
-            <AeroQuoteCalculator key={request._id} request={request} />
-          )}
-          {activeTab === "calculDevis" && isC3Collecte && (
-            <C3QuoteCalculator key={request._id} request={request} />
-          )}
-          {activeTab === "documents" && (
-            <div className="space-y-4">
-              {(request.type === "collecte" || request.type === "aerogommage") && (
-                <PhotoRequestButton request={request} />
-              )}
-              <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
-            </div>
-          )}
-          {activeTab === "client" && (
-            <ClientTab key={request._id} request={request} canUpdate={canUpdate} />
-          )}
-          {activeTab === "messages" && (
-            <div className="h-[60vh]">
-              <MessageThread requestId={request._id} viewerRole="staff" theme="dark" />
-            </div>
-          )}
+          <div className="px-6 pb-6 pt-6 sm:px-7 sm:pb-7">
+            {activeTab === "demande" && <DemandeTab request={request} />}
+            {activeTab === "gestion" && (
+              <GestionTab
+                request={request}
+                collecteUndefined={!!collecteUndefined}
+                canUpdate={canUpdate}
+              />
+            )}
+            {activeTab === "calculDevis" && request.type === "aerogommage" && (
+              <AeroQuoteCalculator key={request._id} request={request} />
+            )}
+            {activeTab === "calculDevis" && isC3Collecte && (
+              <C3QuoteCalculator key={request._id} request={request} />
+            )}
+            {activeTab === "documents" && (
+              <div className="space-y-4">
+                {(request.type === "collecte" || request.type === "aerogommage") && (
+                  <PhotoRequestButton request={request} />
+                )}
+                <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
+              </div>
+            )}
+            {activeTab === "client" && (
+              <ClientTab key={request._id} request={request} canUpdate={canUpdate} />
+            )}
+            {activeTab === "messages" && (
+              <div className="h-[60vh]">
+                <MessageThread requestId={request._id} viewerRole="staff" theme="dark" />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
