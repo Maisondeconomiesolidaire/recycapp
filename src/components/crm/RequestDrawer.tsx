@@ -216,12 +216,12 @@ export function RequestDrawer({
       ) : (
         <div>
           {/* Onglets — collés en haut du panneau pendant le défilement. */}
-          <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-5 border-b border-zinc-800 bg-[var(--crm-surface)] px-5 pt-5">
+          <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 border-b border-zinc-800 bg-[var(--crm-surface)] px-5 pt-2">
             <UnderlineTabs
               items={visibleTabs}
               value={activeTab}
               onChange={setTab}
-              className="border-b-0"
+              className="border-b-0 [&_button]:pb-2"
               size="sm"
             />
           </div>
