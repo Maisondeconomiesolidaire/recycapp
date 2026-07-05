@@ -576,7 +576,7 @@ function PhotoGrid({
             onClick={() => onOpen(i)}
             className="h-full w-full hover:opacity-90"
           >
-            <img src={url} alt="" className="h-full w-full object-cover" />
+            <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
           </button>
           {onRemove && (
             <button
