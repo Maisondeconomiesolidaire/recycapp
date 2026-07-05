@@ -14,6 +14,7 @@ import {
   ImagePlus,
   Loader2,
   MessageSquareText,
+  Trash2,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -98,10 +99,15 @@ export function RequestDrawer({
   );
   const setOutcome = useMutation(api.requests.setOutcome);
   const setComplete = useMutation(api.requests.setComplete);
+  const deleteForever = useMutation(api.requests.deleteForever);
   const access = useCrmAccess();
   const canUpdate = canAccess(access, "demandes", "update");
+  const canDeleteForever = access?.email === "lahmerselim@gmail.com";
   const [tab, setTab] = useState<Tab>("demande");
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [lostReason, setLostReason] = useState<LostReasonValue | "">("");
   const [lostReasonDetails, setLostReasonDetails] = useState("");
   const [cancelError, setCancelError] = useState("");
@@ -165,41 +171,60 @@ export function RequestDrawer({
               </span>
             </div>
 
-            <div className={cn("ml-auto flex items-center gap-2 pl-3", !canUpdate && "hidden")}>
-              <Checkbox
-                checked={request.complete}
-                onChange={(e) =>
-                  setComplete({ id: request._id, complete: e.target.checked })
-                }
-                label="Complète"
-                variant="inline"
-                className="border-white/24 bg-white/10 px-3 py-1.5 text-white hover:border-white/40 hover:bg-white/14 [&_.min-w-0>span]:text-white [&_.text-transparent]:border-white/45"
-              />
+            <div className={cn("ml-auto flex items-center gap-2 pl-3", !canUpdate && !canDeleteForever && "hidden")}>
+              {canUpdate && (
+                <>
+                  <Checkbox
+                    checked={request.complete}
+                    onChange={(e) =>
+                      setComplete({ id: request._id, complete: e.target.checked })
+                    }
+                    label="Complète"
+                    variant="inline"
+                    className="border-white/24 bg-white/10 px-3 py-1.5 text-white hover:border-white/40 hover:bg-white/14 [&_.min-w-0>span]:text-white [&_.text-transparent]:border-white/45"
+                  />
 
-              {request.outcome === "perdue" ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-white/28 bg-black/10 text-white hover:bg-black/18 hover:text-white"
-                  onClick={() => setOutcome({ id: request._id, outcome: "open" })}
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Rouvrir
-                </Button>
-              ) : (
+                  {request.outcome === "perdue" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-white/28 bg-black/10 text-white hover:bg-black/18 hover:text-white"
+                      onClick={() => setOutcome({ id: request._id, outcome: "open" })}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Rouvrir
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="border border-red-400/30 bg-red-600 text-white hover:bg-red-700 hover:text-white"
+                      onClick={() => {
+                        setLostReason((request.lostReason as LostReasonValue | undefined) ?? "");
+                        setLostReasonDetails(request.lostReasonDetails ?? "");
+                        setCancelError("");
+                        setCancelOpen(true);
+                      }}
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Perdue
+                    </Button>
+                  )}
+                </>
+              )}
+
+              {canDeleteForever && (
                 <Button
                   variant="danger"
                   size="sm"
-                  className="border border-red-400/30 bg-red-600 text-white hover:bg-red-700 hover:text-white"
+                  className="border border-red-300/35 bg-red-950/45 text-white hover:bg-red-900/70 hover:text-white"
                   onClick={() => {
-                    setLostReason((request.lostReason as LostReasonValue | undefined) ?? "");
-                    setLostReasonDetails(request.lostReasonDetails ?? "");
-                    setCancelError("");
-                    setCancelOpen(true);
+                    setDeleteError("");
+                    setDeleteOpen(true);
                   }}
                 >
-                  <XCircle className="h-4 w-4" />
-                  Perdue
+                  <Trash2 className="h-4 w-4" />
+                  Supprimer
                 </Button>
               )}
             </div>
@@ -257,6 +282,65 @@ export function RequestDrawer({
             </div>
           )}
         </div>
+      )}
+
+      {request && (
+        <Modal
+          dark
+          open={deleteOpen}
+          onClose={() => {
+            if (!deleting) setDeleteOpen(false);
+          }}
+          title="Supprimer définitivement"
+          className="max-w-md border-0 shadow-[0_28px_90px_rgba(0,0,0,0.18)]"
+          headerClassName="border-b-0"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-300">
+              Cette action supprime définitivement la demande
+              {request.reference ? ` #${request.reference}` : ""}, ses messages,
+              notifications, documents rattachés et photos propres à la demande.
+            </p>
+            {deleteError && (
+              <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteOpen(false)}
+                disabled={deleting}
+              >
+                Retour
+              </Button>
+              <Button
+                variant="danger"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  setDeleteError("");
+                  try {
+                    await deleteForever({ id: request._id });
+                    setDeleteOpen(false);
+                    onClose();
+                  } catch (error) {
+                    setDeleteError(
+                      error instanceof Error
+                        ? error.message
+                        : "La suppression a échoué.",
+                    );
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Supprimer définitivement
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {request && (
