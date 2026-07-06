@@ -32,22 +32,21 @@ const CLERK_APPEARANCE = {
  */
 export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
   const targetUrl = redirectUrl ?? `${window.location.pathname}${window.location.search}`;
-  const signInUrl = `${window.location.pathname}${window.location.search}#/sign-in`;
-  const signUpUrl = `${window.location.pathname}${window.location.search}#/sign-up`;
+  const signInUrl = `${window.location.pathname}${window.location.search}#sign-in`;
+  const signUpUrl = `${window.location.pathname}${window.location.search}#sign-up`;
   const [mode, setMode] = useState<AuthMode>(() => {
-    if (window.location.hash.startsWith("#/sign-up")) return "sign-up";
-    if (window.location.hash.startsWith("#/sign-in")) return "sign-in";
+    if (window.location.hash === "#sign-up" || window.location.hash.startsWith("#/sign-up")) return "sign-up";
+    if (window.location.hash === "#sign-in" || window.location.hash.startsWith("#/sign-in")) return "sign-in";
     return "choice";
   });
 
   useEffect(() => {
-    // Bascule uniquement sur les liens explicites #/sign-up et #/sign-in. Les
-    // autres hashs (#/verify-email-address, #/factor-one…) sont des étapes
-    // internes de Clerk et ne doivent pas changer de formulaire.
+    // Bascule uniquement sur nos liens explicites. Les anciens #/sign-* restent
+    // supportés pour les onglets déjà ouverts avant déploiement.
     const sync = () => {
       const hash = window.location.hash;
-      if (hash.startsWith("#/sign-up")) setMode("sign-up");
-      else if (hash.startsWith("#/sign-in")) setMode("sign-in");
+      if (hash === "#sign-up" || hash.startsWith("#/sign-up")) setMode("sign-up");
+      else if (hash === "#sign-in" || hash.startsWith("#/sign-in")) setMode("sign-in");
     };
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
@@ -58,7 +57,7 @@ export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
     window.history.replaceState(
       null,
       "",
-      `${window.location.pathname}${window.location.search}#/${next}`,
+      `${window.location.pathname}${window.location.search}#${next}`,
     );
   }
 
@@ -85,7 +84,7 @@ export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
 
   return mode === "sign-up" ? (
     <SignUp
-      routing="hash"
+      routing="virtual"
       fallbackRedirectUrl={targetUrl}
       forceRedirectUrl={targetUrl}
       signInUrl={signInUrl}
@@ -93,7 +92,7 @@ export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
     />
   ) : (
     <SignIn
-      routing="hash"
+      routing="virtual"
       fallbackRedirectUrl={targetUrl}
       forceRedirectUrl={targetUrl}
       signUpUrl={signUpUrl}

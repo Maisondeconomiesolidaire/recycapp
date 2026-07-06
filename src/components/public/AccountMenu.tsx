@@ -46,7 +46,7 @@ export function AccountMenu() {
           type="button"
           onClick={() => {
             const redirectUrl = `${window.location.pathname}${window.location.search}`;
-            navigate(`/auth?redirect_url=${encodeURIComponent(redirectUrl)}#/sign-up`);
+            navigate(`/auth?redirect_url=${encodeURIComponent(redirectUrl)}`);
           }}
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/55 bg-white/85 px-5 text-sm font-semibold text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur transition hover:-translate-y-0.5 sm:h-14"
         >
