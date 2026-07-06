@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { PublicLayout } from "./components/public/PublicLayout";
+import { RequirePublicAccount } from "./components/public/RequirePublicAccount";
 import { Boutique } from "./pages/public/Boutique";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
@@ -47,15 +48,65 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Navigate to="/boutique" replace />} />
         <Route path="/boutique" element={<Boutique />} />
-        <Route path="/boutique/panier" element={<CartPage />} />
+        <Route
+          path="/boutique/panier"
+          element={
+            <RequirePublicAccount
+              title="Connectez-vous pour réserver"
+              description="Votre compte permet de suivre votre demande boutique, d'échanger avec notre équipe et de retrouver vos informations."
+            >
+              <CartPage />
+            </RequirePublicAccount>
+          }
+        />
         <Route path="/favoris" element={<Favoris />} />
         <Route path="/suivi/:token" element={<TourneeTracking />} />
         <Route path="/boutique/categorie/:slug" element={<Boutique />} />
         <Route path="/boutique/:id" element={<ArticleDetail />} />
-        <Route path="/aerogommage" element={<AerogommageForm />} />
-        <Route path="/collecte" element={<CollecteForm />} />
-        <Route path="/velo" element={<VeloForm />} />
-        <Route path="/livraison" element={<LivraisonForm />} />
+        <Route
+          path="/aerogommage"
+          element={
+            <RequirePublicAccount
+              title="Connectez-vous pour demander un aérogommage"
+              description="Après connexion ou inscription, vous serez renvoyé directement vers ce formulaire."
+            >
+              <AerogommageForm />
+            </RequirePublicAccount>
+          }
+        />
+        <Route
+          path="/collecte"
+          element={
+            <RequirePublicAccount
+              title="Connectez-vous pour demander une collecte"
+              description="Après connexion ou inscription, vous serez renvoyé directement vers ce formulaire."
+            >
+              <CollecteForm />
+            </RequirePublicAccount>
+          }
+        />
+        <Route
+          path="/velo"
+          element={
+            <RequirePublicAccount
+              title="Connectez-vous pour votre demande vélo"
+              description="Après connexion ou inscription, vous serez renvoyé directement vers ce formulaire."
+            >
+              <VeloForm />
+            </RequirePublicAccount>
+          }
+        />
+        <Route
+          path="/livraison"
+          element={
+            <RequirePublicAccount
+              title="Connectez-vous pour demander une livraison"
+              description="Après connexion ou inscription, vous serez renvoyé directement vers ce formulaire."
+            >
+              <LivraisonForm />
+            </RequirePublicAccount>
+          }
+        />
         <Route path="/merci" element={<Merci />} />
 
         {/* Espace client */}
