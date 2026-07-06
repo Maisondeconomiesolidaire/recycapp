@@ -8,6 +8,8 @@ import {
   CalendarDays,
   MapPin,
   PackageOpen,
+  Pencil,
+  Plus,
   XCircle,
   RotateCcw,
   Check,
@@ -49,6 +51,10 @@ import {
   TYPE_COLORS,
   SITE_LABELS,
   Site,
+  AERO_OBJECT_TYPES,
+  WOOD_TYPES,
+  STRIPPING_OPTIONS,
+  COATING_OPTIONS,
 } from "../../lib/constants";
 import { STEP } from "../../../convex/processes";
 import { formatDateTime, formatPrice } from "../../lib/format";
@@ -252,7 +258,9 @@ export function RequestDrawer({
           </div>
 
           <div className="px-6 pb-6 pt-6 sm:px-7 sm:pb-7">
-            {activeTab === "demande" && <DemandeTab request={request} />}
+            {activeTab === "demande" && (
+              <DemandeTab request={request} canUpdate={canUpdate} />
+            )}
             {activeTab === "gestion" && (
               <GestionTab
                 request={request}
@@ -427,8 +435,75 @@ export function RequestDrawer({
 
 /* ------------------------------------------------------------------ Demande */
 
-function DemandeTab({ request }: { request: RequestDoc }) {
+type AeroItemForm = {
+  objectType: string;
+  label: string;
+  height: string;
+  width: string;
+  depth: string;
+  quantity: string;
+  woodType: string;
+  stripping: string;
+  coating: string;
+  coatingOther: string;
+  comment: string;
+  photos?: Id<"_storage">[];
+};
+
+type AeroDetailsForm = {
+  comment: string;
+  pickupAtHome: boolean;
+  deliveryAtHome: boolean;
+  items: AeroItemForm[];
+};
+
+function aeroItemToForm(item?: NonNullable<RequestDoc["aerogommage"]>[number]): AeroItemForm {
+  return {
+    objectType: item?.objectType ?? "",
+    label: item?.label ?? "",
+    height: item?.height !== undefined ? String(item.height) : "",
+    width: item?.width !== undefined ? String(item.width) : "",
+    depth: item?.depth !== undefined ? String(item.depth) : "",
+    quantity: item?.quantity !== undefined ? String(item.quantity) : "",
+    woodType: item?.woodType ?? "",
+    stripping: item?.stripping ?? "",
+    coating: item?.coating ?? "",
+    coatingOther: item?.coatingOther ?? "",
+    comment: item?.comment ?? "",
+    photos: item?.photos ?? [],
+  };
+}
+
+function aeroRequestToForm(request: RequestDoc): AeroDetailsForm {
+  const items = request.aerogommage?.length
+    ? request.aerogommage.map(aeroItemToForm)
+    : [aeroItemToForm()];
+  const legacyPickup = request.aerogommage?.some((item) => item.retrieval) ?? false;
+  const legacyDelivery = request.aerogommage?.some((item) => item.delivery) ?? false;
+  return {
+    comment: request.comment ?? "",
+    pickupAtHome: request.aerogommageOptions?.pickupAtHome ?? legacyPickup,
+    deliveryAtHome: request.aerogommageOptions?.deliveryAtHome ?? legacyDelivery,
+    items,
+  };
+}
+
+function parseOptionalPositiveNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function DemandeTab({
+  request,
+  canUpdate,
+}: {
+  request: RequestDoc;
+  canUpdate: boolean;
+}) {
   const [lb, setLb] = useState<number | null>(null);
+  const [editingAero, setEditingAero] = useState(false);
 
   const meta = (
     <>
@@ -488,11 +563,349 @@ function DemandeTab({ request }: { request: RequestDoc }) {
     );
   }
 
+  if (request.type === "aerogommage") {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-end">
+          {canUpdate && !editingAero && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditingAero(true)}
+            >
+              <Pencil className="h-4 w-4" />
+              Modifier
+            </Button>
+          )}
+        </div>
+        {editingAero ? (
+          <AerogommageEditForm
+            request={request}
+            onCancel={() => setEditingAero(false)}
+            onSaved={() => setEditingAero(false)}
+          />
+        ) : (
+          <RequestDetails request={request} />
+        )}
+        {meta}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <RequestDetails request={request} />
       {meta}
     </div>
+  );
+}
+
+function AerogommageEditForm({
+  request,
+  onCancel,
+  onSaved,
+}: {
+  request: RequestDoc;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const update = useMutation(api.requests.updateAerogommageDetails);
+  const { user } = useUser();
+  const persona = usePersona();
+  const actorName =
+    persona ?? user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? undefined;
+  const [form, setForm] = useState<AeroDetailsForm>(() => aeroRequestToForm(request));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function setRoot<K extends keyof AeroDetailsForm>(key: K, value: AeroDetailsForm[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setError("");
+  }
+
+  function setItem(index: number, key: keyof AeroItemForm, value: string) {
+    setForm((prev) => ({
+      ...prev,
+      items: prev.items.map((item, i) =>
+        i === index ? { ...item, [key]: value } : item,
+      ),
+    }));
+    setError("");
+  }
+
+  function addItem() {
+    setForm((prev) => ({ ...prev, items: [...prev.items, aeroItemToForm()] }));
+    setError("");
+  }
+
+  function removeItem(index: number) {
+    setForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+    setError("");
+  }
+
+  async function save() {
+    if (form.items.length === 0) {
+      setError("Ajoutez au moins un objet.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const customerAddress = {
+        address: request.customer.address,
+        postalCode: request.customer.postalCode,
+        city: request.customer.city,
+      };
+      await update({
+        id: request._id,
+        actorName,
+        comment: form.comment.trim() || undefined,
+        aerogommageOptions: {
+          pickupAtHome: form.pickupAtHome,
+          deliveryAtHome: form.deliveryAtHome,
+          pickupAddress: form.pickupAtHome ? customerAddress : undefined,
+          deliveryAddress: form.deliveryAtHome ? customerAddress : undefined,
+        },
+        items: form.items.map((item) => ({
+          objectType: item.objectType.trim() || undefined,
+          label: item.label.trim() || undefined,
+          height: parseOptionalPositiveNumber(item.height),
+          width: parseOptionalPositiveNumber(item.width),
+          depth: parseOptionalPositiveNumber(item.depth),
+          quantity: parseOptionalPositiveNumber(item.quantity),
+          woodType: item.woodType.trim() || undefined,
+          stripping: item.stripping.trim() || undefined,
+          coating: item.coating.trim() || undefined,
+          coatingOther: item.coatingOther.trim() || undefined,
+          comment: item.comment.trim() || undefined,
+          photos: item.photos ?? [],
+        })),
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enregistrement impossible.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="space-y-5 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <SectionTitle>Modifier la demande client</SectionTitle>
+          <p className="text-xs text-zinc-500">
+            Les photos ne sont pas modifiées ici.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+            Annuler
+          </Button>
+          <Button type="button" size="sm" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Enregistrer
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </p>
+      )}
+
+      <Field label="Commentaire général">
+        <Textarea
+          value={form.comment}
+          onChange={(e) => setRoot("comment", e.target.value)}
+          placeholder="Commentaire renseigné par le client…"
+        />
+      </Field>
+
+      <section>
+        <SectionTitle>Transport</SectionTitle>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Checkbox
+            label="Retrait à domicile"
+            checked={form.pickupAtHome}
+            onChange={(e) => setRoot("pickupAtHome", e.target.checked)}
+            className="border-[var(--crm-border)] bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-3)]"
+          />
+          <Checkbox
+            label="Livraison à domicile"
+            checked={form.deliveryAtHome}
+            onChange={(e) => setRoot("deliveryAtHome", e.target.checked)}
+            className="border-[var(--crm-border)] bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-3)]"
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle>Objets à aérogommer</SectionTitle>
+          <Button type="button" variant="outline" size="sm" onClick={addItem}>
+            <Plus className="h-4 w-4" />
+            Ajouter
+          </Button>
+        </div>
+
+        {form.items.map((item, index) => {
+          const isOtherType = item.objectType === "Autre (veuillez préciser)";
+          const isOtherCoating = item.coating === "Autre (précisez)";
+          return (
+            <div
+              key={index}
+              className="space-y-4 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-zinc-200">
+                  Objet {index + 1}
+                </p>
+                {form.items.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-300 hover:text-red-200"
+                    onClick={() => removeItem(index)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Retirer
+                  </Button>
+                )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Type d'objet">
+                  <Select
+                    value={item.objectType}
+                    onChange={(e) => setItem(index, "objectType", e.target.value)}
+                  >
+                    <option value="">Sélectionner…</option>
+                    {AERO_OBJECT_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                {isOtherType && (
+                  <Field label="Précisez l'objet">
+                    <Input
+                      value={item.label}
+                      onChange={(e) => setItem(index, "label", e.target.value)}
+                    />
+                  </Field>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <Field label="Hauteur (cm)">
+                  <Input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={item.height}
+                    onChange={(e) => setItem(index, "height", e.target.value)}
+                  />
+                </Field>
+                <Field label="Largeur (cm)">
+                  <Input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={item.width}
+                    onChange={(e) => setItem(index, "width", e.target.value)}
+                  />
+                </Field>
+                <Field label="Profondeur (cm)">
+                  <Input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={item.depth}
+                    onChange={(e) => setItem(index, "depth", e.target.value)}
+                  />
+                </Field>
+                <Field label="Quantité">
+                  <Input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(e) => setItem(index, "quantity", e.target.value)}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Nature du bois">
+                  <Select
+                    value={item.woodType}
+                    onChange={(e) => setItem(index, "woodType", e.target.value)}
+                  >
+                    <option value="">Sélectionner…</option>
+                    {WOOD_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Décapage">
+                  <Select
+                    value={item.stripping}
+                    onChange={(e) => setItem(index, "stripping", e.target.value)}
+                  >
+                    <option value="">Sélectionner…</option>
+                    {STRIPPING_OPTIONS.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Revêtement">
+                  <Select
+                    value={item.coating}
+                    onChange={(e) => setItem(index, "coating", e.target.value)}
+                  >
+                    <option value="">Sélectionner…</option>
+                    {COATING_OPTIONS.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                {isOtherCoating && (
+                  <Field label="Précisez le revêtement">
+                    <Input
+                      value={item.coatingOther}
+                      onChange={(e) => setItem(index, "coatingOther", e.target.value)}
+                    />
+                  </Field>
+                )}
+              </div>
+
+              <Field label="Commentaire objet">
+                <Textarea
+                  value={item.comment}
+                  onChange={(e) => setItem(index, "comment", e.target.value)}
+                  placeholder="Précisions sur cet objet…"
+                />
+              </Field>
+            </div>
+          );
+        })}
+      </section>
+    </section>
   );
 }
 
