@@ -18,7 +18,7 @@ function ProfileSync() {
 
 export function AccountMenu() {
   const navigate = useNavigate();
-  const { openSignUp, signOut } = useClerk();
+  const { signOut } = useClerk();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const unread = useQuery(api.messages.myUnreadCount);
@@ -44,7 +44,10 @@ export function AccountMenu() {
       <SignedOut>
         <button
           type="button"
-          onClick={() => openSignUp({ fallbackRedirectUrl: window.location.pathname, forceRedirectUrl: window.location.pathname })}
+          onClick={() => {
+            const redirectUrl = `${window.location.pathname}${window.location.search}`;
+            navigate(`/auth?redirect_url=${encodeURIComponent(redirectUrl)}#/sign-up`);
+          }}
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/55 bg-white/85 px-5 text-sm font-semibold text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur transition hover:-translate-y-0.5 sm:h-14"
         >
           <User className="h-4 w-4" />

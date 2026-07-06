@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useParams } from "react-router-dom";
-import { SignedIn, SignedOut, SignInButton, useClerk, useUser } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, useClerk, useUser } from "@clerk/clerk-react";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowLeft,
@@ -27,6 +27,7 @@ import { RequestDocumentsPanel } from "../../components/RequestDocumentsPanel";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { LiveDeliveryTracking } from "../../components/public/LiveDeliveryTracking";
+import { AuthPanel } from "../../components/AuthPanel";
 import { useUpload } from "../../lib/useUpload";
 import { COLLECTE_CATEGORY_BY_KEY } from "../../lib/constants";
 
@@ -87,11 +88,9 @@ export function AccountLayout() {
               Suivez vos demandes, échangez avec notre équipe et gérez vos informations.
             </p>
           </div>
-          <SignInButton mode="modal">
-            <button className="rounded-full bg-brand-500 px-6 py-3 text-sm font-bold text-white shadow-[0_12px_30px_rgba(241,16,79,0.28)] transition hover:-translate-y-0.5">
-              Se connecter / S'inscrire
-            </button>
-          </SignInButton>
+          <div className="w-full max-w-sm text-left">
+            <AuthPanel redirectUrl="/compte" />
+          </div>
         </div>
       </SignedOut>
 

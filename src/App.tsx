@@ -11,6 +11,7 @@ import { CollecteForm } from "./pages/public/CollecteForm";
 import { VeloForm } from "./pages/public/VeloForm";
 import { LivraisonForm } from "./pages/public/LivraisonForm";
 import { Merci } from "./pages/public/Merci";
+import { AuthPage } from "./pages/public/AuthPage";
 import {
   AccountLayout,
   AccountInfo,
@@ -108,6 +109,7 @@ export default function App() {
           }
         />
         <Route path="/merci" element={<Merci />} />
+        <Route path="/auth" element={<AuthPage />} />
 
         {/* Espace client */}
         <Route path="/compte" element={<AccountLayout />}>
