@@ -183,6 +183,7 @@ function PublicProfileOnboarding() {
     <Modal
       open={Boolean(needsOnboarding)}
       onClose={() => undefined}
+      hideClose
       title="Finaliser mon inscription"
       className="max-w-2xl"
     >

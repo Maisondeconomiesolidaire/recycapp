@@ -10,6 +10,7 @@ export function Modal({
   children,
   className,
   headerClassName,
+  hideClose,
   dark: _dark,
 }: {
   open: boolean;
@@ -18,19 +19,23 @@ export function Modal({
   children: ReactNode;
   className?: string;
   headerClassName?: string;
+  /** Modal obligatoire : masque la croix et empêche la fermeture (Échap/fond). */
+  hideClose?: boolean;
   /** @deprecated theme is now inherited from document.body class */
   dark?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !hideClose) onClose();
+    };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open, onClose, hideClose]);
 
   if (!open) return null;
 
@@ -38,7 +43,7 @@ export function Modal({
     <>
       <div
         className="fixed inset-0 z-[260] bg-black/50 animate-fade-in"
-        onClick={onClose}
+        onClick={hideClose ? undefined : onClose}
       />
       <div className="fixed inset-0 z-[261] flex items-center justify-center p-4 pointer-events-none">
         <div
@@ -52,12 +57,14 @@ export function Modal({
               <h2 className="text-lg font-semibold text-[var(--foreground)]">
                 {title}
               </h2>
-              <button
-                onClick={onClose}
-                className="rounded-xl p-1.5 text-zinc-400 hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              {!hideClose && (
+                <button
+                  onClick={onClose}
+                  className="rounded-xl p-1.5 text-zinc-400 hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
             </div>
           )}
           <div className="p-6">{children}</div>
