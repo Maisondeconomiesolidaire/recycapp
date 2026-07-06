@@ -17,6 +17,7 @@ import {
   Check,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { confirmDelete } from "../../lib/confirm";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
@@ -81,7 +82,7 @@ export function Documents() {
   }
 
   async function handleDeleteFolder(target: { _id: FolderId; name: string }) {
-    const ok = window.confirm(
+    const ok = await confirmDelete(
       `Supprimer le dossier "${target.name}" et tout son contenu ?`,
     );
     if (!ok) return;
@@ -96,7 +97,7 @@ export function Documents() {
   }
 
   async function handleDeleteFile(target: { _id: Id<"documents">; name: string }) {
-    const ok = window.confirm(`Supprimer le document "${target.name}" ?`);
+    const ok = await confirmDelete(`Supprimer le document "${target.name}" ?`);
     if (!ok) return;
     await deleteFile({ documentId: target._id });
   }

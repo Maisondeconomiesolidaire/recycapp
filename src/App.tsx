@@ -41,9 +41,11 @@ import { TourneeConduite } from "./pages/crm/TourneeConduite";
 import { Messages } from "./pages/crm/Messages";
 import { Documents } from "./pages/crm/Documents";
 import { Admin } from "./pages/crm/Admin";
+import { ConfirmRoot } from "./lib/confirm";
 
 export default function App() {
   return (
+    <>
     <Routes>
       {/* Public (light mode) */}
       <Route element={<PublicLayout />}>
@@ -148,5 +150,7 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/boutique" replace />} />
     </Routes>
+      <ConfirmRoot />
+    </>
   );
 }

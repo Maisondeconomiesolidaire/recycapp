@@ -7,6 +7,7 @@ import {
   Calendar, X, AlertCircle, Route, Copy, Navigation, Trash2,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { confirmDelete } from "../../lib/confirm";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 
@@ -224,7 +225,7 @@ function PlanificationTab() {
   }
 
   async function handleDeleteTournee(tourneeId: Id<"tournees">, label: string) {
-    const confirmed = window.confirm(
+    const confirmed = await confirmDelete(
       `Supprimer définitivement "${label}" ? Les liens de suivi et la position live associés seront aussi supprimés.`,
     );
     if (!confirmed) return;
