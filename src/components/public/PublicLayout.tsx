@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "convex/react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { SignedIn, useUser } from "@clerk/clerk-react";
 import {
   Link,
   NavLink,
@@ -17,6 +18,11 @@ import {
 import { Id } from "../../../convex/_generated/dataModel";
 import { cn } from "../../lib/cn";
 import { Input } from "../ui/Field";
+import { Field } from "../ui/Field";
+import { Button } from "../ui/Button";
+import { Modal } from "../ui/Modal";
+import { PhoneInput } from "../ui/PhoneInput";
+import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
 import { AccountMenu } from "./AccountMenu";
@@ -87,8 +93,141 @@ export function PublicLayout() {
           <Outlet />
         </div>
       </main>
+      <SignedIn>
+        <PublicProfileOnboarding />
+      </SignedIn>
       {!embed && <Footer />}
     </div>
+  );
+}
+
+function PublicProfileOnboarding() {
+  const { user, isLoaded } = useUser();
+  const profile = useQuery(api.users.getMyProfile, {});
+  const updateProfile = useMutation(api.users.updateMyProfile);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    address: "",
+    postalCode: "",
+    city: "",
+  });
+
+  const profileLoaded = profile !== undefined;
+  const needsOnboarding =
+    isLoaded &&
+    user &&
+    profileLoaded &&
+    !(
+      (profile?.firstName || user.firstName)?.trim() &&
+      (profile?.lastName || user.lastName)?.trim() &&
+      profile?.phone?.trim() &&
+      profile?.address?.trim() &&
+      profile?.postalCode?.trim() &&
+      profile?.city?.trim()
+    );
+
+  useEffect(() => {
+    if (!isLoaded || !user || !profileLoaded) return;
+    setForm((current) => ({
+      firstName: current.firstName || profile?.firstName || user.firstName || "",
+      lastName: current.lastName || profile?.lastName || user.lastName || "",
+      phone: current.phone || profile?.phone || "",
+      address: current.address || profile?.address || "",
+      postalCode: current.postalCode || profile?.postalCode || "",
+      city: current.city || profile?.city || "",
+    }));
+  }, [isLoaded, profileLoaded, profile, user]);
+
+  function setField(field: keyof typeof form, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      phone: form.phone.trim(),
+      address: form.address.trim(),
+      postalCode: form.postalCode.trim(),
+      city: form.city.trim(),
+    };
+    if (!next.firstName || !next.lastName || !next.phone || !next.address || !next.postalCode || !next.city) {
+      setError("Merci de compléter tous les champs pour continuer.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      if (
+        user &&
+        (next.firstName !== (user.firstName ?? "") || next.lastName !== (user.lastName ?? ""))
+      ) {
+        await user.update({ firstName: next.firstName, lastName: next.lastName });
+      }
+      await updateProfile(next);
+      await user?.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Impossible d'enregistrer vos informations.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={Boolean(needsOnboarding)}
+      onClose={() => undefined}
+      title="Finaliser mon inscription"
+      className="max-w-2xl"
+    >
+      <form onSubmit={submit} className="space-y-5">
+        <p className="text-sm leading-6 text-zinc-600">
+          Ajoutez votre prénom, nom, téléphone et adresse pour continuer.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Prénom" required>
+            <Input value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} placeholder="Marie" />
+          </Field>
+          <Field label="Nom" required>
+            <Input value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} placeholder="Dupont" />
+          </Field>
+          <Field label="Téléphone" required>
+            <PhoneInput value={form.phone} onChange={(event) => setField("phone", event.target.value)} placeholder="06 12 34 56 78" />
+          </Field>
+          <Field label="Adresse" required>
+            <AddressAutocomplete
+              value={form.address}
+              onValueChange={(value) => setField("address", value)}
+              onSelect={(address) => {
+                setForm((current) => ({
+                  ...current,
+                  address: address.address,
+                  postalCode: address.postalCode,
+                  city: address.city,
+                }));
+              }}
+              placeholder="12 rue des Lilas"
+            />
+          </Field>
+          <Field label="Code postal" required>
+            <Input value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} placeholder="60000" />
+          </Field>
+          <Field label="Ville" required>
+            <Input value={form.city} onChange={(event) => setField("city", event.target.value)} placeholder="Beauvais" />
+          </Field>
+        </div>
+        {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p> : null}
+        <Button type="submit" size="lg" className="w-full rounded-2xl bg-orange-500 text-white hover:bg-orange-600" disabled={saving}>
+          {saving ? "Enregistrement..." : "Enregistrer et continuer"}
+        </Button>
+      </form>
+    </Modal>
   );
 }
 

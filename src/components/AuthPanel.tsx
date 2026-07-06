@@ -2,6 +2,27 @@ import { useEffect, useState } from "react";
 import { SignIn, SignUp } from "@clerk/clerk-react";
 
 type AuthMode = "choice" | "sign-in" | "sign-up";
+const CLERK_APPEARANCE = {
+  variables: {
+    colorPrimary: "#ff7700",
+    colorText: "#18181b",
+    colorTextSecondary: "#71717a",
+    colorBackground: "#ffffff",
+    colorInputBackground: "#ffffff",
+    colorInputText: "#18181b",
+    borderRadius: "14px",
+  },
+  elements: {
+    card: "shadow-[0_24px_70px_rgba(24,24,27,0.12)] border border-orange-100",
+    headerTitle: "text-zinc-950",
+    headerSubtitle: "text-zinc-500",
+    formButtonPrimary:
+      "bg-orange-500 hover:bg-orange-600 text-white shadow-[0_10px_26px_rgba(255,119,0,0.28)]",
+    footerActionLink: "text-orange-600 hover:text-orange-700",
+    identityPreviewEditButton: "text-orange-600 hover:text-orange-700",
+    formFieldInput: "focus:border-orange-500 focus:ring-orange-500/25",
+  },
+};
 
 /**
  * Choix d'authentification puis formulaire Clerk local.
@@ -11,6 +32,8 @@ type AuthMode = "choice" | "sign-in" | "sign-up";
  */
 export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
   const targetUrl = redirectUrl ?? `${window.location.pathname}${window.location.search}`;
+  const signInUrl = `${window.location.pathname}${window.location.search}#/sign-in`;
+  const signUpUrl = `${window.location.pathname}${window.location.search}#/sign-up`;
   const [mode, setMode] = useState<AuthMode>(() => {
     if (window.location.hash.startsWith("#/sign-up")) return "sign-up";
     if (window.location.hash.startsWith("#/sign-in")) return "sign-in";
@@ -61,8 +84,21 @@ export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
   }
 
   return mode === "sign-up" ? (
-    <SignUp routing="hash" fallbackRedirectUrl={targetUrl} signInUrl="#/sign-in" />
+    <SignUp
+      routing="hash"
+      fallbackRedirectUrl={targetUrl}
+      forceRedirectUrl={targetUrl}
+      signInUrl={signInUrl}
+      appearance={CLERK_APPEARANCE}
+    />
   ) : (
-    <SignIn routing="hash" fallbackRedirectUrl={targetUrl} signUpUrl="#/sign-up" />
+    <SignIn
+      routing="hash"
+      fallbackRedirectUrl={targetUrl}
+      forceRedirectUrl={targetUrl}
+      signUpUrl={signUpUrl}
+      appearance={CLERK_APPEARANCE}
+      withSignUp
+    />
   );
 }

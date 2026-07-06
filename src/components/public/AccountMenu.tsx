@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignedIn, SignedOut, SignInButton, useClerk } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, useClerk } from "@clerk/clerk-react";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronDown, LogOut, MessageSquare, Package, Settings, User } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -18,7 +18,7 @@ function ProfileSync() {
 
 export function AccountMenu() {
   const navigate = useNavigate();
-  const { signOut } = useClerk();
+  const { openSignUp, signOut } = useClerk();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const unread = useQuery(api.messages.myUnreadCount);
@@ -42,15 +42,14 @@ export function AccountMenu() {
   return (
     <>
       <SignedOut>
-        <SignInButton mode="modal">
-          <button
-            type="button"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/55 bg-white/85 px-5 text-sm font-semibold text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur transition hover:-translate-y-0.5 sm:h-14"
-          >
-            <User className="h-4 w-4" />
-            S'inscrire
-          </button>
-        </SignInButton>
+        <button
+          type="button"
+          onClick={() => openSignUp({ fallbackRedirectUrl: window.location.pathname, forceRedirectUrl: window.location.pathname })}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/55 bg-white/85 px-5 text-sm font-semibold text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur transition hover:-translate-y-0.5 sm:h-14"
+        >
+          <User className="h-4 w-4" />
+          S'inscrire
+        </button>
       </SignedOut>
 
       <SignedIn>

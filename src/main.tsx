@@ -50,6 +50,8 @@ if (missing.length > 0) {
           publishableKey={clerkKey}
           localization={frFR}
           appearance={{ variables: { colorPrimary: "#ff7700" } }}
+          signInUrl="/boutique#/sign-in"
+          signUpUrl="/boutique#/sign-up"
         >
           <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
             <BrowserRouter>
