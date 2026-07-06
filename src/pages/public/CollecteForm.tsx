@@ -8,6 +8,7 @@ import { api } from "../../../convex/_generated/api";
 import { FormShell, FormSection } from "../../components/public/FormShell";
 import { Field, Input, Textarea, Checkbox, Select } from "../../components/ui/Field";
 import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import {
@@ -17,6 +18,8 @@ import {
   type CategoryPhotoMap,
 } from "../../components/public/CollecteCategoryPicker";
 import { HOUSING_TYPES } from "../../lib/constants";
+
+const COLLECTE_RULES_PDF_URL = "/collecte-reglement-2026.pdf";
 
 const optNum = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
@@ -51,6 +54,9 @@ const schema = z
     reusableGoodCondition: ouiNon,
     sorted: ouiNon,
     noWaste: ouiNon,
+    acceptedRules: z
+      .boolean()
+      .refine((value) => value, "Vous devez accepter les conditions de collecte"),
     comment: z.string().optional(),
   })
   .refine(
@@ -66,6 +72,7 @@ export function CollecteForm() {
   const navigate = useNavigate();
   const submit = useMutation(api.requests.submitCollecte);
   const [sameAddress, setSameAddress] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const {
     register,
@@ -75,7 +82,7 @@ export function CollecteForm() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { objectCategories: [] },
+    defaultValues: { objectCategories: [], acceptedRules: false },
   });
 
   // Préremplit les coordonnées (dont l'adresse de facturation) depuis le profil
@@ -304,10 +311,51 @@ export function CollecteForm() {
           </Field>
         </FormSection>
 
+        <FormSection title="Conditions de collecte">
+          <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <Checkbox
+              label="J'ai lu et accepté les conditions de collecte"
+              description="Cette acceptation est obligatoire pour envoyer votre demande."
+              {...register("acceptedRules")}
+            />
+            {errors.acceptedRules?.message && (
+              <p className="text-sm text-red-500">{errors.acceptedRules.message}</p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setRulesOpen(true)}
+            >
+              Voir les conditions
+            </Button>
+          </div>
+        </FormSection>
+
         <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Envoi en cours…" : "Envoyer ma demande"}
         </Button>
       </form>
+
+      <Modal
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        title="Conditions de collecte"
+        className="max-w-5xl"
+      >
+        <div className="space-y-4">
+          <iframe
+            title="Règlement collecte 2026"
+            src={COLLECTE_RULES_PDF_URL}
+            className="h-[75vh] w-full rounded-2xl border border-zinc-200 bg-white"
+          />
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setRulesOpen(false)}>
+              Fermer
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </FormShell>
   );
 }
