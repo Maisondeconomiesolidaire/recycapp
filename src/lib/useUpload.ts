@@ -11,9 +11,23 @@ import { Id } from "../../convex/_generated/dataModel";
 const MAX_DIMENSION = 1600;
 const WEBP_QUALITY = 0.82;
 
+function isHeicImage(file: File) {
+  return (
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    /\.(heic|heif)$/i.test(file.name)
+  );
+}
+
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
-  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return file;
+  const heic = isHeicImage(file);
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
+    if (heic) {
+      throw new Error("Le format HEIC n'est pas pris en charge ici. Envoyez une photo en JPEG ou PNG.");
+    }
+    return file;
+  }
 
   try {
     const bitmap = await createImageBitmap(file);
@@ -36,11 +50,20 @@ async function compressImage(file: File): Promise<File> {
       canvas.toBlob(resolve, "image/webp", WEBP_QUALITY),
     );
     // On ne garde la version compressée que si elle est réellement plus légère.
-    if (!blob || blob.size >= file.size) return file;
+    if (!blob) {
+      if (heic) {
+        throw new Error("Impossible de convertir cette photo HEIC. Envoyez une photo en JPEG ou PNG.");
+      }
+      return file;
+    }
+    if (!heic && blob.size >= file.size) return file;
     return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", {
       type: "image/webp",
     });
   } catch {
+    if (heic) {
+      throw new Error("Le format HEIC n'est pas pris en charge ici. Envoyez une photo en JPEG ou PNG.");
+    }
     return file;
   }
 }
