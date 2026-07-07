@@ -11,6 +11,8 @@ import { CollecteForm } from "./pages/public/CollecteForm";
 import { VeloForm } from "./pages/public/VeloForm";
 import { LivraisonForm } from "./pages/public/LivraisonForm";
 import { Merci } from "./pages/public/Merci";
+import { Conditions } from "./pages/public/Conditions";
+import { Confidentialite } from "./pages/public/Confidentialite";
 import { AuthPage } from "./pages/public/AuthPage";
 import {
   AccountLayout,
@@ -112,6 +114,8 @@ export default function App() {
           }
         />
         <Route path="/merci" element={<Merci />} />
+        <Route path="/conditions" element={<Conditions />} />
+        <Route path="/confidentialite" element={<Confidentialite />} />
         <Route path="/auth" element={<AuthPage />} />
 
         {/* Espace client */}

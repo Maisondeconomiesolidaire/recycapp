@@ -655,9 +655,19 @@ function Footer() {
         isBoutiqueListing ? "bg-white/58 backdrop-blur-xl" : "bg-white/80",
       )}
     >
-      <div className={`${PUBLIC_CONTAINER} flex flex-col items-center justify-between gap-3 py-8 text-sm text-zinc-500 sm:flex-row`}>
+      <div className={`${PUBLIC_CONTAINER} flex flex-col items-center justify-between gap-4 py-8 text-sm text-zinc-500 sm:flex-row`}>
         <p>© {new Date().getFullYear()} Boutique solidaire de seconde main</p>
-        <Link to="/crm" className="hover:text-zinc-800">Espace professionnel</Link>
+        <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+          <Link to="/conditions" className="hover:text-zinc-800">
+            Conditions générales d'utilisation
+          </Link>
+          <Link to="/confidentialite" className="hover:text-zinc-800">
+            Politique de confidentialité
+          </Link>
+          <Link to="/crm" className="hover:text-zinc-800">
+            Espace professionnel
+          </Link>
+        </nav>
       </div>
     </footer>
   );
