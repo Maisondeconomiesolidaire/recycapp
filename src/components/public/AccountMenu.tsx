@@ -11,7 +11,9 @@ const BRAND = "#f1104f";
 function ProfileSync() {
   const syncProfile = useMutation(api.users.syncProfile);
   useEffect(() => {
-    void syncProfile({});
+    void syncProfile({
+      source: { app: "recycapp", path: window.location.pathname + window.location.search },
+    });
   }, [syncProfile]);
   return null;
 }

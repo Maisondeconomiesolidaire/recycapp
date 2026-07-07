@@ -40,7 +40,6 @@ import { Reservations } from "./pages/crm/Reservations";
 import { TourneeConduite } from "./pages/crm/TourneeConduite";
 import { Messages } from "./pages/crm/Messages";
 import { Documents } from "./pages/crm/Documents";
-import { Admin } from "./pages/crm/Admin";
 import { ConfirmRoot } from "./lib/confirm";
 
 export default function App() {
@@ -141,7 +140,6 @@ export default function App() {
         <Route path="flotte" element={<RequireCrmPermission page="flotte"><Flotte /></RequireCrmPermission>} />
         <Route path="reservations" element={<RequireCrmPermission page="reservations"><Reservations /></RequireCrmPermission>} />
         <Route path="equipe" element={<RequireCrmPermission page="equipe"><Equipe /></RequireCrmPermission>} />
-        <Route path="admin" element={<RequireCrmPermission page="admin"><Admin /></RequireCrmPermission>} />
         <Route path="compte" element={<Compte />} />
       </Route>
 

@@ -9,7 +9,6 @@ import {
   Package,
   PackagePlus,
   PackageMinus,
-  ShieldCheck,
   ShoppingCart,
   Truck,
   UserCog,
@@ -218,15 +217,6 @@ export const CRM_PAGES: CrmPageDefinition[] = [
     to: "/crm/equipe",
     icon: UserCog,
     actions: ["read", "create", "update", "delete"],
-  },
-  {
-    key: "admin",
-    label: "Admin",
-    description: "Permissions CRM, pages et fonctionnalités.",
-    to: "/crm/admin",
-    icon: ShieldCheck,
-    actions: ["read", "manage"],
-    adminOnly: true,
   },
 ];
 
