@@ -2340,6 +2340,25 @@ function RequestDetails({ request }: { request: RequestDoc }) {
         </section>
 
         <section>
+          <SectionTitle>Conditions du don</SectionTitle>
+          <div className="text-sm">
+            <Row
+              label="Démontage possible par le client"
+              value={yesNo(c.dismountable)}
+            />
+            <Row
+              label="Objets en bon état / réemployables"
+              value={yesNo(c.reusableGoodCondition)}
+            />
+            <Row label="Objets triés par famille" value={yesNo(c.sorted)} />
+            <Row
+              label="Don sans déchet / non collectable"
+              value={yesNo(c.noWaste)}
+            />
+          </div>
+        </section>
+
+        <section>
           <SectionTitle>Objets</SectionTitle>
           {(c.objectCategories?.length ?? 0) > 0 ? (
             <>
