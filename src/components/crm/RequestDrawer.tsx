@@ -1384,13 +1384,13 @@ function GestionTab({
   const isC1 = request.type === "collecte" && request.collecteType === "C1";
 
   if (isFullProcess) {
-    if (!request.estimatedHours)
+    if (request.type !== "collecte" && !request.estimatedHours)
       stepBlockers[STEP.devisEdite] =
         "Renseignez les heures estimées (champ « Temps estimé ») avant de cocher cette étape.";
     if (!request.scheduledDate)
       stepBlockers[STEP.prestaPlanifiee] =
         "Programmez une date avant de cocher cette étape.";
-    if (!request.actualHours)
+    if (request.type !== "collecte" && !request.actualHours)
       stepBlockers[STEP.prestaTerminee] =
         "Renseignez les heures réelles (champ « Temps réel passé ») avant de cocher cette étape.";
     if (!request.quoteAmount)
@@ -1401,9 +1401,6 @@ function GestionTab({
     if (!request.scheduledDate)
       stepBlockers[STEP.prestaPlanifiee] =
         "Programmez une date avant de cocher cette étape.";
-    if (!request.actualHours)
-      stepBlockers[STEP.prestaTerminee] =
-        "Renseignez les heures réelles (champ « Temps réel passé ») avant de cocher cette étape.";
   }
   if (request.type === "article" && linkedArticle && !linkedArticle.gdrReference) {
     stepBlockers[STEP.factureReglee] =
