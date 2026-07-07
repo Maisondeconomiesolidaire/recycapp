@@ -4,6 +4,7 @@ import { useUser } from "@clerk/clerk-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useUpload } from "../../lib/useUpload";
+import { downloadImage } from "../../lib/downloadImage";
 import {
   CalendarDays,
   MapPin,
@@ -17,6 +18,8 @@ import {
   Loader2,
   MessageSquareText,
   Trash2,
+  Eye,
+  Download,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -1077,13 +1080,29 @@ function PhotoGrid({
           key={`${url}-${i}`}
           className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--crm-border)]"
         >
-          <button
-            type="button"
-            onClick={() => onOpen(i)}
-            className="h-full w-full hover:opacity-90"
-          >
-            <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-          </button>
+          <img
+            src={url}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/55 p-2 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={() => onOpen(i)}
+              className="inline-flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-zinc-900 transition hover:bg-white"
+            >
+              <Eye className="h-3.5 w-3.5" /> Voir l'image
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadImage(url)}
+              className="inline-flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-zinc-900 transition hover:bg-white"
+            >
+              <Download className="h-3.5 w-3.5" /> Télécharger l'image
+            </button>
+          </div>
           {onRemove && (
             <button
               type="button"

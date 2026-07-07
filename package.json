@@ -30,6 +30,7 @@
     "convex": "^1.41.0",
     "date-fns": "^4.1.0",
     "geist": "^1.7.2",
+    "heic2any": "^0.0.4",
     "jsbarcode": "^3.12.3",
     "lucide-react": "^0.469.0",
     "mapbox-gl": "^3.25.0",

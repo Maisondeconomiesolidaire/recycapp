@@ -307,7 +307,8 @@ export const sendRequestConfirmation = internalAction({
 const NEW_REQUEST_STAFF_EMAILS = [
   "accueil.recyclerie@eco-solidaire.fr",
   "e.carette@eco-solidaire.fr",
-  "s.tiennot@eco-solidaire.fr",
+  "v.horcholle@eco-solidaire.fr",
+  "o.dalencourt@eco-solidaire.fr",
 ];
 
 export const sendNewRequestToStaff = internalAction({
