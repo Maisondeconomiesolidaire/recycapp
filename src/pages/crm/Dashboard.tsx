@@ -23,9 +23,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Inbox,
-  PackagePlus,
   ClipboardPlus,
-  Layers3,
   Trophy,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -133,14 +131,6 @@ export function Dashboard() {
             <Button variant="secondary" size="sm" onClick={() => navigate("/crm/demandes?action=new")}>
               <ClipboardPlus className="h-4 w-4" />
               Nouvelle demande
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => navigate("/crm/articles?action=new")}>
-              <PackagePlus className="h-4 w-4" />
-              Nouvel article
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => navigate("/crm/arrivages?action=new&mode=unique")}>
-              <Layers3 className="h-4 w-4" />
-              Nouvel arrivage
             </Button>
           </>
         }

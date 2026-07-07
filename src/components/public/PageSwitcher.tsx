@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bike, ChevronDown, PackageCheck, SprayCan, Store, Truck } from "lucide-react";
+import { Bike, ChevronDown, SprayCan, Store, Truck } from "lucide-react";
 
-const PAGES = [
-  { to: "/boutique", label: "Boutique", icon: Store },
+const SWITCHER_PAGES = [
   { to: "/collecte", label: "Collecte", icon: Truck },
   { to: "/aerogommage", label: "Aérogommage", icon: SprayCan },
   { to: "/velo", label: "Cycle en Bray", icon: Bike },
-  { to: "/livraison", label: "Livraison", icon: PackageCheck },
 ];
 
+const BOUTIQUE_PAGE = { to: "/boutique", label: "Boutique", icon: Store };
+
 function matchPage(pathname: string) {
-  if (pathname.startsWith("/boutique")) return PAGES[0];
-  return PAGES.find((p) => pathname.startsWith(p.to)) ?? PAGES[0];
+  if (pathname.startsWith("/boutique")) return BOUTIQUE_PAGE;
+  return SWITCHER_PAGES.find((p) => pathname.startsWith(p.to)) ?? SWITCHER_PAGES[0];
 }
 
 export function PageSwitcher() {
@@ -46,7 +46,7 @@ export function PageSwitcher() {
 
       {open && (
         <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-60 overflow-hidden rounded-2xl border border-black/6 bg-white p-1.5 shadow-[0_28px_70px_rgba(24,24,27,0.18)]">
-          {PAGES.map(({ to, label, icon: Icon }) => {
+          {SWITCHER_PAGES.map(({ to, label, icon: Icon }) => {
             const active = current.to === to;
             return (
               <button
@@ -89,10 +89,5 @@ export const PAGE_HEADERS: Record<string, { icon: typeof Store; title: string; s
     icon: Bike,
     title: "Cycle en Bray",
     subtitle: "Réparation et reconditionnement de vélos.",
-  },
-  "/livraison": {
-    icon: PackageCheck,
-    title: "Livraison d'un article",
-    subtitle: "Faites-vous livrer un article à votre adresse.",
   },
 };
