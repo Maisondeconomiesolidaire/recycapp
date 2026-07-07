@@ -46,7 +46,7 @@ import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner";
 export default function App() {
   return (
     <>
-    <UpdateAvailableBanner />
+    <UpdateAvailableBanner appName="Recycapp" />
     <Routes>
       {/* Public (light mode) */}
       <Route element={<PublicLayout />}>
