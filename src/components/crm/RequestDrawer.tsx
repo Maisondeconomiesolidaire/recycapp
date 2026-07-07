@@ -279,7 +279,14 @@ export function RequestDrawer({
                 {(request.type === "collecte" || request.type === "aerogommage") && (
                   <PhotoRequestButton request={request} />
                 )}
-                <RequestDocumentsPanel requestId={request._id} theme="dark" viewerRole="staff" />
+                <RequestDocumentsPanel
+                  requestId={request._id}
+                  theme="dark"
+                  viewerRole="staff"
+                  customerName={[request.customer.firstName, request.customer.lastName]
+                    .filter(Boolean)
+                    .join(" ")}
+                />
               </div>
             )}
             {activeTab === "client" && (

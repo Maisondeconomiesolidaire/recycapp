@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
+  CheckCircle2,
   Download,
   Loader2,
+  Share2,
   Trash2,
   UploadCloud,
 } from "lucide-react";
@@ -10,8 +12,10 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useUpload } from "../lib/useUpload";
 import { cn } from "../lib/cn";
+import { confirmDialog } from "../lib/confirm";
 import { Modal } from "./ui/Modal";
 import { FileTypePreview } from "./ui/FileTypePreview";
+import { Button } from "./ui/Button";
 
 export type RequestDocumentType =
   | "devis"
@@ -48,20 +52,24 @@ export function RequestDocumentsPanel({
   requestId,
   theme = "dark",
   viewerRole = "staff",
+  customerName,
 }: {
   requestId: Id<"requests">;
   theme?: "dark" | "light";
   viewerRole?: "staff" | "client";
+  customerName?: string;
 }) {
   const documents = useQuery(api.documents.listForRequest, { requestId });
   const addDocument = useMutation(api.documents.addToRequest);
   const removeDocument = useMutation(api.documents.removeFromRequest);
+  const shareDocument = useMutation(api.documents.shareWithClient);
   const upload = useUpload();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const selectedTypeRef = useRef<RequestDocumentType>("devis");
   const [docType, setDocType] = useState<RequestDocumentType>("devis");
   const [typeModalOpen, setTypeModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [sharingId, setSharingId] = useState<Id<"requestDocuments"> | null>(null);
   const dark = theme === "dark";
   const canManageDocuments = viewerRole === "staff";
 
@@ -90,6 +98,24 @@ export function RequestDocumentsPanel({
     setDocType(type);
     setTypeModalOpen(false);
     window.setTimeout(() => inputRef.current?.click(), 0);
+  }
+
+  async function handleShare(documentId: Id<"requestDocuments">) {
+    const clientLabel = customerName?.trim() || "ce client";
+    const confirmed = await confirmDialog({
+      title: "Partager avec le client",
+      description: `Êtes-vous sûr(e) de vouloir partager ce document avec "${clientLabel}" ?`,
+      confirmLabel: "Oui",
+      cancelLabel: "Non",
+      tone: "primary",
+    });
+    if (!confirmed) return;
+    setSharingId(documentId);
+    try {
+      await shareDocument({ documentId });
+    } finally {
+      setSharingId(null);
+    }
   }
 
   return (
@@ -193,7 +219,7 @@ export function RequestDocumentsPanel({
           </div>
         ) : (
           documents.map((document) => (
-            <div key={document._id} className="flex items-center gap-3 py-3">
+            <div key={document._id} className="flex flex-wrap items-center gap-3 py-3">
               <FileTypePreview
                 name={document.name}
                 mimeType={document.mimeType}
@@ -209,6 +235,37 @@ export function RequestDocumentsPanel({
                   {formatDate(document.createdAt)}
                 </p>
               </div>
+              {canManageDocuments && document.uploadedByRole === "staff" && (
+                document.sharedWithClientAt ? (
+                  <span
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold",
+                      dark
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                    )}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Partagé client
+                  </span>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleShare(document._id)}
+                    disabled={sharingId === document._id}
+                    className={dark ? "" : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100"}
+                  >
+                    {sharingId === document._id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Share2 className="h-4 w-4" />
+                    )}
+                    Partager avec le client
+                  </Button>
+                )
+              )}
               {document.url && (
                 <a
                   href={document.url}
