@@ -21,7 +21,7 @@ export function Conditions() {
           <br />
           Siège social : 4 Rue de la Prairie, 60650 Lachapelle-aux-Pots
           <br />
-          SIREN/SIRET : [numéro à compléter]
+          SIRET : 503 123 044 00029
           <br />
           Adresse électronique : {CONTACT_EMAIL}
           <br />
