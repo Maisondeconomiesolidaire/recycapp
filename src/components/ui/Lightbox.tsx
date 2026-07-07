@@ -36,7 +36,7 @@ export function Lightbox({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 animate-fade-in"
+      className="fixed inset-0 z-[400] flex items-center justify-center bg-black/85 animate-fade-in"
       onClick={onClose}
     >
       <button
