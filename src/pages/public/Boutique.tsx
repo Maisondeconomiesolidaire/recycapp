@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { useClerk, useUser } from "@clerk/clerk-react";
+import { useUser } from "@clerk/clerk-react";
 import { ArrowRight, Check, Flame, Heart, PackageOpen, ShoppingCart, Sparkles, X } from "lucide-react";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
@@ -12,6 +12,7 @@ import { HScroll } from "../../components/ui/HScroll";
 import {
   ARTICLE_SLUG_TO_CATEGORY,
 } from "../../lib/constants";
+import { redirectToCentralAuth } from "../../lib/centralAuth";
 import { useCart } from "../../lib/useCart";
 
 const BRAND = "#f1104f";
@@ -27,14 +28,13 @@ function truncateDescription(value: string, max = 88) {
 /** État partagé des favoris : ids sauvegardés + bascule (avec connexion si besoin). */
 function useWishlist() {
   const { isSignedIn } = useUser();
-  const clerk = useClerk();
   const ids = useQuery(api.articles.myWishlistIds, isSignedIn ? {} : "skip");
   const toggleMutation = useMutation(api.articles.toggleWishlist);
   const idSet = useMemo(() => new Set((ids ?? []).map(String)), [ids]);
 
   const toggle = (articleId: string) => {
     if (!isSignedIn) {
-      clerk.openSignIn({});
+      redirectToCentralAuth("sign-in");
       return;
     }
     void toggleMutation({ articleId: articleId as Id<"articles"> });

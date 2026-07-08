@@ -4,6 +4,7 @@ import { SignedIn, SignedOut, useClerk } from "@clerk/clerk-react";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronDown, LogOut, MessageSquare, Package, Settings, User } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { redirectToCentralAuth } from "../../lib/centralAuth";
 
 const BRAND = "#f1104f";
 
@@ -47,8 +48,7 @@ export function AccountMenu() {
         <button
           type="button"
           onClick={() => {
-            const redirectUrl = `${window.location.pathname}${window.location.search}`;
-            navigate(`/auth?redirect_url=${encodeURIComponent(redirectUrl)}`);
+            redirectToCentralAuth("sign-up");
           }}
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/55 bg-white/85 px-5 text-sm font-semibold text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur transition hover:-translate-y-0.5 sm:h-14"
         >

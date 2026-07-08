@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SignIn, SignUp } from "@clerk/clerk-react";
+import { redirectToCentralAuth, needsCentralAuthRedirect } from "../lib/centralAuth";
 
 type AuthMode = "choice" | "sign-in" | "sign-up";
 const CLERK_APPEARANCE = {
@@ -32,6 +33,26 @@ const CLERK_APPEARANCE = {
  */
 export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
   const targetUrl = redirectUrl ?? `${window.location.pathname}${window.location.search}`;
+  if (needsCentralAuthRedirect()) {
+    return (
+      <div className="grid gap-3">
+        <button
+          type="button"
+          onClick={() => redirectToCentralAuth("sign-in", `${window.location.origin}${targetUrl}`)}
+          className="rounded-2xl bg-zinc-950 px-5 py-4 text-base font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-800"
+        >
+          J'ai déjà un compte, me connecter
+        </button>
+        <button
+          type="button"
+          onClick={() => redirectToCentralAuth("sign-up", `${window.location.origin}${targetUrl}`)}
+          className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-base font-bold text-zinc-950 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50"
+        >
+          Je m'inscris
+        </button>
+      </div>
+    );
+  }
   const signInUrl = `${window.location.pathname}${window.location.search}#sign-in`;
   const signUpUrl = `${window.location.pathname}${window.location.search}#sign-up`;
   const [mode, setMode] = useState<AuthMode>(() => {
