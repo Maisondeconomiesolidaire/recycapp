@@ -1,5 +1,5 @@
 const MESOUTILS_URL =
-  (import.meta.env.VITE_MESOUTILS_URL ?? "https://eco-solidaire.fr").replace(/\/$/, "");
+  (import.meta.env.VITE_MESOUTILS_URL ?? "https://mesoutils.eco-solidaire.fr").replace(/\/$/, "");
 
 function currentUrl() {
   return `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`;
