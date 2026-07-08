@@ -36,6 +36,7 @@ import {
   TYPE_COLORS,
   TYPE_LABELS,
 } from "../../lib/constants";
+import { formatPrice } from "../../lib/format";
 
 type StatsType = "aerogommage" | "collecte" | "article" | "velo" | null;
 
@@ -164,6 +165,26 @@ export function Dashboard() {
                     label="Taux de gain"
                     value={`${winRate}%`}
                     helper={`${stats.won} gagnée(s) / ${stats.lost} perdue(s)`}
+                    flat
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <StatCard
+                    label="Montant en cours"
+                    value={formatPrice(stats.quoteTotals.open)}
+                    helper="Devis des demandes actives"
+                    flat
+                  />
+                  <StatCard
+                    label="Montant gagné"
+                    value={formatPrice(stats.quoteTotals.won)}
+                    helper="Devis des demandes gagnées"
+                    flat
+                  />
+                  <StatCard
+                    label="Montant perdu"
+                    value={formatPrice(stats.quoteTotals.lost)}
+                    helper="Devis des demandes perdues"
                     flat
                   />
                 </div>

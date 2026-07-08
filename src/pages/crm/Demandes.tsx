@@ -344,12 +344,7 @@ function MobileOpenBoard({
                 {cards.length}
               </span>
               <span
-                className={cn(
-                  "rounded-full px-1.5 py-0.5 text-xs font-semibold",
-                  stage === s.key
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-emerald-500/10 text-emerald-300",
-                )}
+                className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-xs font-semibold text-zinc-950 dark:bg-zinc-900 dark:text-zinc-100"
               >
                 {formatPrice(quoteTotal(cards))}
               </span>
@@ -397,7 +392,7 @@ function MobileClosedBoard({
         <div key={label}>
           <h3 className={cn("mb-3 text-sm font-semibold", accent)}>
             {label} <span className="text-zinc-500">({items.length})</span>{" "}
-            <span className="text-emerald-300">{formatPrice(quoteTotal(items))}</span>
+            <span className="text-zinc-900 dark:text-zinc-100">{formatPrice(quoteTotal(items))}</span>
           </h3>
           {items.length === 0 ? (
             <p className="text-sm text-zinc-500">Aucune demande.</p>

@@ -25,7 +25,7 @@ export function KanbanColumn({
           )}
           <h3 className="text-sm font-semibold text-zinc-300">{title}</h3>
           {total && (
-            <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+            <span className="rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {total}
             </span>
           )}
