@@ -16,7 +16,7 @@ import { api } from "../../convex/_generated/api";
  * locale) pour pouvoir être copié tel quel dans chaque dépôt.
  */
 
-export type AppKey = "mesoutils" | "recycapp" | "klyde" | "cycleenbray" | "bennespro" | "pointeuse";
+export type AppKey = "mesoutils" | "recycapp" | "klyde" | "cycleenbray" | "bennespro";
 
 type Access = {
   role: string;
@@ -79,14 +79,6 @@ const APPS: PortalApp[] = [
     href: env.VITE_BENNESPRO_URL ?? "https://bennespro.vercel.app",
     cardBg: "#a4cebe",
   },
-  {
-    key: "pointeuse",
-    label: "Pointeuse",
-    description: "Suivi des salariés et des chantiers : pointages, projets, dépenses et factures.",
-    logoSrc: "/logo-lsdb.png",
-    href: env.VITE_POINTEUSE_URL ?? "https://pointeuselsdb.vercel.app",
-    cardBg: "#fff1e5",
-  },
 ];
 
 /** Réplique la logique `appCanAccess` du portail Mes Outils. */
@@ -97,7 +89,6 @@ function appCanAccess(access: Access, key: AppKey): boolean {
   if (key === "klyde") return access.grants.some((g) => g.pageKey.startsWith("klyde:"));
   if (key === "cycleenbray") return access.grants.some((g) => g.pageKey.startsWith("cycle:"));
   if (key === "bennespro") return access.grants.some((g) => g.pageKey.startsWith("bennespro:"));
-  if (key === "pointeuse") return access.grants.some((g) => g.pageKey.startsWith("pointeuse:"));
   // recycapp : pages sans préfixe d'application (flotte, demandes, tournees…).
   return access.grants.some((g) => !g.pageKey.includes(":"));
 }

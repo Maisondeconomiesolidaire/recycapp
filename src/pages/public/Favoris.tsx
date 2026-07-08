@@ -1,13 +1,12 @@
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { useUser } from "@clerk/clerk-react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import { ArrowRight, Heart, PackageOpen } from "lucide-react";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
 import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { redirectToCentralAuth } from "../../lib/centralAuth";
 
 const BRAND = "#f1104f";
 
@@ -25,6 +24,7 @@ type FavoriteArticle = {
 
 export function Favoris() {
   const { isSignedIn, isLoaded } = useUser();
+  const clerk = useClerk();
   const favorites = useQuery(api.articles.myWishlist, isSignedIn ? {} : "skip");
   const toggleWishlist = useMutation(api.articles.toggleWishlist);
 
@@ -55,7 +55,7 @@ export function Favoris() {
           />
           <button
             type="button"
-            onClick={() => redirectToCentralAuth("sign-in")}
+            onClick={() => clerk.openSignIn({})}
             className="mt-5 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold text-white shadow-[0_12px_30px_rgba(241,16,79,0.3)] transition hover:-translate-y-0.5"
             style={{ backgroundColor: BRAND }}
           >

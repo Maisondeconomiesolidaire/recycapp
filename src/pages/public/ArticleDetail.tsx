@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { useUser } from "@clerk/clerk-react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -20,7 +20,6 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { Button } from "../../components/ui/Button";
 import { Lightbox } from "../../components/ui/Lightbox";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { redirectToCentralAuth } from "../../lib/centralAuth";
 import { useCart } from "../../lib/useCart";
 
 function createViewSessionId() {
@@ -44,12 +43,13 @@ export function ArticleDetail() {
   const heartbeatView = useMutation(api.articles.heartbeatView);
   const leaveView = useMutation(api.articles.leaveView);
   const { isSignedIn } = useUser();
+  const clerk = useClerk();
   const wishlistIds = useQuery(api.articles.myWishlistIds, isSignedIn ? {} : "skip");
   const toggleWishlist = useMutation(api.articles.toggleWishlist);
   const wishlisted = Boolean(wishlistIds?.some((wid) => String(wid) === id));
   function handleToggleWishlist() {
     if (!isSignedIn) {
-      redirectToCentralAuth("sign-in");
+      clerk.openSignIn({});
       return;
     }
     if (id) void toggleWishlist({ articleId: id as Id<"articles"> });
