@@ -59,7 +59,18 @@ export function RequestDocumentsPanel({
   viewerRole?: "staff" | "client";
   customerName?: string;
 }) {
-  const documents = useQuery(api.documents.listForRequest, { requestId });
+  const rawDocuments = useQuery(api.documents.listForRequest, { requestId });
+  // Sécurité (défense en profondeur) : côté client, on n'affiche JAMAIS un
+  // document interne de l'équipe tant qu'il n'a pas été explicitement partagé,
+  // même si l'API venait à en renvoyer un. Seuls les documents partagés ou
+  // déposés par le client lui-même sont visibles.
+  const documents =
+    viewerRole === "staff"
+      ? rawDocuments
+      : rawDocuments?.filter(
+          (document) =>
+            document.uploadedByRole === "client" || document.sharedWithClientAt != null,
+        );
   const addDocument = useMutation(api.documents.addToRequest);
   const removeDocument = useMutation(api.documents.removeFromRequest);
   const shareDocument = useMutation(api.documents.shareWithClient);
