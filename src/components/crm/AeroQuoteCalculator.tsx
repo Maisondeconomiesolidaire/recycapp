@@ -7,6 +7,7 @@ import { Field, Input } from "../ui/Field";
 import { formatPrice } from "../../lib/format";
 import {
   AERO_FURNITURE,
+  AERO_OTHER_KEY,
   AERO_RATES,
   AeroQuoteInputs,
   calculateAeroQuote,
@@ -94,7 +95,8 @@ function buildQuoteDetails(inputs: AeroQuoteInputs, result: ReturnType<typeof ca
     .filter((line) => line.quantity > 0)
     .map((line) => {
       const ref = AERO_FURNITURE.find((item) => item.key === line.key);
-      return `- ${ref?.label ?? line.key} : ${line.quantity} x ${formatPrice(line.appliedPrice)} = ${formatPrice(line.quantity * line.appliedPrice)}`;
+      const label = line.label?.trim() || ref?.label || line.key;
+      return `- ${label} : ${line.quantity} x ${formatPrice(line.appliedPrice)} = ${formatPrice(line.quantity * line.appliedPrice)}`;
     });
 
   return [
@@ -139,6 +141,16 @@ export function AeroQuoteCalculator({ request }: { request: AeroQuoteRequest }) 
       ...current,
       furniture: current.furniture.map((line) =>
         line.key === key ? { ...line, [field]: numberValue(value) } : line,
+      ),
+    }));
+  };
+
+  const setFurnitureLabel = (key: string, value: string) => {
+    setSaved(false);
+    setInputs((current) => ({
+      ...current,
+      furniture: current.furniture.map((line) =>
+        line.key === key ? { ...line, label: value } : line,
       ),
     }));
   };
@@ -213,10 +225,21 @@ export function AeroQuoteCalculator({ request }: { request: AeroQuoteRequest }) 
                 key={line.key}
                 className="grid grid-cols-[1fr_110px_130px_130px] items-center gap-3 border-b border-[var(--crm-border)] px-4 py-3 last:border-b-0"
               >
-                <div>
-                  <p className="text-sm font-medium text-zinc-200">{ref?.label ?? line.key}</p>
-                  <p className="text-xs text-zinc-500">À partir de {formatPrice(ref?.basePrice ?? 0)}</p>
-                </div>
+                {line.key === AERO_OTHER_KEY ? (
+                  <div>
+                    <Input
+                      value={line.label ?? ""}
+                      placeholder="Autre (veuillez préciser)"
+                      onChange={(event) => setFurnitureLabel(line.key, event.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-zinc-500">Prix libre à saisir</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">{ref?.label ?? line.key}</p>
+                    <p className="text-xs text-zinc-500">À partir de {formatPrice(ref?.basePrice ?? 0)}</p>
+                  </div>
+                )}
                 <Input
                   type="number"
                   min="0"

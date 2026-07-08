@@ -10,6 +10,13 @@ export type C3SectorEntry = {
 export type C3QuoteInputs = {
   departure: C3Departure;
   commune: string;
+  /** Adresse de collecte complète (pour l'affichage du devis). */
+  collectAddress?: string;
+  /**
+   * Distance/durée routières (aller simple) calculées depuis l'adresse de
+   * collecte. Prioritaire sur le référentiel commune quand renseignée.
+   */
+  manualDistance?: { km: number; minutes: number } | null;
   rotations: number;
   vehicles: number;
   travelAgents: number;
@@ -26,6 +33,10 @@ export type C3QuoteInputs = {
 
 export type C3QuoteResult = {
   entry: C3SectorEntry | null;
+  /** Distance/durée aller simple retenues (adresse calculée ou référentiel). */
+  oneWayKm: number;
+  oneWayMinutes: number;
+  hasRoute: boolean;
   totalKm: number;
   totalTravelHours: number;
   travelCost: number;
@@ -4312,8 +4323,13 @@ export function calculateC3Quote(inputs: C3QuoteInputs): C3QuoteResult {
   const loadingAgents = positive(inputs.loadingAgents);
   const loadingHours = positive(inputs.loadingHours);
   const wasteVolume = positive(inputs.wasteVolume);
-  const totalKm = entry ? entry.km * 2 * rotations * vehicles : 0;
-  const totalTravelHours = entry ? (entry.minutes / 60) * 2 * vehicles * rotations : 0;
+  // La distance calculée depuis l'adresse de collecte prime sur le référentiel commune.
+  const manual = inputs.manualDistance ?? null;
+  const oneWayKm = manual ? positive(manual.km) : entry ? entry.km : 0;
+  const oneWayMinutes = manual ? positive(manual.minutes) : entry ? entry.minutes : 0;
+  const hasRoute = manual !== null || entry !== null;
+  const totalKm = oneWayKm * 2 * rotations * vehicles;
+  const totalTravelHours = (oneWayMinutes / 60) * 2 * vehicles * rotations;
   const travelCost = totalKm * C3_RATES.kilometer + totalTravelHours * C3_RATES.travelHourly;
   const loadingTotalHours = loadingAgents * loadingHours;
   const loadingCost = loadingTotalHours * C3_RATES.loadingHourly;
@@ -4331,6 +4347,9 @@ export function calculateC3Quote(inputs: C3QuoteInputs): C3QuoteResult {
 
   return {
     entry,
+    oneWayKm,
+    oneWayMinutes,
+    hasRoute,
     totalKm,
     totalTravelHours,
     travelCost,

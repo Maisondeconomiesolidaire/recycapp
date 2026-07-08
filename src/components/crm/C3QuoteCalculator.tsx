@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
-import { useMutation } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "../ui/Button";
 import { Field, Input, Select } from "../ui/Field";
+import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { formatPrice } from "../../lib/format";
 import { Site } from "../../lib/constants";
 import {
@@ -12,7 +13,6 @@ import {
   calculateC3Quote,
   C3Departure,
   C3QuoteInputs,
-  getC3CommuneSuggestions,
 } from "../../lib/c3QuoteCalculator";
 
 type C3QuoteRequest = {
@@ -21,14 +21,22 @@ type C3QuoteRequest = {
   customer: {
     firstName: string;
     lastName: string;
+    address?: string;
+    postalCode?: string;
     city?: string;
   };
   collecte?: {
     collectAddress?: {
+      address?: string;
+      postalCode?: string;
       city?: string;
     };
   };
 };
+
+function buildAddressString(a: { address?: string; postalCode?: string; city?: string }): string {
+  return [a.address, a.postalCode, a.city].map((p) => p?.trim()).filter(Boolean).join(" ");
+}
 
 const VALUE_FIELDS = [
   ["storageFurnitureValue", "Meuble de rangement"],
@@ -64,15 +72,16 @@ function roundCurrency(value: number): number {
 }
 
 function buildQuoteDetails(inputs: C3QuoteInputs, result: ReturnType<typeof calculateC3Quote>): string {
-  const commune = result.entry
-    ? `${result.entry.commune} (${result.entry.insee})`
-    : inputs.commune || "Commune non renseignée";
+  const location =
+    inputs.collectAddress?.trim() ||
+    (result.entry ? `${result.entry.commune} (${result.entry.insee})` : inputs.commune) ||
+    "Adresse non renseignée";
 
   return [
     "Calcul devis collecte C3",
     `Départ : ${C3_DEPARTURE_LABELS[inputs.departure]}`,
-    `Commune : ${commune}`,
-    `Trajet aller : ${result.entry ? `${result.entry.km.toFixed(2)} km / ${result.entry.minutes.toFixed(1)} min` : "non trouvé"}`,
+    `Adresse de collecte : ${location}`,
+    `Trajet aller : ${result.hasRoute ? `${result.oneWayKm.toFixed(2)} km / ${result.oneWayMinutes.toFixed(1)} min` : "non calculé"}`,
     `Rotations : ${inputs.rotations}`,
     `Véhicules : ${inputs.vehicles}`,
     `Agents déplacement : ${inputs.travelAgents} (mémo, non facturé dans la formule C3)`,
@@ -88,30 +97,68 @@ function buildQuoteDetails(inputs: C3QuoteInputs, result: ReturnType<typeof calc
 
 export function C3QuoteCalculator({ request }: { request: C3QuoteRequest }) {
   const patch = useMutation(api.requests.patchManagement);
+  const estimateRoute = useAction(api.livraison.estimateCollecteRoute);
   const initialDeparture: C3Departure = request.site === "76" ? "GEB" : "LCP";
-  const initialCommune = request.collecte?.collectAddress?.city ?? request.customer.city ?? "";
+  // Adresse de COLLECTE (pas facturation) rattachée à la demande, sinon adresse client.
+  const initialAddress = {
+    address: request.collecte?.collectAddress?.address ?? request.customer.address ?? "",
+    postalCode: request.collecte?.collectAddress?.postalCode ?? request.customer.postalCode ?? "",
+    city: request.collecte?.collectAddress?.city ?? request.customer.city ?? "",
+  };
+  const initialAddressString = buildAddressString(initialAddress);
+  const [addressParts, setAddressParts] = useState(initialAddress);
+  const [addressText, setAddressText] = useState(initialAddressString);
+  const [computing, setComputing] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
   const [inputs, setInputs] = useState<C3QuoteInputs>({
     departure: initialDeparture,
-    commune: initialCommune,
+    commune: initialAddress.city,
+    collectAddress: initialAddressString,
+    manualDistance: null,
     ...DEFAULT_NUMBERS,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const result = useMemo(() => calculateC3Quote(inputs), [inputs]);
-  const suggestions = useMemo(
-    () => getC3CommuneSuggestions(inputs.departure, inputs.commune),
-    [inputs.commune, inputs.departure],
-  );
+
+  // Calcule la distance routière départ → adresse de collecte (1 €/km) dès que
+  // l'adresse ou le départ change.
+  useEffect(() => {
+    let cancelled = false;
+    if (!addressParts.address.trim() && !addressParts.city.trim()) {
+      setInputs((current) => ({ ...current, manualDistance: null }));
+      return;
+    }
+    setComputing(true);
+    setRouteError(null);
+    estimateRoute({
+      departure: inputs.departure,
+      address: addressParts.address,
+      postalCode: addressParts.postalCode || undefined,
+      city: addressParts.city || undefined,
+    })
+      .then((route) => {
+        if (cancelled) return;
+        setInputs((current) => ({ ...current, manualDistance: route }));
+        if (!route) setRouteError("Adresse introuvable pour le calcul de distance.");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setInputs((current) => ({ ...current, manualDistance: null }));
+        setRouteError(error instanceof Error ? error.message : "Calcul de distance impossible.");
+      })
+      .finally(() => {
+        if (!cancelled) setComputing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addressParts, inputs.departure, estimateRoute]);
 
   const setNumber = (key: keyof typeof DEFAULT_NUMBERS, value: string) => {
     setSaved(false);
     setInputs((current) => ({ ...current, [key]: numberValue(value) }));
-  };
-
-  const setText = (key: "commune", value: string) => {
-    setSaved(false);
-    setInputs((current) => ({ ...current, [key]: value }));
   };
 
   const setDeparture = (departure: C3Departure) => {
@@ -163,28 +210,37 @@ export function C3QuoteCalculator({ request }: { request: C3QuoteRequest }) {
             <option value="GEB">{C3_DEPARTURE_LABELS.GEB}</option>
           </Select>
         </Field>
-        <Field label="Commune d'intervention">
+        <Field label="Adresse de collecte">
           <div className="space-y-2">
-            <Input
-              value={inputs.commune}
-              onChange={(event) => setText("commune", event.target.value)}
-              placeholder="Ex. Lachapelle-aux-Pots"
-              list="c3-communes"
+            <AddressAutocomplete
+              value={addressText}
+              onValueChange={(v) => {
+                setSaved(false);
+                setAddressText(v);
+              }}
+              onSelect={(a) => {
+                setSaved(false);
+                setAddressText(a.label);
+                setAddressParts({ address: a.address, postalCode: a.postalCode, city: a.city });
+                setInputs((current) => ({
+                  ...current,
+                  commune: a.city,
+                  collectAddress: a.label,
+                }));
+              }}
+              placeholder="Adresse de collecte du client…"
             />
-            <datalist id="c3-communes">
-              {suggestions.map((entry) => (
-                <option key={`${entry.insee}-${entry.commune}`} value={entry.commune} />
-              ))}
-            </datalist>
-            {inputs.commune && !result.entry && (
-              <p className="text-xs text-amber-300">
-                Commune introuvable dans le référentiel {inputs.departure}. Vérifiez l'orthographe ou le départ.
+            {computing && (
+              <p className="text-xs text-zinc-500">Calcul de la distance…</p>
+            )}
+            {!computing && result.hasRoute && (
+              <p className="text-xs text-zinc-500">
+                Trajet aller : {result.oneWayKm.toFixed(1)} km / {result.oneWayMinutes.toFixed(0)} min ·
+                {" "}{formatPrice(result.oneWayKm)} par km d'aller-retour × rotations.
               </p>
             )}
-            {result.entry && (
-              <p className="text-xs text-zinc-500">
-                Trajet aller : {result.entry.km.toFixed(2)} km / {result.entry.minutes.toFixed(1)} min.
-              </p>
+            {!computing && routeError && (
+              <p className="text-xs text-amber-300">{routeError}</p>
             )}
           </div>
         </Field>

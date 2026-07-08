@@ -15,7 +15,12 @@ export type AeroFurnitureInput = {
   key: string;
   quantity: number;
   appliedPrice: number;
+  /** Libellé libre saisi pour la ligne « Autre (veuillez préciser) ». */
+  label?: string;
 };
+
+/** Clé de la ligne libre « Autre » de la liste des objets. */
+export const AERO_OTHER_KEY = "autre";
 
 export type AeroQuoteInputs = {
   furniture: AeroFurnitureInput[];
@@ -143,7 +148,12 @@ export const AERO_FURNITURE: AeroFurnitureLine[] = [
     "key": "vaisselier",
     "label": "Vaisselier",
     "basePrice": 150.0
-  }
+  },
+  {
+    key: AERO_OTHER_KEY,
+    label: "Autre (veuillez préciser)",
+    basePrice: 0,
+  },
 ];
 
 export const AERO_TRANSPORT_COMMUNES: AeroTransportEntry[] = [
