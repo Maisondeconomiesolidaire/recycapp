@@ -25,6 +25,7 @@ import {
   deriveStage,
 } from "../../lib/constants";
 import { cn } from "../../lib/cn";
+import { formatPrice } from "../../lib/format";
 
 type Tab = "complete" | "incomplete" | "closed";
 type ChatMessage = {
@@ -46,6 +47,10 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "incomplete", label: "Demandes incomplètes" },
   { key: "closed", label: "Gagnées / Perdues" },
 ];
+
+function quoteTotal(requests: Doc<"requests">[]) {
+  return requests.reduce((sum, request) => sum + (request.quoteAmount ?? 0), 0);
+}
 
 export function Demandes() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -222,6 +227,7 @@ function OpenBoard({
             key={s.key}
             title={s.label}
             count={cards.length}
+            total={formatPrice(quoteTotal(cards))}
             accent={s.key === "planifie" ? "#a78bfa" : undefined}
           >
             {cards.map((r) => (
@@ -252,7 +258,12 @@ function ClosedBoard({
   const lost = requests.filter((r) => r.outcome === "perdue");
   return (
     <>
-      <KanbanColumn title="Gagnées" count={won.length} accent="#196b24">
+      <KanbanColumn
+        title="Gagnées"
+        count={won.length}
+        total={formatPrice(quoteTotal(won))}
+        accent="#196b24"
+      >
         {won.map((r) => (
           <RequestCard
             key={r._id}
@@ -262,7 +273,12 @@ function ClosedBoard({
           />
         ))}
       </KanbanColumn>
-      <KanbanColumn title="Perdues" count={lost.length} accent="#ef4444">
+      <KanbanColumn
+        title="Perdues"
+        count={lost.length}
+        total={formatPrice(quoteTotal(lost))}
+        accent="#ef4444"
+      >
         {lost.map((r) => (
           <RequestCard
             key={r._id}
@@ -306,7 +322,7 @@ function MobileOpenBoard({
       {/* Stage tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:-mx-6 sm:px-6">
         {STAGES.map((s) => {
-          const count = filtered.filter((r) => deriveStage(r) === s.key).length;
+          const cards = filtered.filter((r) => deriveStage(r) === s.key);
           return (
             <button
               key={s.key}
@@ -325,7 +341,17 @@ function MobileOpenBoard({
                   stage === s.key ? "bg-[var(--crm-surface-3)] text-zinc-100" : "bg-[var(--crm-surface-3)] text-zinc-400",
                 )}
               >
-                {count}
+                {cards.length}
+              </span>
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-xs font-semibold",
+                  stage === s.key
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-emerald-500/10 text-emerald-300",
+                )}
+              >
+                {formatPrice(quoteTotal(cards))}
               </span>
             </button>
           );
@@ -370,7 +396,8 @@ function MobileClosedBoard({
       ].map(({ label, items, accent }) => (
         <div key={label}>
           <h3 className={cn("mb-3 text-sm font-semibold", accent)}>
-            {label} <span className="text-zinc-500">({items.length})</span>
+            {label} <span className="text-zinc-500">({items.length})</span>{" "}
+            <span className="text-emerald-300">{formatPrice(quoteTotal(items))}</span>
           </h3>
           {items.length === 0 ? (
             <p className="text-sm text-zinc-500">Aucune demande.</p>

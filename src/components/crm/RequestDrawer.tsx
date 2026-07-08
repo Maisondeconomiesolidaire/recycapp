@@ -596,7 +596,7 @@ function DemandeTab({
             onSaved={() => setEditingAero(false)}
           />
         ) : (
-          <RequestDetails request={request} />
+          <RequestDetails request={request} canUpdate={canUpdate} />
         )}
         {meta}
       </div>
@@ -2304,14 +2304,18 @@ function joinItems(
   return parts.length > 0 ? parts.join(", ") : undefined;
 }
 
-function RequestDetails({ request }: { request: RequestDoc }) {
+function RequestDetails({
+  request,
+  canUpdate = false,
+}: {
+  request: RequestDoc;
+  canUpdate?: boolean;
+}) {
   if (request.type === "aerogommage") {
     return (
       <AerogommageDetails
-        items={request.aerogommage ?? []}
-        photosByItem={request.aerogommagePhotos ?? []}
-        options={request.aerogommageOptions}
-        customerCity={request.customer.city}
+        request={request}
+        canUpdate={canUpdate}
       />
     );
   }
@@ -2806,18 +2810,26 @@ function ArticleRequestPreview({
 
 /** Détails aérogommage avec onglets pour basculer d'un objet à l'autre. */
 function AerogommageDetails({
-  items,
-  photosByItem,
-  options,
-  customerCity,
+  request,
+  canUpdate,
 }: {
-  items: NonNullable<RequestDoc["aerogommage"]>;
-  photosByItem: string[][];
-  options?: RequestDoc["aerogommageOptions"];
-  customerCity?: string;
+  request: RequestDoc;
+  canUpdate: boolean;
 }) {
+  const items = request.aerogommage ?? [];
+  const photosByItem = request.aerogommagePhotos ?? [];
+  const options = request.aerogommageOptions;
+  const customerCity = request.customer.city;
   const [sel, setSel] = useState(0);
   const [lb, setLb] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const update = useMutation(api.requests.updateAerogommageDetails);
+  const upload = useUpload();
+  const { user } = useUser();
+  const persona = usePersona();
+  const actorName =
+    persona ?? user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? undefined;
+
   if (items.length === 0) return null;
   const idx = Math.min(sel, items.length - 1);
   const a = items[idx];
@@ -2828,6 +2840,45 @@ function AerogommageDetails({
   const deliveryAtHome = options?.deliveryAtHome ?? legacyDelivery;
   const pickupCity = options?.pickupAddress?.city ?? customerCity;
   const deliveryCity = options?.deliveryAddress?.city ?? customerCity;
+
+  async function patchItems(nextItems: NonNullable<RequestDoc["aerogommage"]>) {
+    await update({
+      id: request._id,
+      actorName,
+      comment: request.comment?.trim() || undefined,
+      aerogommageOptions: options,
+      items: nextItems,
+    });
+  }
+
+  async function addItemPhotos(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const ids: Id<"_storage">[] = [];
+      for (const file of Array.from(files)) ids.push(await upload(file));
+      const nextItems = items.map((item, itemIndex) =>
+        itemIndex === idx
+          ? { ...item, photos: [...(item.photos ?? []), ...ids] }
+          : item,
+      );
+      await patchItems(nextItems);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeItemPhoto(photoIndex: number) {
+    const nextItems = items.map((item, itemIndex) =>
+      itemIndex === idx
+        ? {
+            ...item,
+            photos: (item.photos ?? []).filter((_, i) => i !== photoIndex),
+          }
+        : item,
+    );
+    await patchItems(nextItems);
+  }
 
   return (
     <div className="space-y-5">
@@ -2890,9 +2941,48 @@ function AerogommageDetails({
         {a.comment && <Row label="Commentaire" value={a.comment} />}
       </div>
 
-      {photos.length > 0 && (
-        <div className="mt-3">
-          <PhotoGrid urls={photos} onOpen={setLb} />
+      {(photos.length > 0 || canUpdate) && (
+        <div className="mt-3 space-y-3">
+          {photos.length > 0 && (
+            <PhotoGrid
+              urls={photos}
+              onOpen={setLb}
+              onRemove={canUpdate ? removeItemPhoto : undefined}
+            />
+          )}
+          {canUpdate && (
+            <label
+              className={cn(
+                "flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-4 text-sm font-medium transition-colors",
+                uploading
+                  ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-500 opacity-70"
+                  : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/60 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
+              )}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Envoi des images…
+                </>
+              ) : (
+                <>
+                  <ImagePlus className="h-4 w-4" />
+                  Ajouter des photos à ce meuble
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  addItemPhotos(e.target.files);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+          )}
         </div>
       )}
 

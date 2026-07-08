@@ -3,11 +3,13 @@ import { ReactNode } from "react";
 export function KanbanColumn({
   title,
   count,
+  total,
   accent,
   children,
 }: {
   title: string;
   count: number;
+  total?: string;
   accent?: string;
   children: ReactNode;
 }) {
@@ -22,6 +24,11 @@ export function KanbanColumn({
             />
           )}
           <h3 className="text-sm font-semibold text-zinc-300">{title}</h3>
+          {total && (
+            <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+              {total}
+            </span>
+          )}
           <span className="rounded-full bg-[var(--crm-surface-3)] px-2 py-0.5 text-xs text-zinc-400">
             {count}
           </span>
