@@ -546,8 +546,10 @@ function DemandeTab({
         </section>
       )}
 
-      {request.type === "aerogommage" && (
-        <AerogommageProgressPhotos request={request} />
+      {request.type === "aerogommage" &&
+        ((request.beforePhotoUrls?.length ?? 0) > 0 ||
+          (request.afterPhotoUrls?.length ?? 0) > 0) && (
+        <AerogommageProgressPhotos request={request} canUpdate={false} />
       )}
 
       <p className="text-xs text-zinc-600">
@@ -919,7 +921,13 @@ function AerogommageEditForm({
   );
 }
 
-function AerogommageProgressPhotos({ request }: { request: RequestDoc }) {
+function AerogommageProgressPhotos({
+  request,
+  canUpdate = true,
+}: {
+  request: RequestDoc;
+  canUpdate?: boolean;
+}) {
   const patchManagement = useMutation(api.requests.patchManagement);
   const upload = useUpload();
   const [beforeOpen, setBeforeOpen] = useState<number | null>(null);
@@ -968,8 +976,9 @@ function AerogommageProgressPhotos({ request }: { request: RequestDoc }) {
         urls={request.beforePhotoUrls ?? []}
         uploading={uploadingKind === "before"}
         onAdd={(files) => addPhotos("before", files)}
-        onRemove={(index) => removePhoto("before", index)}
+        onRemove={canUpdate ? (index) => removePhoto("before", index) : undefined}
         onOpen={setBeforeOpen}
+        canUpdate={canUpdate}
       />
 
       <ManagedRequestPhotoBlock
@@ -977,8 +986,9 @@ function AerogommageProgressPhotos({ request }: { request: RequestDoc }) {
         urls={request.afterPhotoUrls ?? []}
         uploading={uploadingKind === "after"}
         onAdd={(files) => addPhotos("after", files)}
-        onRemove={(index) => removePhoto("after", index)}
+        onRemove={canUpdate ? (index) => removePhoto("after", index) : undefined}
         onOpen={setAfterOpen}
+        canUpdate={canUpdate}
       />
 
       {beforeOpen !== null && (
@@ -1007,14 +1017,18 @@ function ManagedRequestPhotoBlock({
   onAdd,
   onRemove,
   onOpen,
+  canUpdate = true,
 }: {
   title: string;
   urls: string[];
   uploading: boolean;
   onAdd: (files: FileList | null) => void;
-  onRemove: (index: number) => void;
+  onRemove?: (index: number) => void;
   onOpen: (index: number) => void;
+  canUpdate?: boolean;
 }) {
+  if (urls.length === 0 && !canUpdate) return null;
+
   return (
     <div>
       <SectionTitle>{title}</SectionTitle>
@@ -1026,6 +1040,7 @@ function ManagedRequestPhotoBlock({
           className="mb-3"
         />
       )}
+      {canUpdate && (
       <label
         className={cn(
           "flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-4 text-sm font-medium transition-colors",
@@ -1057,6 +1072,7 @@ function ManagedRequestPhotoBlock({
           }}
         />
       </label>
+      )}
     </div>
   );
 }
@@ -2821,8 +2837,10 @@ function AerogommageDetails({
   const options = request.aerogommageOptions;
   const customerCity = request.customer.city;
   const [sel, setSel] = useState(0);
-  const [lb, setLb] = useState<number | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [lb, setLb] = useState<{ images: string[]; index: number } | null>(null);
+  const [uploading, setUploading] = useState<
+    "photos" | "beforePhotos" | "afterPhotos" | null
+  >(null);
   const update = useMutation(api.requests.updateAerogommageDetails);
   const upload = useUpload();
   const { user } = useUser();
@@ -2834,6 +2852,8 @@ function AerogommageDetails({
   const idx = Math.min(sel, items.length - 1);
   const a = items[idx];
   const photos = photosByItem[idx] ?? [];
+  const beforePhotos = request.aerogommageBeforePhotos?.[idx] ?? [];
+  const afterPhotos = request.aerogommageAfterPhotos?.[idx] ?? [];
   const legacyPickup = items.some((item) => item.retrieval);
   const legacyDelivery = items.some((item) => item.delivery);
   const pickupAtHome = options?.pickupAtHome ?? legacyPickup;
@@ -2851,29 +2871,35 @@ function AerogommageDetails({
     });
   }
 
-  async function addItemPhotos(files: FileList | null) {
+  async function addItemPhotos(
+    field: "photos" | "beforePhotos" | "afterPhotos",
+    files: FileList | null,
+  ) {
     if (!files || files.length === 0) return;
-    setUploading(true);
+    setUploading(field);
     try {
       const ids: Id<"_storage">[] = [];
       for (const file of Array.from(files)) ids.push(await upload(file));
       const nextItems = items.map((item, itemIndex) =>
         itemIndex === idx
-          ? { ...item, photos: [...(item.photos ?? []), ...ids] }
+          ? { ...item, [field]: [...(item[field] ?? []), ...ids] }
           : item,
       );
       await patchItems(nextItems);
     } finally {
-      setUploading(false);
+      setUploading(null);
     }
   }
 
-  async function removeItemPhoto(photoIndex: number) {
+  async function removeItemPhoto(
+    field: "photos" | "beforePhotos" | "afterPhotos",
+    photoIndex: number,
+  ) {
     const nextItems = items.map((item, itemIndex) =>
       itemIndex === idx
         ? {
             ...item,
-            photos: (item.photos ?? []).filter((_, i) => i !== photoIndex),
+            [field]: (item[field] ?? []).filter((_, i) => i !== photoIndex),
           }
         : item,
     );
@@ -2941,53 +2967,57 @@ function AerogommageDetails({
         {a.comment && <Row label="Commentaire" value={a.comment} />}
       </div>
 
-      {(photos.length > 0 || canUpdate) && (
+      {(photos.length > 0 ||
+        beforePhotos.length > 0 ||
+        afterPhotos.length > 0 ||
+        canUpdate) && (
         <div className="mt-3 space-y-3">
-          {photos.length > 0 && (
-            <PhotoGrid
-              urls={photos}
-              onOpen={setLb}
-              onRemove={canUpdate ? removeItemPhoto : undefined}
-            />
-          )}
-          {canUpdate && (
-            <label
-              className={cn(
-                "flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-4 text-sm font-medium transition-colors",
-                uploading
-                  ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-500 opacity-70"
-                  : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/60 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
-              )}
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Envoi des images…
-                </>
-              ) : (
-                <>
-                  <ImagePlus className="h-4 w-4" />
-                  Ajouter des photos à ce meuble
-                </>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                disabled={uploading}
-                onChange={(e) => {
-                  addItemPhotos(e.target.files);
-                  e.currentTarget.value = "";
-                }}
-              />
-            </label>
-          )}
+          <ManagedRequestPhotoBlock
+            title="Photos client du meuble"
+            urls={photos}
+            uploading={uploading === "photos"}
+            onAdd={(files) => addItemPhotos("photos", files)}
+            onRemove={
+              canUpdate ? (photoIndex) => removeItemPhoto("photos", photoIndex) : undefined
+            }
+            onOpen={(index) => setLb({ images: photos, index })}
+            canUpdate={canUpdate}
+          />
+          <ManagedRequestPhotoBlock
+            title="Photos avant du meuble"
+            urls={beforePhotos}
+            uploading={uploading === "beforePhotos"}
+            onAdd={(files) => addItemPhotos("beforePhotos", files)}
+            onRemove={
+              canUpdate
+                ? (photoIndex) => removeItemPhoto("beforePhotos", photoIndex)
+                : undefined
+            }
+            onOpen={(index) => setLb({ images: beforePhotos, index })}
+            canUpdate={canUpdate}
+          />
+          <ManagedRequestPhotoBlock
+            title="Photos après du meuble"
+            urls={afterPhotos}
+            uploading={uploading === "afterPhotos"}
+            onAdd={(files) => addItemPhotos("afterPhotos", files)}
+            onRemove={
+              canUpdate
+                ? (photoIndex) => removeItemPhoto("afterPhotos", photoIndex)
+                : undefined
+            }
+            onOpen={(index) => setLb({ images: afterPhotos, index })}
+            canUpdate={canUpdate}
+          />
         </div>
       )}
 
       {lb !== null && (
-        <Lightbox images={photos} startIndex={lb} onClose={() => setLb(null)} />
+        <Lightbox
+          images={lb.images}
+          startIndex={lb.index}
+          onClose={() => setLb(null)}
+        />
       )}
       </section>
     </div>
