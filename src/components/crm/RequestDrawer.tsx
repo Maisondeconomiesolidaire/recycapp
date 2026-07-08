@@ -1073,8 +1073,12 @@ function PhotoGrid({
   onRemove?: (i: number) => void;
   className?: string;
 }) {
+  // Couleurs en style inline : garantit un texte foncé sur fond blanc quel que
+  // soit le thème (le préfixe `!` de Tailwind v3 n'est plus honoré en v4 et
+  // laissait le texte hériter d'une couleur claire → blanc sur blanc).
   const imageActionClass =
-    "inline-flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg border border-zinc-200 !bg-white px-2.5 py-1.5 text-xs font-semibold !text-zinc-950 shadow-sm transition hover:!bg-zinc-50 hover:!text-zinc-950";
+    "inline-flex w-full max-w-[9rem] items-center justify-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-semibold shadow-sm transition";
+  const imageActionStyle = { backgroundColor: "#ffffff", color: "#09090b" } as const;
 
   return (
     <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-4", className)}>
@@ -1095,6 +1099,7 @@ function PhotoGrid({
               type="button"
               onClick={() => onOpen(i)}
               className={imageActionClass}
+              style={imageActionStyle}
             >
               <Eye className="h-3.5 w-3.5" /> Voir l'image
             </button>
@@ -1102,6 +1107,7 @@ function PhotoGrid({
               type="button"
               onClick={() => downloadImage(url)}
               className={imageActionClass}
+              style={imageActionStyle}
             >
               <Download className="h-3.5 w-3.5" /> Télécharger l'image
             </button>
