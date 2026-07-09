@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
 import { SignIn, SignUp } from "@clerk/clerk-react";
 
-type AuthMode = "choice" | "sign-in" | "sign-up";
+/**
+ * Panneau d'authentification local et aux couleurs de l'app (logo + brand).
+ *
+ * On monte `<SignIn>` / `<SignUp>` en `routing="virtual"` (Clerk gère ses étapes
+ * en interne, sans toucher à l'URL) et on bascule entre les deux via un simple
+ * hash `#sign-in` / `#sign-up`. Comme le lien de bascule pointe vers un hash où
+ * l'autre composant EST monté, Clerk ne retombe jamais sur son portail hébergé
+ * (page anglaise aux couleurs par défaut).
+ */
+
+const BRAND = "#ff7700";
+const LOGO = "/recyclerie-logo.png";
+
 const CLERK_APPEARANCE = {
   variables: {
-    colorPrimary: "#ff7700",
+    colorPrimary: BRAND,
     colorText: "#18181b",
     colorTextSecondary: "#71717a",
     colorBackground: "#ffffff",
@@ -13,36 +25,32 @@ const CLERK_APPEARANCE = {
     borderRadius: "14px",
   },
   elements: {
-    card: "shadow-[0_24px_70px_rgba(24,24,27,0.12)] border border-orange-100",
+    rootBox: "w-full",
+    cardBox: "w-full shadow-none",
+    card: "shadow-none border-0 bg-transparent px-0 py-2",
     headerTitle: "text-zinc-950",
     headerSubtitle: "text-zinc-500",
-    formButtonPrimary:
-      "bg-orange-500 hover:bg-orange-600 text-white shadow-[0_10px_26px_rgba(255,119,0,0.28)]",
-    footerActionLink: "text-orange-600 hover:text-orange-700",
-    identityPreviewEditButton: "text-orange-600 hover:text-orange-700",
+    footerActionLink: "text-orange-600 hover:text-orange-700 font-semibold",
     formFieldInput: "focus:border-orange-500 focus:ring-orange-500/25",
   },
-};
+} as const;
 
-/**
- * Choix d'authentification puis formulaire Clerk local.
- *
- * On garde `<SignIn>` et `<SignUp>` locaux pour éviter le portail hébergé Clerk,
- * mais on n'affiche Clerk qu'après le choix explicite de l'utilisateur.
- */
+type AuthMode = "choice" | "sign-in" | "sign-up";
+
+function readMode(): AuthMode {
+  const hash = window.location.hash;
+  if (hash === "#sign-up" || hash.startsWith("#/sign-up")) return "sign-up";
+  if (hash === "#sign-in" || hash.startsWith("#/sign-in")) return "sign-in";
+  return "choice";
+}
+
 export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
   const targetUrl = redirectUrl ?? `${window.location.pathname}${window.location.search}`;
   const signInUrl = `${window.location.pathname}${window.location.search}#sign-in`;
   const signUpUrl = `${window.location.pathname}${window.location.search}#sign-up`;
-  const [mode, setMode] = useState<AuthMode>(() => {
-    if (window.location.hash === "#sign-up" || window.location.hash.startsWith("#/sign-up")) return "sign-up";
-    if (window.location.hash === "#sign-in" || window.location.hash.startsWith("#/sign-in")) return "sign-in";
-    return "choice";
-  });
+  const [mode, setMode] = useState<AuthMode>(readMode);
 
   useEffect(() => {
-    // Bascule uniquement sur nos liens explicites. Les anciens #/sign-* restent
-    // supportés pour les onglets déjà ouverts avant déploiement.
     const sync = () => {
       const hash = window.location.hash;
       if (hash === "#sign-up" || hash.startsWith("#/sign-up")) setMode("sign-up");
@@ -61,43 +69,44 @@ export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
     );
   }
 
-  if (mode === "choice") {
-    return (
-      <div className="grid gap-3">
-        <button
-          type="button"
-          onClick={() => choose("sign-in")}
-          className="rounded-2xl bg-zinc-950 px-5 py-4 text-base font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-800"
-        >
-          J'ai déjà un compte, me connecter
-        </button>
-        <button
-          type="button"
-          onClick={() => choose("sign-up")}
-          className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-base font-bold text-zinc-950 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50"
-        >
-          Je m'inscris
-        </button>
-      </div>
-    );
-  }
-
-  return mode === "sign-up" ? (
-    <SignUp
-      routing="virtual"
-      fallbackRedirectUrl={targetUrl}
-      forceRedirectUrl={targetUrl}
-      signInUrl={signInUrl}
-      appearance={CLERK_APPEARANCE}
-    />
-  ) : (
-    <SignIn
-      routing="virtual"
-      fallbackRedirectUrl={targetUrl}
-      forceRedirectUrl={targetUrl}
-      signUpUrl={signUpUrl}
-      appearance={CLERK_APPEARANCE}
-      withSignUp
-    />
+  return (
+    <div className="flex w-full flex-col items-center">
+      <img src={LOGO} alt="" className="mb-5 h-14 w-auto object-contain" />
+      {mode === "choice" ? (
+        <div className="grid w-full gap-3">
+          <button
+            type="button"
+            onClick={() => choose("sign-in")}
+            className="rounded-2xl px-5 py-4 text-base font-bold text-white shadow-sm transition hover:-translate-y-0.5"
+            style={{ backgroundColor: BRAND }}
+          >
+            J'ai déjà un compte, me connecter
+          </button>
+          <button
+            type="button"
+            onClick={() => choose("sign-up")}
+            className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-base font-bold text-zinc-950 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50"
+          >
+            Je m'inscris
+          </button>
+        </div>
+      ) : mode === "sign-up" ? (
+        <SignUp
+          routing="virtual"
+          fallbackRedirectUrl={targetUrl}
+          forceRedirectUrl={targetUrl}
+          signInUrl={signInUrl}
+          appearance={CLERK_APPEARANCE}
+        />
+      ) : (
+        <SignIn
+          routing="virtual"
+          fallbackRedirectUrl={targetUrl}
+          forceRedirectUrl={targetUrl}
+          signUpUrl={signUpUrl}
+          appearance={CLERK_APPEARANCE}
+        />
+      )}
+    </div>
   );
 }
