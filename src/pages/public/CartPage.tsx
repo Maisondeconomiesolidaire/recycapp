@@ -22,8 +22,6 @@ import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import { CustomerSummary } from "../../components/public/CustomerSummary";
-import { SignedIn, SignedOut } from "@clerk/clerk-react";
-import { AuthPanel } from "../../components/AuthPanel";
 
 const BRAND = "#f1104f";
 
@@ -212,7 +210,6 @@ export function CartPage() {
 
         {/* ── Reservation form ── */}
         <div className="rounded-[28px] bg-white p-7 shadow-[0_24px_70px_rgba(24,24,27,0.1)]">
-          {/* Step indicator */}
           <div className="mb-6 flex items-center gap-3">
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
@@ -226,21 +223,11 @@ export function CartPage() {
             </div>
           </div>
 
-          <SignedOut>
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 text-center">
-              <p className="text-base font-bold text-zinc-900">Créez un compte pour réserver</p>
-              <p className="mx-auto mt-1.5 max-w-sm text-sm text-zinc-500">
-                Un compte est nécessaire pour réserver : il vous permet de suivre l'avancement de
-                votre demande et d'échanger avec notre équipe.
-              </p>
-              <div className="mx-auto mt-4 max-w-sm text-left">
-                <AuthPanel redirectUrl="/boutique/panier" />
-              </div>
-            </div>
-          </SignedOut>
-
-          <SignedIn>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+              Laissez vos coordonnées pour finaliser la réservation. Si cette adresse email
+              correspond déjà à un client, nous mettrons simplement sa fiche à jour.
+            </div>
             {!customerProfileLoaded ? (
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-400">
                 Chargement de vos coordonnées…
@@ -328,7 +315,6 @@ export function CartPage() {
               </button>
             </div>
           </form>
-          </SignedIn>
         </div>
       </div>
     </div>

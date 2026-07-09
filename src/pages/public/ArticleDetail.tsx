@@ -373,8 +373,8 @@ export function ArticleDetail() {
                     Réserver cet article
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-zinc-500">
-                    Ajoutez l’article à votre panier puis finalisez votre réservation. Un compte
-                    est nécessaire pour réserver.
+                    Ajoutez l’article à votre panier puis finalisez votre réservation en laissant
+                    simplement vos coordonnées.
                   </p>
                   <button
                     type="button"
