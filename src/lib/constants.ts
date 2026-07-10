@@ -155,6 +155,7 @@ export const AERO_OBJECT_TYPES = [
   "Meuble bas",
   "Banc",
   "Bibliothèque",
+  "Volets",
   "Autre (veuillez préciser)",
 ];
 
