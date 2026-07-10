@@ -12,6 +12,7 @@ import {
   isVeloComplete,
   isLivraisonComplete,
   normalizeCustomer,
+  normalizeEmail,
   requireUser,
   titleCaseName,
 } from "./lib";
@@ -145,8 +146,9 @@ async function createNewRequestNotification(
     });
   }
 
-  // Email à l'équipe recyclerie (accueil / e.carette / s.tiennot) — décalé pour
-  // rester sous la limite Resend (2 req/s) avec l'email client.
+  // Email à l'équipe recyclerie — décalé pour rester sous la limite Resend
+  // (2 req/s) avec l'email client. E. Carette est ajouté uniquement pour
+  // les demandes d'aérogommage par l'action d'envoi.
   if (request) {
     await ctx.scheduler.runAfter(1200, internal.emails.sendNewRequestToStaff, {
       type: request.type,
@@ -161,6 +163,88 @@ async function generateReference(ctx: MutationCtx): Promise<string> {
   const all = await ctx.db.query("requests").collect();
   const n = all.length + 1;
   return n.toString().padStart(6, "0");
+}
+
+async function upsertRequestCustomer(
+  ctx: MutationCtx,
+  customerInput: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    address?: string;
+    postalCode?: string;
+    city?: string;
+  },
+  sourcePath: string,
+) {
+  const customer = normalizeCustomer(customerInput);
+  const email = normalizeEmail(customer.email);
+  const now = Date.now();
+
+  const [existingUser, existingCrmCustomer, identity] = await Promise.all([
+    email
+      ? ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .first()
+      : null,
+    email
+      ? ctx.db
+          .query("crmCustomers")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .first()
+      : null,
+    ctx.auth.getUserIdentity(),
+  ]);
+
+  if (existingUser) {
+    await ctx.db.patch(existingUser._id, {
+      firstName: titleCaseName(customer.firstName),
+      lastName: titleCaseName(customer.lastName),
+      phone: customer.phone,
+      address: customer.address,
+      postalCode: customer.postalCode,
+      city: customer.city,
+      updatedAt: now,
+    });
+  }
+
+  if (existingCrmCustomer) {
+    await ctx.db.patch(existingCrmCustomer._id, {
+      firstName: titleCaseName(customer.firstName),
+      lastName: titleCaseName(customer.lastName),
+      phone: customer.phone,
+      address: customer.address,
+      postalCode: customer.postalCode,
+      city: customer.city,
+      updatedAt: now,
+    });
+  } else if (email) {
+    await ctx.db.insert("crmCustomers", {
+      source: "public:request",
+      sourceId: `${sourcePath}:${email}`,
+      firstName: titleCaseName(customer.firstName),
+      lastName: titleCaseName(customer.lastName),
+      email,
+      phone: customer.phone,
+      address: customer.address,
+      postalCode: customer.postalCode,
+      city: customer.city,
+      raw: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const signedInEmail = normalizeEmail(identity?.email);
+  const signedInUserId =
+    signedInEmail && signedInEmail === email ? identity?.subject : undefined;
+
+  return {
+    customer,
+    userId: existingUser?.clerkId ?? signedInUserId,
+  };
 }
 
 function requestArticleIds(request: {
@@ -229,7 +313,12 @@ export const submitAerogommage = mutation({
     options: v.optional(aerogommageOptionsArg),
   },
   handler: async (ctx, { customer, comment, photos, items, options }) => {
-    customer = normalizeCustomer(customer);
+    const resolvedCustomer = await upsertRequestCustomer(
+      ctx,
+      customer,
+      "/aerogommage",
+    );
+    customer = resolvedCustomer.customer;
     const now = Date.now();
     const reference = await generateReference(ctx);
     const requestId = await ctx.db.insert("requests", {
@@ -242,7 +331,7 @@ export const submitAerogommage = mutation({
       completedSteps: 0,
       site: "60", // Recyclerie 60 par défaut pour l'aérogommage.
       customer,
-      userId: (await ctx.auth.getUserIdentity())?.subject,
+      userId: resolvedCustomer.userId,
       comment,
       photos,
       aerogommage: items,
@@ -298,7 +387,12 @@ export const submitCollecte = mutation({
     }),
   },
   handler: async (ctx, { customer, comment, photos, details }) => {
-    customer = normalizeCustomer(customer);
+    const resolvedCustomer = await upsertRequestCustomer(
+      ctx,
+      customer,
+      "/collecte",
+    );
+    customer = resolvedCustomer.customer;
     const now = Date.now();
     const reference = await generateReference(ctx);
     const requestId = await ctx.db.insert("requests", {
@@ -312,7 +406,7 @@ export const submitCollecte = mutation({
       processSteps: resolveProcess("collecte", "indefini"),
       completedSteps: 0,
       customer,
-      userId: (await ctx.auth.getUserIdentity())?.subject,
+      userId: resolvedCustomer.userId,
       comment,
       photos,
       collecte: details,
@@ -343,7 +437,12 @@ export const submitVelo = mutation({
     }),
   },
   handler: async (ctx, { customer, comment, photos, details }) => {
-    customer = normalizeCustomer(customer);
+    const resolvedCustomer = await upsertRequestCustomer(
+      ctx,
+      customer,
+      "/velo",
+    );
+    customer = resolvedCustomer.customer;
     const now = Date.now();
     const reference = await generateReference(ctx);
     const requestId = await ctx.db.insert("requests", {
@@ -355,7 +454,7 @@ export const submitVelo = mutation({
       processSteps: resolveProcess("velo"),
       completedSteps: 0,
       customer,
-      userId: (await ctx.auth.getUserIdentity())?.subject,
+      userId: resolvedCustomer.userId,
       comment,
       photos,
       velo: details,
@@ -380,7 +479,12 @@ export const submitLivraison = mutation({
     referencePhoto: v.optional(v.id("_storage")),
   },
   handler: async (ctx, { customer, comment, articlePhoto, referencePhoto }) => {
-    customer = normalizeCustomer(customer);
+    const resolvedCustomer = await upsertRequestCustomer(
+      ctx,
+      customer,
+      "/livraison",
+    );
+    customer = resolvedCustomer.customer;
     const now = Date.now();
     const reference = await generateReference(ctx);
     const details = {
@@ -405,7 +509,7 @@ export const submitLivraison = mutation({
       processSteps: resolveProcess("livraison"),
       completedSteps: 0,
       customer,
-      userId: (await ctx.auth.getUserIdentity())?.subject,
+      userId: resolvedCustomer.userId,
       comment,
       photos,
       livraison: details,
@@ -429,7 +533,12 @@ export const submitArticleReservation = mutation({
     articleId: v.id("articles"),
   },
   handler: async (ctx, { customer, comment, articleId }) => {
-    customer = normalizeCustomer(customer);
+    const resolvedCustomer = await upsertRequestCustomer(
+      ctx,
+      customer,
+      "/boutique",
+    );
+    customer = resolvedCustomer.customer;
     const article = await ctx.db.get(articleId);
     if (!article) throw new Error("Article introuvable.");
     if (article.status !== "disponible") {
@@ -448,7 +557,7 @@ export const submitArticleReservation = mutation({
       processSteps: resolveProcess("article"),
       completedSteps: 0,
       customer,
-      userId: (await ctx.auth.getUserIdentity())?.subject,
+      userId: resolvedCustomer.userId,
       comment,
       photos: [],
       article: { articleId, articleTitle: article.title },
@@ -479,7 +588,12 @@ export const submitArticleCartReservation = mutation({
     articleIds: v.array(v.id("articles")),
   },
   handler: async (ctx, { customer, comment, articleIds }) => {
-    customer = normalizeCustomer(customer);
+    const resolvedCustomer = await upsertRequestCustomer(
+      ctx,
+      customer,
+      "/boutique/panier",
+    );
+    customer = resolvedCustomer.customer;
     const uniqueArticleIds = Array.from(new Set(articleIds));
     if (uniqueArticleIds.length === 0) {
       throw new Error("Ajoutez au moins un article au panier.");
@@ -509,7 +623,7 @@ export const submitArticleCartReservation = mutation({
       processSteps: resolveProcess("article"),
       completedSteps: 0,
       customer,
-      userId: (await ctx.auth.getUserIdentity())?.subject,
+      userId: resolvedCustomer.userId,
       comment,
       photos: [],
       article: articles[0],

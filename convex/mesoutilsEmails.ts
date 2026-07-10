@@ -17,7 +17,7 @@ export const VEHICLE_REQUEST_MANAGER_EMAILS = [
 
 /** URL publique de l'app Mes Outils, pour les liens et le logo des emails. */
 function appUrl() {
-  return (process.env.MESOUTILS_APP_URL ?? "https://mesoutils.eco-solidaire.fr").replace(/\/$/, "");
+  return (process.env.MESOUTILS_APP_URL ?? "https://mesoutils.groupemes.fr").replace(/\/$/, "");
 }
 
 /** URL absolue du logo Mes Outils (version détourée pour email, servie par l'app). */
@@ -404,7 +404,6 @@ export const sendVehicleRequestToManagers = internalAction({
 /** Adresses des responsables notifiés des réservations de salle. */
 export const ROOM_RESERVATION_MANAGER_EMAILS = [
   "a.still@eco-solidaire.fr",
-  "y.prata@eco-solidaire.fr",
 ];
 
 /**
@@ -413,7 +412,6 @@ export const ROOM_RESERVATION_MANAGER_EMAILS = [
  */
 export const RECYCLERIE_VEHICLE_NOTICE_EMAILS = [
   "a.dargent@eco-solidaire.fr",
-  "e.carette@eco-solidaire.fr",
   "s.tiennot@eco-solidaire.fr",
 ];
 
@@ -470,7 +468,7 @@ export const sendRecyclerieVehicleNotice = internalAction({
   },
 });
 
-/** Notifie les responsables (a.still / y.prata) d'une réservation de salle. */
+/** Notifie les responsables d'une réservation de salle. */
 export const sendRoomReservationToManagers = internalAction({
   args: {
     requesterName: v.string(),

@@ -33,6 +33,10 @@ export async function vehicleBusyReason(
   opts: {
     excludeRequestId?: Id<"requests">;
     excludeTourneeId?: Id<"tournees">;
+    // Les réservations Mes Outils sont horodatées (créneau à l'heure près). Les
+    // flux de réservation véhicule vérifient les chevauchements précisément et
+    // passent cette option pour ne pas bloquer toute la journée.
+    ignoreReservations?: boolean;
   } = {},
 ): Promise<string | null> {
   const requests = await ctx.db
@@ -62,14 +66,16 @@ export async function vehicleBusyReason(
     }
   }
 
-  const reservations = await ctx.db
-    .query("vehicleReservations")
-    .withIndex("by_vehicleId", (q) => q.eq("vehicleId", vehicleId))
-    .collect();
-  for (const reservation of reservations) {
-    if (reservation.status !== "approved") continue;
-    if (overlapsUtcDay(reservation.start, reservation.end, date)) {
-      return "Réservé via Mes Outils";
+  if (!opts.ignoreReservations) {
+    const reservations = await ctx.db
+      .query("vehicleReservations")
+      .withIndex("by_vehicleId", (q) => q.eq("vehicleId", vehicleId))
+      .collect();
+    for (const reservation of reservations) {
+      if (reservation.status !== "approved") continue;
+      if (overlapsUtcDay(reservation.start, reservation.end, date)) {
+        return "Réservé via Mes Outils";
+      }
     }
   }
 
@@ -157,6 +163,60 @@ export const availableOn = query({
       });
     }
     return result;
+  },
+});
+
+export const listRemarks = query({
+  args: { vehicleId: v.id("vehicles") },
+  handler: async (ctx, { vehicleId }) => {
+    await requireCrmPermission(ctx, "flotte", "read");
+    const vehicle = await ctx.db.get(vehicleId);
+    if (!vehicle || vehicle.recycappEnabled !== true) {
+      throw new Error("Véhicule introuvable.");
+    }
+
+    const raw = await ctx.db
+      .query("vehicleReservations")
+      .withIndex("by_vehicleId", (q) => q.eq("vehicleId", vehicleId))
+      .order("desc")
+      .collect();
+    const reservations = raw.filter((reservation) => reservation.feedbackSubmittedAt);
+    const lastMileage =
+      raw.reduce<number | null>((highest, reservation) => {
+        if (
+          typeof reservation.feedbackMileage !== "number" ||
+          !Number.isFinite(reservation.feedbackMileage)
+        ) {
+          return highest;
+        }
+        if (highest === null) {
+          return reservation.feedbackMileage;
+        }
+        return Math.max(highest, reservation.feedbackMileage);
+      }, typeof vehicle.odometerKm === "number" ? vehicle.odometerKm : null) ?? null;
+
+    return {
+      vehicleId: vehicle._id,
+      vehicleName: vehicle.name,
+      remarks: reservations
+        .sort((a, b) => (b.feedbackSubmittedAt ?? 0) - (a.feedbackSubmittedAt ?? 0))
+        .map((reservation) => ({
+          _id: reservation._id,
+          userName: reservation.userName,
+          purpose: reservation.purpose,
+          usageType: reservation.usageType ?? null,
+          start: reservation.start,
+          end: reservation.end,
+          submittedAt: reservation.feedbackSubmittedAt ?? 0,
+          mileage: reservation.feedbackMileage ?? null,
+          lastRecordedMileage: lastMileage,
+          fuelRestored: reservation.feedbackFuelRestored ?? null,
+          vehicleEmpty: reservation.feedbackVehicleEmpty ?? null,
+          vehicleClean: reservation.feedbackVehicleClean ?? null,
+          issues: reservation.feedbackIssues ?? null,
+          notes: reservation.feedbackNotes ?? null,
+        })),
+    };
   },
 });
 

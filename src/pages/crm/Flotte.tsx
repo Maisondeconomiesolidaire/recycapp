@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { Truck, Plus, Pencil, Trash2, X, CarFront, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useQuery } from "convex/react";
+import { Truck, Eye, CarFront, Users, Gauge, Building2, ClipboardList, Fuel, Sparkles, CalendarRange } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
@@ -9,12 +9,11 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../../components/ui/Modal";
-import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
-import { PhotoUpload } from "../../components/ui/PhotoUpload";
-import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { SITE_LABELS, Site } from "../../lib/constants";
+import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 
 type VehicleKind = "utilitaire" | "voiture";
+type VehicleTab = "details" | "remarques";
 
 const KIND_LABELS: Record<VehicleKind, string> = {
   utilitaire: "Utilitaire",
@@ -27,28 +26,30 @@ type Vehicle = Doc<"vehicles"> & {
   photoUrl: string | null;
 };
 
+type VehicleRemark = {
+  _id: Id<"vehicleReservations">;
+  userName: string;
+  purpose: string;
+  usageType: "pro" | "personal" | null;
+  start: number;
+  end: number;
+  submittedAt: number;
+  mileage: number | null;
+  lastRecordedMileage: number | null;
+  fuelRestored: boolean | null;
+  vehicleEmpty: boolean | null;
+  vehicleClean: boolean | null;
+  issues: string | null;
+  notes: string | null;
+};
+
 export function Flotte() {
   const vehicles = useQuery(api.fleet.list) as Vehicle[] | undefined;
-  const remove = useMutation(api.fleet.remove);
-  const [editing, setEditing] = useState<Vehicle | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [deleting, setDeleting] = useState<Doc<"vehicles"> | null>(null);
-
-  function openNew() {
-    setEditing(null);
-    setFormOpen(true);
-  }
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
   return (
     <div>
-      <PageHeader
-        title="Flotte"
-        actions={
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4" /> Ajouter un véhicule
-          </Button>
-        }
-      />
+      <PageHeader title="Flotte" />
 
       <div className="p-4 sm:p-6">
         {vehicles === undefined ? (
@@ -57,12 +58,7 @@ export function Flotte() {
           <EmptyState
             icon={<Truck className="h-10 w-10" />}
             title="Aucun véhicule"
-            description="Ajoutez vos utilitaires pour pouvoir les affecter aux collectes et tournées."
-            action={
-              <Button onClick={openNew}>
-                <Plus className="h-4 w-4" /> Ajouter un véhicule
-              </Button>
-            }
+            description="Aucun véhicule activé n'est visible dans la flotte Recycapp."
           />
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -123,23 +119,13 @@ export function Flotte() {
                   {v.reason ? (
                     <p className="mt-3 text-xs text-zinc-500">{v.reason}</p>
                   ) : null}
-                  <div className="mt-4 flex gap-2">
+                  <div className="mt-4">
                     <Button
                       variant="secondary"
-                      className="flex-1"
-                      onClick={() => {
-                        setEditing(v);
-                        setFormOpen(true);
-                      }}
+                      className="w-full"
+                      onClick={() => setSelectedVehicle(v)}
                     >
-                      <Pencil className="h-4 w-4" /> Modifier
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setDeleting(v)}
-                      className="text-zinc-400 hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
+                      <Eye className="h-4 w-4" /> Voir les détails
                     </Button>
                   </div>
                 </div>
@@ -149,158 +135,244 @@ export function Flotte() {
         )}
       </div>
 
-      {formOpen && (
-        <VehicleForm
-          key={editing?._id ?? "new"}
-          vehicle={editing}
-          onClose={() => setFormOpen(false)}
+      {selectedVehicle ? (
+        <VehicleDetailsModal
+          vehicle={selectedVehicle}
+          onClose={() => setSelectedVehicle(null)}
         />
-      )}
-
-      <ConfirmDialog
-        open={deleting !== null}
-        onClose={() => setDeleting(null)}
-        onConfirm={async () => {
-          if (!deleting) return;
-          await remove({ id: deleting._id });
-          setDeleting(null);
-        }}
-        title="Supprimer ce véhicule ?"
-        description={
-          deleting
-            ? `${deleting.name} ne pourra plus être affecté aux collectes et tournées.`
-            : undefined
-        }
-        confirmLabel="Supprimer"
-      />
+      ) : null}
     </div>
   );
 }
 
-function VehicleForm({
+function VehicleDetailsModal({
   vehicle,
   onClose,
 }: {
-  vehicle: Vehicle | null;
+  vehicle: Vehicle;
   onClose: () => void;
 }) {
-  const create = useMutation(api.fleet.create);
-  const update = useMutation(api.fleet.update);
-  const [name, setName] = useState(vehicle?.name ?? "");
-  const [plate, setPlate] = useState(vehicle?.plate ?? "");
-  const [kind, setKind] = useState<VehicleKind>(vehicle?.kind ?? "utilitaire");
-  const [site, setSite] = useState<Site | "">(vehicle?.site ?? "");
-  const [active, setActive] = useState(vehicle?.active ?? true);
-  const [photoId, setPhotoId] = useState<Id<"_storage"> | null>(
-    vehicle?.photo ?? null,
+  const [tab, setTab] = useState<VehicleTab>("details");
+  const remarksData = useQuery(api.fleet.listRemarks, { vehicleId: vehicle._id }) as
+    | { remarks: VehicleRemark[] }
+    | undefined;
+  const detailRows = useMemo(
+    () => [
+      {
+        label: "Type",
+        value: KIND_LABELS[vehicle.kind as VehicleKind],
+        icon: <Truck className="h-4 w-4" />,
+      },
+      {
+        label: "Immatriculation",
+        value: vehicle.plate || "Non renseignée",
+        icon: <ClipboardList className="h-4 w-4" />,
+      },
+      {
+        label: "Site",
+        value: vehicle.site ? SITE_LABELS[vehicle.site as Site] : "Non renseigné",
+        icon: <Building2 className="h-4 w-4" />,
+      },
+      {
+        label: "Kilométrage",
+        value:
+          typeof vehicle.odometerKm === "number"
+            ? `${vehicle.odometerKm.toLocaleString("fr-FR")} km`
+            : "Non renseigné",
+        icon: <Gauge className="h-4 w-4" />,
+      },
+    ],
+    [vehicle],
   );
-  const [saving, setSaving] = useState(false);
-
-  // Aperçu de la photo existante (tant qu'elle n'a pas été remplacée/retirée).
-  const currentPhotoUrl =
-    vehicle && photoId === vehicle.photo ? vehicle.photoUrl : null;
-
-  async function save() {
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
-      if (vehicle) {
-        await update({
-          id: vehicle._id,
-          name: name.trim(),
-          plate: plate.trim() || undefined,
-          kind,
-          photo: photoId,
-          site: site || undefined,
-          active,
-        });
-      } else {
-        await create({
-          name: name.trim(),
-          plate: plate.trim() || undefined,
-          kind,
-          photo: photoId ?? undefined,
-          site: site || undefined,
-        });
-      }
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <Modal
-      dark
       open
       onClose={onClose}
-      title={vehicle ? "Modifier le véhicule" : "Nouveau véhicule"}
+      title={vehicle.name}
+      className="max-w-3xl"
     >
-      <div className="space-y-4">
-        <Field label="Nom / identifiant" required>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Renault Master" />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Immatriculation">
-            <Input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="AB-123-CD" />
-          </Field>
-          <Field label="Type">
-            <Select value={kind} onChange={(e) => setKind(e.target.value as VehicleKind)}>
-              {(Object.keys(KIND_LABELS) as VehicleKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {KIND_LABELS[k]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-        <Field label="Site de rattachement">
-          <Select value={site} onChange={(e) => setSite(e.target.value as Site | "")}>
-            <option value="">Sélectionner un site</option>
-            <option value="60">{SITE_LABELS["60"]}</option>
-            <option value="76">{SITE_LABELS["76"]}</option>
-          </Select>
-        </Field>
-        <Field label="Photo du véhicule">
-          {currentPhotoUrl ? (
-            <div className="relative w-32">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] sm:w-72">
+            {vehicle.photoUrl ? (
               <img
-                src={currentPhotoUrl}
-                alt={name}
-                className="aspect-square w-32 rounded-xl object-cover ring-1 ring-[var(--crm-border)]"
+                src={vehicle.photoUrl}
+                alt={vehicle.name}
+                className="aspect-[4/3] w-full object-cover"
               />
-              <button
-                type="button"
-                onClick={() => setPhotoId(null)}
-                className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1 text-white transition hover:bg-black/80"
+            ) : (
+              <div className="flex aspect-[4/3] items-center justify-center text-zinc-500">
+                <CarFront className="h-12 w-12" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  vehicle.active
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "bg-zinc-500/15 text-zinc-300"
+                }`}
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
+                {vehicle.active ? "Actif" : "Immobilisé"}
+              </span>
+              <span className="rounded-full bg-[var(--crm-surface-2)] px-3 py-1 text-xs font-semibold text-zinc-300">
+                {vehicle.status}
+              </span>
             </div>
-          ) : (
-            <PhotoUpload
-              value={photoId ? [photoId] : []}
-              onChange={(ids) => setPhotoId(ids[ids.length - 1] ?? null)}
-            />
-          )}
-        </Field>
-        {vehicle && (
-          <Checkbox
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-            label="Actif"
-            description="Affectable aux collectes et tournées"
+            <p className="text-sm text-zinc-400">
+              Consultation uniquement depuis Recycapp. Les modifications du véhicule
+              restent gérées dans l’outil de référence.
+            </p>
+            {vehicle.reason ? (
+              <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3 text-sm text-zinc-300">
+                {vehicle.reason}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <UnderlineTabs
+          items={[
+            { key: "details", label: "Détails" },
+            { key: "remarques", label: "Remarques" },
+          ]}
+          value={tab}
+          onChange={setTab}
+          counts={{ remarques: remarksData?.remarks.length ?? 0 }}
+        />
+
+        {tab === "details" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {detailRows.map((row) => (
+              <div
+                key={row.label}
+                className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3"
+              >
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  {row.icon}
+                  <span>{row.label}</span>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{row.value}</p>
+              </div>
+            ))}
+          </div>
+        ) : remarksData === undefined ? (
+          <FullSpinner label="Chargement des remarques…" />
+        ) : remarksData.remarks.length === 0 ? (
+          <EmptyState
+            icon={<ClipboardList className="h-10 w-10" />}
+            title="Aucune remarque"
+            description="Aucun retour de réservation n'a encore été laissé pour ce véhicule."
           />
+        ) : (
+          <div className="space-y-3">
+            {remarksData.remarks.map((remark) => (
+              <article
+                key={remark._id}
+                className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[var(--foreground)]">
+                      {remark.userName}
+                    </h3>
+                    <p className="text-sm text-zinc-400">{remark.purpose}</p>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    {new Date(remark.submittedAt).toLocaleString("fr-FR")}
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                  <InfoLine
+                    icon={<CalendarRange className="h-4 w-4" />}
+                    label="Créneau"
+                    value={`${formatDateTime(remark.start)} -> ${formatDateTime(remark.end)}`}
+                  />
+                  <InfoLine
+                    icon={<Gauge className="h-4 w-4" />}
+                    label="Kilométrage"
+                    value={formatMileageComparison(remark.lastRecordedMileage, remark.mileage)}
+                  />
+                  <InfoLine
+                    icon={<Fuel className="h-4 w-4" />}
+                    label="Carburant remis"
+                    value={formatBoolean(remark.fuelRestored)}
+                  />
+                  <InfoLine
+                    icon={<Sparkles className="h-4 w-4" />}
+                    label="Véhicule vidé / propre"
+                    value={`${formatBoolean(remark.vehicleEmpty)} / ${formatBoolean(remark.vehicleClean)}`}
+                  />
+                </div>
+
+                {remark.issues ? (
+                  <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                    <span className="font-medium">Problèmes signalés :</span> {remark.issues}
+                  </div>
+                ) : null}
+                {remark.notes ? (
+                  <div className="mt-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-300">
+                    <span className="font-medium text-zinc-100">Remarque :</span> {remark.notes}
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
         )}
-        <div className="flex justify-end gap-2 pt-2">
+
+        <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button onClick={save} disabled={saving}>
-            {saving ? "Enregistrement…" : vehicle ? "Enregistrer" : "Ajouter"}
+            Fermer
           </Button>
         </div>
       </div>
     </Modal>
   );
+}
+
+function InfoLine({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl bg-[var(--crm-surface-2)] px-3 py-2">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <p className="mt-1 text-sm text-[var(--foreground)]">{value}</p>
+    </div>
+  );
+}
+
+function formatBoolean(value: boolean | null) {
+  if (value === null) return "Non renseigné";
+  return value ? "Oui" : "Non";
+}
+
+function formatDateTime(value: number) {
+  return new Date(value).toLocaleString("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function formatMileageComparison(lastRecordedMileage: number | null, mileage: number | null) {
+  if (mileage === null && lastRecordedMileage === null) return "Non renseigné";
+  if (mileage === null) {
+    return `Dernier relevé: ${lastRecordedMileage?.toLocaleString("fr-FR")} km`;
+  }
+  if (lastRecordedMileage === null) {
+    return `${mileage.toLocaleString("fr-FR")} km`;
+  }
+  return `${mileage.toLocaleString("fr-FR")} km (dernier relevé: ${lastRecordedMileage.toLocaleString("fr-FR")} km)`;
 }
