@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   Bell,
@@ -41,15 +41,6 @@ export function Notifications() {
     void markAllRead();
   }, [unreadCount, markAllRead]);
 
-  const stats = useMemo(() => {
-    if (!notifications) return null;
-    return {
-      total: notifications.length,
-      boutique: notifications.filter((item) => item.requestType === "article").length,
-      paid: notifications.filter((item) => item.paymentCaptured).length,
-    };
-  }, [notifications]);
-
   return (
     <div>
       <PageHeader title="Notifications" />
@@ -65,14 +56,6 @@ export function Notifications() {
           />
         ) : (
           <div className="space-y-4">
-            {stats && (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <StatCard label="Notifications" value={String(stats.total)} />
-                <StatCard label="Demandes boutique" value={String(stats.boutique)} />
-                <StatCard label="Paiements carte" value={String(stats.paid)} />
-              </div>
-            )}
-
             <RequestTypeFilter value={typeFilter} onChange={setTypeFilter} />
 
             <div className="space-y-3">
@@ -195,17 +178,6 @@ function NotificationCard({
 
       <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-zinc-500 transition group-hover:translate-x-0.5 group-hover:text-zinc-300" />
     </button>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-surface)_92%,transparent)] px-4 py-4 shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p>
-    </div>
   );
 }
 
