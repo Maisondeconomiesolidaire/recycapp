@@ -7,6 +7,7 @@ import {
   useUser,
 } from "@clerk/clerk-react";
 import { AuthPanelInner } from "../AuthPanel";
+import { AppSwitcher } from "../AppSwitcher";
 import {
   Menu,
   Sun,
@@ -208,12 +209,13 @@ function Sidebar({
   const nav = visibleNav(access);
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[var(--crm-border)] bg-[var(--crm-surface)] lg:flex">
-      <div className="flex h-16 items-center justify-center border-b border-[var(--crm-border)] px-5">
+      <div className="flex h-16 items-center justify-between gap-2 border-b border-[var(--crm-border)] px-5">
         <img
           src="/recyclerie-logo.png"
           alt="Recyclerie"
           className="h-11 w-auto object-contain"
         />
+        <AppSwitcher current="recycapp" />
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
