@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAction, useQuery } from "convex/react";
-import { BrainCircuit, Inbox, Loader2, Plus, Send } from "lucide-react";
+import { BrainCircuit, Inbox, Loader2, Plus, Search, Send } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
@@ -60,6 +60,7 @@ export function Demandes() {
   const [staffFilter, setStaffFilter] = useState<string | null>(null);
   const [siteFilter, setSiteFilter] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [search, setSearch] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
 
@@ -71,14 +72,20 @@ export function Demandes() {
   const assigneeName = (r: Doc<"requests">) =>
     r.assignedTo ? teamNames.get(r.assignedTo) : undefined;
 
-  const displayedRequests = (requests ?? [])
-    .filter((r) => !staffFilter || r.assignedTo === staffFilter)
-    .filter((r) => !siteFilter || r.site === siteFilter)
-    .sort((a, b) =>
-      sortOrder === "desc"
-        ? b.createdAt - a.createdAt
-        : a.createdAt - b.createdAt,
-    );
+  const normalizedSearch = search.trim().toLocaleLowerCase("fr-FR");
+  const displayedRequests = useMemo(
+    () =>
+      (requests ?? [])
+        .filter((r) => !staffFilter || r.assignedTo === staffFilter)
+        .filter((r) => !siteFilter || r.site === siteFilter)
+        .filter((r) => matchesRequestSearch(r, normalizedSearch, assigneeName(r)))
+        .sort((a, b) =>
+          sortOrder === "desc"
+            ? b.createdAt - a.createdAt
+            : a.createdAt - b.createdAt,
+        ),
+    [requests, staffFilter, siteFilter, normalizedSearch, sortOrder, team],
+  );
 
   useEffect(() => {
     if (searchParams.get("action") !== "new") return;
@@ -131,6 +138,9 @@ export function Demandes() {
           <div className="h-4 w-px shrink-0 bg-[var(--crm-surface-3)]" />
           <SiteFilter value={siteFilter} onChange={setSiteFilter} />
           <StaffFilter value={staffFilter} onChange={setStaffFilter} team={team} />
+        </div>
+        <div className="pb-3">
+          <SearchFilter value={search} onChange={setSearch} />
         </div>
       </div>
 
@@ -699,6 +709,101 @@ function countForTab(requests: Doc<"requests">[], tab: Tab): number {
   ).length;
 }
 
+function matchesRequestSearch(
+  request: Doc<"requests">,
+  query: string,
+  assignee?: string,
+): boolean {
+  if (!query) return true;
+
+  const haystack = [
+    request.reference,
+    request.customer.firstName,
+    request.customer.lastName,
+    `${request.customer.firstName ?? ""} ${request.customer.lastName ?? ""}`.trim(),
+    `${request.customer.lastName ?? ""} ${request.customer.firstName ?? ""}`.trim(),
+    request.customer.email,
+    request.customer.phone,
+    request.customer.address,
+    request.customer.postalCode,
+    request.customer.city,
+    request.collecte?.collectAddress?.address,
+    request.collecte?.collectAddress?.postalCode,
+    request.collecte?.collectAddress?.city,
+    request.article?.articleTitle,
+    request.livraison?.articleTitle,
+    request.livraison?.deliveryAddress?.address,
+    request.livraison?.deliveryAddress?.postalCode,
+    request.livraison?.deliveryAddress?.city,
+    request.livraison?.reference,
+    request.velo?.bikeType,
+    request.velo?.service,
+    request.velo?.brand,
+    request.velo?.description,
+    assignee,
+    request.site,
+    TYPE_LABELS[request.type],
+    request.type,
+    requestSummary(request),
+    ...(request.aerogommage ?? []).flatMap((item) => [
+      item.objectType,
+      item.label,
+      item.woodType,
+      item.coating,
+      item.coatingOther,
+      item.comment,
+    ]),
+    ...(request.articles ?? []).flatMap((item) => [
+      item.articleTitle,
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("fr-FR");
+
+  return haystack.includes(query);
+}
+
+function requestSummary(r: Doc<"requests">): string {
+  switch (r.type) {
+    case "aerogommage": {
+      const items = r.aerogommage ?? [];
+      if (items.length === 0) return "Aérogommage";
+      if (items.length > 1) return `${items.length} objets`;
+      const objectType = items[0].objectType?.trim();
+      if (objectType === "Autre (veuillez préciser)") return "Autre";
+      return objectType || items[0].label?.trim() || "1 objet";
+    }
+    case "collecte": {
+      const ca = r.collecte?.collectAddress;
+      return (
+        [ca?.postalCode, ca?.city].filter(Boolean).join(" ") ||
+        "Collecte à domicile"
+      );
+    }
+    case "article":
+      if (r.articles && r.articles.length > 1) {
+        return `${r.articles.length} articles réservés`;
+      }
+      return r.article?.articleTitle ?? "Réservation article";
+    case "velo":
+      return (
+        [r.velo?.bikeType, r.velo?.service].filter(Boolean).join(" · ") ||
+        "Atelier vélo"
+      );
+    case "livraison":
+      return (
+        r.livraison?.articleTitle ||
+        [r.livraison?.deliveryAddress?.postalCode, r.livraison?.deliveryAddress?.city]
+          .filter(Boolean)
+          .join(" ") ||
+        "Livraison article"
+      );
+    default:
+      return "";
+  }
+}
+
 function TypeFilter({
   value,
   onChange,
@@ -801,5 +906,26 @@ function SortFilter({
       <option value="desc">Plus récent</option>
       <option value="asc">Plus ancien</option>
     </Select>
+  );
+}
+
+function SearchFilter({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Rechercher par nom, prénom, référence, email, objet..."
+        className="h-10 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] pl-10 pr-3 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+      />
+    </div>
   );
 }
