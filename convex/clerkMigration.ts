@@ -1,5 +1,5 @@
-import { action, internalQuery } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { action, query } from "./_generated/server";
+import { api } from "./_generated/api";
 
 /**
  * Migration Clerk dev -> prod (domaine groupemes.fr).
@@ -17,9 +17,14 @@ import { api, internal } from "./_generated/api";
  * - `CLERK_PROD_SECRET_KEY` : fallback si `CLERK_SECRET_KEY` pointe encore DEV
  */
 
-export const usersForClerkExport = internalQuery({
+export const usersForClerkExport = query({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity) {
+      const access = await ctx.runQuery(api.permissions.myAccess, {});
+      if (!access.isAdmin) throw new Error("Réservé aux administrateurs.");
+    }
     const users = await ctx.db.query("users").collect();
     return users
       .map((user) => ({
@@ -47,6 +52,24 @@ function clerkPrimaryEmail(user: ClerkUserPayload) {
   const primary = emails.find((email) => email.id === primaryId) ?? emails[0];
   const value = primary?.email_address?.trim().toLowerCase() ?? "";
   return value || null;
+}
+
+function isClerkDuplicateError(responseStatus: number, body: ClerkErrorBody) {
+  const errors = Array.isArray(body.errors) ? body.errors : [];
+  return (
+    responseStatus === 409 ||
+    errors.some((error) => {
+      const code = (error.code ?? "").toLowerCase();
+      const message = (error.message ?? "").toLowerCase();
+      return (
+        code.includes("already_exists") ||
+        code.includes("identifier_exists") ||
+        code.includes("duplicate") ||
+        message.includes("already exists") ||
+        message.includes("has already been taken")
+      );
+    })
+  );
 }
 
 async function listClerkUsers(secret: string) {
@@ -123,7 +146,7 @@ export const exportUsersToProdClerk = action({
     }
 
     const clerkUsers = await listClerkUsers(sourceSecret);
-    const dbUsers = await ctx.runQuery(internal.clerkMigration.usersForClerkExport, {});
+    const dbUsers = await ctx.runQuery(api.clerkMigration.usersForClerkExport, {});
     const byEmail = new Map<string, { email: string; firstName?: string; lastName?: string }>();
     for (const user of dbUsers) byEmail.set(user.email, user);
     for (const user of clerkUsers) {
@@ -154,20 +177,15 @@ export const exportUsersToProdClerk = action({
             ...(user.lastName ? { last_name: user.lastName } : {}),
             skip_password_requirement: true,
             skip_password_checks: true,
+            legal_accepted_at: new Date().toISOString(),
           }),
         });
         if (response.ok) {
           created += 1;
         } else {
           const body = (await response.json().catch(() => ({}))) as ClerkErrorBody;
-          const code = body.errors?.[0]?.code ?? "";
           // Email déjà présent côté prod : on considère l'utilisateur exporté.
-          if (
-            response.status === 422 ||
-            code.includes("already_exists") ||
-            code.includes("identifier_exists") ||
-            code.includes("duplicate")
-          ) {
+          if (isClerkDuplicateError(response.status, body)) {
             skipped += 1;
           } else {
             failed += 1;
