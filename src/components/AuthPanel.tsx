@@ -45,6 +45,18 @@ function readMode(): AuthMode {
 }
 
 export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
+  return <AuthPanelInner redirectUrl={redirectUrl} />;
+}
+
+export function AuthPanelInner({
+  redirectUrl,
+  showLogo = true,
+  theme = "light",
+}: {
+  redirectUrl?: string;
+  showLogo?: boolean;
+  theme?: "light" | "dark";
+}) {
   const targetUrl = redirectUrl ?? `${window.location.pathname}${window.location.search}`;
   const signInUrl = `${window.location.pathname}${window.location.search}#sign-in`;
   const signUpUrl = `${window.location.pathname}${window.location.search}#sign-up`;
@@ -71,7 +83,9 @@ export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
 
   return (
     <div className="flex w-full flex-col items-center">
-      <img src={LOGO} alt="" className="mb-5 h-14 w-auto object-contain" />
+      {showLogo ? (
+        <img src={LOGO} alt="" className="mb-5 h-14 w-auto object-contain" />
+      ) : null}
       {mode === "choice" ? (
         <div className="grid w-full gap-3">
           <button
@@ -85,7 +99,11 @@ export function AuthPanel({ redirectUrl }: { redirectUrl?: string }) {
           <button
             type="button"
             onClick={() => choose("sign-up")}
-            className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-base font-bold text-zinc-950 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50"
+            className={
+              theme === "dark"
+                ? "rounded-2xl border border-zinc-700 bg-zinc-900 px-5 py-4 text-base font-bold text-zinc-100 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-500/60 hover:bg-zinc-800"
+                : "rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-base font-bold text-zinc-950 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50"
+            }
           >
             Je m'inscris
           </button>

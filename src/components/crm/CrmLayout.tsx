@@ -6,7 +6,7 @@ import {
   SignedOut,
   useUser,
 } from "@clerk/clerk-react";
-import { AuthPanel } from "../AuthPanel";
+import { AuthPanelInner } from "../AuthPanel";
 import {
   Menu,
   Sun,
@@ -400,7 +400,9 @@ function SignInScreen() {
           Espace professionnel
         </p>
       </div>
-      <AuthPanel />
+      <div className="w-full max-w-xl rounded-[28px] border border-[var(--crm-border)] bg-[var(--crm-surface)] p-6 text-center shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:p-8">
+        <AuthPanelInner showLogo={false} theme="dark" />
+      </div>
     </div>
   );
 }
