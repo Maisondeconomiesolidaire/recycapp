@@ -126,18 +126,21 @@ function MobileTopBar({ onToggleTheme }: { onToggleTheme: () => void }) {
           className="h-9 w-auto object-contain"
         />
 
-        <Link
-          to="/crm/compte"
-          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:ring-2 hover:ring-brand-500/45"
-          aria-label="Ouvrir mon compte"
-        >
-          <CrmUserAvatar user={user} />
-          {!onNotificationsPage && (unreadNotifications ?? 0) > 0 ? (
-            <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-brand-500 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white ring-2 ring-[var(--crm-bg)]">
-              {unreadNotifications}
-            </span>
-          ) : null}
-        </Link>
+        <div className="ml-auto flex items-center gap-1">
+          <AppSwitcher current="recycapp" />
+          <Link
+            to="/crm/compte"
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:ring-2 hover:ring-brand-500/45"
+            aria-label="Ouvrir mon compte"
+          >
+            <CrmUserAvatar user={user} />
+            {!onNotificationsPage && (unreadNotifications ?? 0) > 0 ? (
+              <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-brand-500 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white ring-2 ring-[var(--crm-bg)]">
+                {unreadNotifications}
+              </span>
+            ) : null}
+          </Link>
+        </div>
       </div>
 
       <Drawer
