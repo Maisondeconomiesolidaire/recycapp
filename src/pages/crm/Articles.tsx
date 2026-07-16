@@ -159,6 +159,10 @@ function normalizeDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function normalizeLocation(value: string) {
+  return value.trim();
+}
+
 export function Articles() {
   const [searchParams, setSearchParams] = useSearchParams();
   const access = useCrmAccess();
@@ -170,6 +174,7 @@ export function Articles() {
   const [tab, setTab] = useState<Tab>("stock");
   const [searchText, setSearchText] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState("");
   const articles = useQuery(api.articles.listAll, {});
   const remove = useMutation(api.articles.remove);
   const publishLot = useMutation(api.articles.publishLot);
@@ -186,6 +191,17 @@ export function Articles() {
   const [scanOpen, setScanOpen] = useState(false);
   // Note: barcode scanner (external device) is handled globally by GlobalScanner in CrmLayout
 
+  const locationOptions = useMemo(() => {
+    if (!articles) return [];
+    return Array.from(
+      new Set(
+        articles
+          .map((article) => normalizeLocation(article.location ?? ""))
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "fr", { numeric: true }));
+  }, [articles]);
+
   const filteredArticles = useMemo(() => {
     if (!articles) return articles;
     const selected = selectedCategories.filter(Boolean);
@@ -195,6 +211,13 @@ export function Articles() {
 
     return articles.filter((article) => {
       if (selected.length > 0 && !selected.includes(article.category)) {
+        return false;
+      }
+
+      if (
+        selectedLocation &&
+        normalizeLocation(article.location ?? "") !== selectedLocation
+      ) {
         return false;
       }
 
@@ -220,7 +243,7 @@ export function Articles() {
 
       return textMatch || digitMatch;
     });
-  }, [articles, searchText, selectedCategories]);
+  }, [articles, searchText, selectedCategories, selectedLocation]);
 
   function openNew() {
     setEditing(null);
@@ -387,18 +410,32 @@ export function Articles() {
                   orientation="horizontal"
                 />
               </div>
+              <Field label="Filtrer par emplacement">
+                <select
+                  value={selectedLocation}
+                  onChange={(e) => setSelectedLocation(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-sm text-zinc-100 outline-none transition focus:border-brand-500"
+                >
+                  <option value="">Tous les emplacements</option>
+                  {locationOptions.map((location) => (
+                    <option key={location} value={location}>
+                      {location}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
 
             {filteredArticles.length === 0 ? (
               <EmptyState
                 icon={<Package className="h-10 w-10" />}
                 title={
-                  searchText.trim() || selectedCategories.length > 0
+                  searchText.trim() || selectedCategories.length > 0 || selectedLocation
                     ? "Aucun résultat"
                     : "Aucun article"
                 }
                 description={
-                  searchText.trim() || selectedCategories.length > 0
+                  searchText.trim() || selectedCategories.length > 0 || selectedLocation
                     ? "Aucun article ne correspond à votre recherche ou à vos filtres."
                     : "Ajoutez votre premier article pour qu'il apparaisse en boutique."
                 }
@@ -548,6 +585,7 @@ export function Articles() {
           key={editing?._id ?? "new"}
           article={editing}
           open={formOpen}
+          locationOptions={locationOptions}
           onClose={() => setFormOpen(false)}
         />
       )}

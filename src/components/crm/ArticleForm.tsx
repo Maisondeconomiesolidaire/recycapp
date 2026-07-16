@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useAction } from "convex/react";
 import { ExternalLink, ImagePlus, Loader2, Sparkles, Star, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -189,10 +189,12 @@ export function ArticleForm({
   article,
   open,
   onClose,
+  locationOptions,
 }: {
   article: ArticleDoc | null;
   open: boolean;
   onClose: () => void;
+  locationOptions: string[];
 }) {
   const create = useMutation(api.articles.create);
   const update = useMutation(api.articles.update);
@@ -201,10 +203,19 @@ export function ArticleForm({
   const upload = useUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<ArticlePhoto[]>([]);
-  const initialLocation = article?.location?.trim() ?? "";
-  const initialLocationIsPreset = STOCK_BIN_OPTIONS.includes(
-    initialLocation as (typeof STOCK_BIN_OPTIONS)[number],
+  const availableLocationOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [...STOCK_BIN_OPTIONS, ...locationOptions]
+            .map((value) => value.trim())
+            .filter(Boolean),
+        ),
+      ),
+    [locationOptions],
   );
+  const initialLocation = article?.location?.trim() ?? "";
+  const initialLocationIsPreset = availableLocationOptions.includes(initialLocation);
 
   const [title, setTitle] = useState(article?.title ?? "");
   const [description, setDescription] = useState(article?.description ?? "");
@@ -936,7 +947,7 @@ export function ArticleForm({
                 onChange={(e) => setLocationChoice(e.target.value)}
               >
                 <option value="">— Sélectionner un bac —</option>
-                {STOCK_BIN_OPTIONS.map((bin) => (
+                {availableLocationOptions.map((bin) => (
                   <option key={bin} value={bin}>
                     {bin}
                   </option>
