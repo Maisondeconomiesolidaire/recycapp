@@ -113,7 +113,7 @@ type ArticlePhoto = {
   localPreview?: boolean;
 };
 
-const STOCK_BIN_OPTIONS = ["9282", "6220", "8764", "9369", "5525", "9281"] as const;
+const STOCK_BIN_OPTIONS = ["9282", "6220", "8764", "9369", "5525", "9281", "8797"] as const;
 const OTHER_BIN_VALUE = "__other__";
 
 function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
