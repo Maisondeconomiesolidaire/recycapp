@@ -21,6 +21,8 @@ const dealType = v.union(
   v.literal("echange"),
 );
 
+const dealAdKind = v.union(v.literal("offre"), v.literal("demande"));
+
 function displayName(identity: {
   name?: string | null;
   givenName?: string | null;
@@ -249,6 +251,7 @@ export const listDeals = query({
     return await Promise.all(
       deals.map(async (deal) => ({
         ...deal,
+        adKind: deal.adKind ?? "offre",
         imageUrls: await resolveImages(ctx, deal.images),
         canManage: deal.authorClerkId === identity.subject,
         isMine: deal.authorClerkId === identity.subject,
@@ -261,6 +264,7 @@ export const createDeal = mutation({
   args: {
     title: v.string(),
     description: v.string(),
+    adKind: dealAdKind,
     dealType,
     price: v.optional(v.number()),
     availableFrom: v.optional(v.number()),
@@ -277,6 +281,7 @@ export const createDeal = mutation({
       authorImageUrl: pictureUrl(identity),
       title: args.title.trim(),
       description: args.description.trim(),
+      adKind: args.adKind,
       dealType: args.dealType,
       price: args.price,
       availableFrom: args.availableFrom,
@@ -522,7 +527,7 @@ export const searchStaff = query({
 export const listStaffDirectory = query({
   args: {},
   handler: async (ctx): Promise<Array<{ clerkId: string; name: string; imageUrl: string | null }>> => {
-    await requireStaff(ctx);
+    const identity = await requireStaff(ctx);
 
     const perms = await ctx.db.query("crmPermissions").collect();
     const results: Array<{ clerkId: string; name: string; imageUrl: string | null }> = [];
@@ -538,6 +543,7 @@ export const listStaffDirectory = query({
         .withIndex("by_email", (q) => q.eq("email", email))
         .first();
       if (!user) continue; // jamais connecté → pas de clerkId, injoignable
+      if (user.clerkId === identity.subject) continue;
       if (seen.has(user.clerkId)) continue;
       seen.add(user.clerkId);
       const name =

@@ -35,6 +35,15 @@ export const bpMaterial = v.union(
   v.literal("Tout venant/DIB non triés"),
 );
 
+/** App « Bennes & Pro » — profil d'entreprise cliente. */
+export const bpCompanyType = v.union(
+  v.literal("artisan"),
+  v.literal("btp"),
+  v.literal("distributeur"),
+  v.literal("industrie"),
+  v.literal("autre"),
+);
+
 /** App « Bennes & Pro » — unités de mesure. */
 export const bpUnit = v.union(
   v.literal("kg"),
@@ -109,6 +118,39 @@ export const requestOrigin = v.union(
   v.literal("internal"),
   v.literal("external"),
 );
+
+export const hrEmployeeGender = v.union(v.literal("homme"), v.literal("femme"));
+
+export const hrEmployeeStructure = v.union(
+  v.literal("Pays de Bray Services 60"),
+  v.literal("Pays de Bray Services 76"),
+  v.literal("Recyclerie 60"),
+  v.literal("Recyclerie 76"),
+  v.literal("Les Sens du Bray"),
+  v.literal("Maison d'Economie Solidaire"),
+  v.literal("Pays de Bray Emploi"),
+);
+
+export const hrContractWebhookPayload = v.object({
+  genre_salarie: v.string(),
+  nom_prenom_salarie: v.string(),
+  adresse_salarie: v.string(),
+  num_sec_sociale: v.string(),
+  structure: v.string(),
+  type_contrat: v.string(),
+  type_document: v.string(),
+  date_fin_contrat: v.string(),
+  duree_contrat: v.string(),
+  date_debut_contrat: v.string(),
+  poste: v.string(),
+  duree_periode_essai: v.optional(v.string()),
+  date_debut_periode_essai: v.optional(v.string()),
+  date_fin_periode_essai: v.optional(v.string()),
+  remuneration_brute_horaire: v.string(),
+  duree_mensuel_travail: v.string(),
+  salaire_brut_mensuel: v.string(),
+  PREMIER_CONTRAT: v.string(),
+});
 
 const customer = v.object({
   firstName: v.string(),
@@ -921,6 +963,7 @@ export default defineSchema(
     recipientClerkId: v.string(),
     kind: v.union(
       v.literal("room_reservation_confirmed"),
+      v.literal("equipment_reservation_confirmed"),
       v.literal("vehicle_reservation_decided"),
       v.literal("new_direct_message"),
       v.literal("post_liked"),
@@ -991,6 +1034,38 @@ export default defineSchema(
     .index("by_bookedForClerkId", ["bookedForClerkId"])
     .index("by_start", ["start"]),
 
+  /** Équipements réservables (mêmes règles que les salles : créneau libre = confirmé). */
+  equipments: defineTable({
+    name: v.string(),
+    category: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    site: v.optional(v.union(v.literal("60"), v.literal("76"))),
+    photo: v.optional(v.id("_storage")),
+    photoUrl: v.optional(v.string()),
+    buildingLabel: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    active: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_active", ["active"]),
+
+  equipmentReservations: defineTable({
+    equipmentId: v.id("equipments"),
+    clerkId: v.string(),
+    userName: v.string(),
+    bookedByName: v.optional(v.string()),
+    bookedForClerkId: v.optional(v.string()),
+    title: v.string(),
+    start: v.number(),
+    end: v.number(),
+    status: v.optional(v.union(v.literal("confirmed"), v.literal("cancelled"))),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_equipmentId", ["equipmentId"])
+    .index("by_clerkId", ["clerkId"])
+    .index("by_bookedForClerkId", ["bookedForClerkId"])
+    .index("by_start", ["start"]),
+
   /**
    * Réservations de véhicules via Mes Outils (approbation requise). Les
    * réservations `approved` rendent le véhicule indisponible côté recyclerie
@@ -1045,6 +1120,7 @@ export default defineSchema(
     status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done")),
     dueDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
+    odometerKm: v.optional(v.number()),
     createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -1094,6 +1170,7 @@ export default defineSchema(
     authorImageUrl: v.optional(v.string()),
     title: v.string(),
     description: v.string(),
+    adKind: v.optional(v.union(v.literal("offre"), v.literal("demande"))),
     dealType: v.union(
       v.literal("pret"),
       v.literal("don"),
@@ -1248,6 +1325,13 @@ export default defineSchema(
       assignedTo: v.optional(v.string()),
       notes: v.optional(v.string()),
     })),
+    fieldEdits: v.optional(
+      v.object({
+        customer: v.optional(v.object({ by: v.string(), at: v.number() })),
+        reebike: v.optional(v.object({ by: v.string(), at: v.number() })),
+        management: v.optional(v.object({ by: v.string(), at: v.number() })),
+      }),
+    ),
     pipelineStatus: v.union(
       v.literal("nouveau"),
       v.literal("validation"),
@@ -1358,10 +1442,61 @@ export default defineSchema(
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
     contactEmail: v.optional(v.string()),
+    /** Email dédié à la facturation (peut différer de l'email de contact). */
+    billingEmail: v.optional(v.string()),
+    /** Profil de l'entreprise (artisan, BTP, distributeur…). */
+    companyType: v.optional(bpCompanyType),
+    /** Précision libre quand `companyType === "autre"`. */
+    companyTypeOther: v.optional(v.string()),
+    /** Sujet Clerk du client propriétaire (compte espace client). */
+    ownerUserId: v.optional(v.string()),
+    /** Documents obligatoires marqués « Signé » par le staff. */
+    conventionSignedAt: v.optional(v.number()),
+    protocoleSignedAt: v.optional(v.number()),
     /** Client Stripe associé (facturation du DIB). */
     stripeCustomerId: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_name", ["name"]),
+  })
+    .index("by_name", ["name"])
+    .index("by_owner", ["ownerUserId"]),
+
+  /** Documents rattachés à une entreprise (KBIS, RIB… ; client ↔ staff). */
+  bpCompanyDocuments: defineTable({
+    companyId: v.id("bpCompanies"),
+    storageId: v.id("_storage"),
+    name: v.string(),
+    docType: v.union(
+      v.literal("kbis"),
+      v.literal("rib"),
+      v.literal("assurance"),
+      v.literal("convention"),
+      v.literal("protocole"),
+      v.literal("autre"),
+    ),
+    mimeType: v.optional(v.string()),
+    /** Message de contexte optionnel joint au document. */
+    note: v.optional(v.string()),
+    /** Qui a déposé le document (portail client ou CRM). */
+    uploadedByRole: v.union(v.literal("client"), v.literal("staff")),
+    /** Horodatage de partage au client (docs staff visibles côté client). */
+    sharedWithClientAt: v.optional(v.number()),
+    /** Validation par le staff d'un document signé (convention, protocole…). */
+    validatedAt: v.optional(v.number()),
+    validatedBy: v.optional(v.string()),
+    createdBy: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_company", ["companyId"]),
+
+  /** Messagerie entre une entreprise cliente et le staff. */
+  bpCompanyMessages: defineTable({
+    companyId: v.id("bpCompanies"),
+    senderRole: v.union(v.literal("client"), v.literal("staff")),
+    senderName: v.string(),
+    body: v.string(),
+    readByClientAt: v.optional(v.number()),
+    readByStaffAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_company", ["companyId"]),
 
   /** Réglages Bennes & Pro (doc unique, key = "bennespro"). */
   bpSettings: defineTable({
@@ -1433,6 +1568,8 @@ export default defineSchema(
   /** Clients (donneurs d'ordre des chantiers). */
   ptClients: defineTable({
     name: v.string(),
+    /** Interne (structures du groupe) ou externe — filtre principal de l'UI. */
+    clientType: v.optional(v.union(v.literal("interne"), v.literal("externe"))),
     contactName: v.optional(v.string()),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
@@ -1495,6 +1632,9 @@ export default defineSchema(
     laborCost: v.number(),
     travelCost: v.number(),
     totalCost: v.number(),
+    billingStatus: v.optional(
+      v.union(v.literal("a_facturer"), v.literal("facture")),
+    ),
     notes: v.optional(v.string()),
     documentIds: v.array(v.id("ptDocuments")),
     createdAt: v.number(),
@@ -1558,13 +1698,66 @@ export default defineSchema(
     storageId: v.id("_storage"),
     name: v.string(),
     mimeType: v.optional(v.string()),
+    kind: v.optional(
+      v.union(
+        v.literal("chantier_photo"),
+        v.literal("expense_quote"),
+        v.literal("expense_delivery_note"),
+        v.literal("expense_invoice"),
+        v.literal("invoice_pdf"),
+        v.literal("other"),
+      ),
+    ),
     projectId: v.id("ptProjects"),
+    /** Fournisseur rattaché (justificatifs de dépenses). */
+    supplierId: v.optional(v.id("ptSuppliers")),
     timeEntryId: v.optional(v.id("ptTimeEntries")),
     expenseId: v.optional(v.id("ptExpenses")),
     invoiceId: v.optional(v.id("ptInvoices")),
     uploadedAt: v.number(),
     uploadedBy: v.optional(v.string()),
   }).index("by_project", ["projectId"]),
+
+  /** Salariés RH Mes Outils. */
+  hrEmployees: defineTable({
+    firstName: v.string(),
+    lastName: v.string(),
+    fullName: v.string(),
+    gender: hrEmployeeGender,
+    address: v.string(),
+    structure: hrEmployeeStructure,
+    socialSecurityNumber: v.string(),
+    socialSecurityNumberNormalized: v.string(),
+    firstContractDate: v.optional(v.string()),
+    active: v.boolean(),
+    importedFrom: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+  })
+    .index("by_fullName", ["fullName"])
+    .index("by_lastName_and_firstName", ["lastName", "firstName"])
+    .index("by_socialSecurityNumberNormalized", ["socialSecurityNumberNormalized"])
+    .index("by_structure", ["structure"]),
+
+  /** Historique des générations de contrats RH envoyées à Make. */
+  hrContracts: defineTable({
+    employeeId: v.id("hrEmployees"),
+    payload: hrContractWebhookPayload,
+    webhookUrl: v.string(),
+    webhookStatus: v.union(
+      v.literal("pending"),
+      v.literal("success"),
+      v.literal("error"),
+    ),
+    webhookResponseCode: v.optional(v.number()),
+    webhookResponseBody: v.optional(v.string()),
+    requestedAt: v.number(),
+    requestedBy: v.string(),
+  })
+    .index("by_employee_and_requestedAt", ["employeeId", "requestedAt"])
+    .index("by_requestedAt", ["requestedAt"]),
   },
   { schemaValidation: false },
 );

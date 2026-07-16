@@ -1,12 +1,15 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { action, env, internalMutation, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import {
+  accessAllows,
   clerkIdForEmail,
   emailForClerkId,
+  fetchInternalClerkDirectory,
   hasCrmPermission,
+  isReservationParticipant,
   photoForClerkId,
   requireCrmPermission,
   requireUser,
@@ -141,6 +144,10 @@ async function lastRecordedMileageForVehicle(
   return reservationMileage;
 }
 
+function feedbackMileageRecordedAt(reservation: Doc<"vehicleReservations">) {
+  return reservation.feedbackSubmittedAt ?? reservation.end ?? reservation.start ?? reservation._creationTime;
+}
+
 export const listRooms = query({
   args: {},
   handler: async (ctx) => {
@@ -250,34 +257,24 @@ async function resolveReservationTarget(
   };
 }
 
-export const listReservationDirectory = query({
+/**
+ * Annuaire « Réserver pour » : uniquement les membres internes
+ * (@eco-solidaire.fr) de l'instance Clerk PRODUCTION, lus via l'API Backend
+ * (`CLERK_SECRET_KEY`), hors soi-même. On n'utilise pas la table `users` Convex :
+ * elle ne contient que les comptes déjà connectés et peut garder d'anciens
+ * comptes dev. Si Clerk est injoignable on remonte l'erreur plutôt que
+ * d'afficher un annuaire faux ou vide.
+ */
+export const listReservationDirectory = action({
   args: {},
   handler: async (ctx): Promise<Array<{ clerkId: string; name: string; imageUrl: string | null }>> => {
-    const identity = await requireUser(ctx);
-    await requireCrmPermission(ctx, PAGE_KEY, "create");
-    const selfEmail = (identity.email ?? "").trim().toLowerCase();
-    const users = await ctx.db.query("users").collect();
-    const seen = new Set<string>();
-    return users
-      .filter((user) => {
-        const email = user.email.trim().toLowerCase();
-        // Uniquement les membres internes (adresse @eco-solidaire.fr).
-        if (!email.endsWith("@eco-solidaire.fr")) return false;
-        // On s'exclut soi-même (« Réserver pour → Moi-même » gère ce cas). On
-        // compare aussi par email : le clerkId peut différer de la session à
-        // cause des artefacts de migration Clerk dev/prod.
-        if (user.clerkId === identity.subject) return false;
-        if (selfEmail && email === selfEmail) return false;
-        if (seen.has(user.clerkId)) return false;
-        seen.add(user.clerkId);
-        return true;
-      })
-      .map((user) => ({
-        clerkId: user.clerkId,
-        name: userDisplayName(user) ?? user.clerkId,
-        imageUrl: user.imageUrl ?? null,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    const access = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, PAGE_KEY, "create")) {
+      throw new Error("Accès insuffisant pour réserver pour un collègue.");
+    }
+    const secret = env.CLERK_SECRET_KEY;
+    if (!secret) throw new Error("Annuaire indisponible : CLERK_SECRET_KEY manquante.");
+    return await fetchInternalClerkDirectory(secret, access.email ?? "");
   },
 });
 
@@ -397,7 +394,7 @@ export const cancelRoomReservation = mutation({
     const reservation = await ctx.db.get(args.reservationId);
     if (!reservation) return;
     const isManager = await hasCrmPermission(ctx, PAGE_KEY, "manage");
-    if (reservation.clerkId !== identity.subject && !isManager) {
+    if (!isReservationParticipant(reservation, identity.subject) && !isManager) {
       throw new Error("Annulation non autorisée.");
     }
     const room = await ctx.db.get(reservation.roomId);
@@ -571,6 +568,7 @@ export const listVehicleBookings = query({
         _id: reservation._id,
         vehicleName: nameById.get(String(reservation.vehicleId)) ?? "Véhicule",
         clerkId: reservation.clerkId,
+        bookedForClerkId: reservation.bookedForClerkId,
         userName: reservation.userName,
         purpose: reservation.purpose,
         usageType: reservation.usageType,
@@ -690,8 +688,7 @@ export const submitVehicleFeedback = mutation({
     const identity = await requireUser(ctx);
     const reservation = await ctx.db.get(args.reservationId);
     if (!reservation) throw new Error("Réservation introuvable.");
-    const recipientClerkId = reservation.bookedForClerkId ?? reservation.clerkId;
-    if (recipientClerkId !== identity.subject && reservation.clerkId !== identity.subject) {
+    if (!isReservationParticipant(reservation, identity.subject)) {
       throw new Error("Retour non autorisé.");
     }
     if (reservation.status !== "approved") {
@@ -779,8 +776,7 @@ export const submitRoomFeedback = mutation({
     const identity = await requireUser(ctx);
     const reservation = await ctx.db.get(args.reservationId);
     if (!reservation) throw new Error("Réservation introuvable.");
-    const recipientClerkId = reservation.bookedForClerkId ?? reservation.clerkId;
-    if (recipientClerkId !== identity.subject && reservation.clerkId !== identity.subject) {
+    if (!isReservationParticipant(reservation, identity.subject)) {
       throw new Error("Retour non autorisé.");
     }
     if (reservation.end > Date.now()) {
@@ -847,22 +843,43 @@ export const listVehicleRemarks = query({
           .collect()
       : await ctx.db.query("vehicleReservations").order("desc").take(300);
     const reservations = raw.filter((r) => r.feedbackSubmittedAt);
-    const vehicles = await ctx.db.query("vehicles").collect();
+    const [vehicles, mileageSource] = await Promise.all([
+      ctx.db.query("vehicles").collect(),
+      vehicleId ? Promise.resolve(raw) : ctx.db.query("vehicleReservations").collect(),
+    ]);
     const byId = new Map(vehicles.map((vehicle) => [String(vehicle._id), vehicle]));
-    const lastMileageByVehicleId = new Map(
-      vehicles.map((vehicle) => [String(vehicle._id), vehicle.odometerKm]),
-    );
-    for (const reservation of raw) {
+    const mileageHistoryByVehicleId = new Map<
+      string,
+      Array<{ id: string; recordedAt: number; mileage: number }>
+    >();
+    for (const reservation of mileageSource) {
       if (typeof reservation.feedbackMileage !== "number" || !Number.isFinite(reservation.feedbackMileage)) {
         continue;
       }
       const key = String(reservation.vehicleId);
-      const current = lastMileageByVehicleId.get(key);
-      lastMileageByVehicleId.set(
-        key,
-        typeof current === "number" ? Math.max(current, reservation.feedbackMileage) : reservation.feedbackMileage,
-      );
+      const history = mileageHistoryByVehicleId.get(key) ?? [];
+      history.push({
+        id: String(reservation._id),
+        recordedAt: feedbackMileageRecordedAt(reservation),
+        mileage: reservation.feedbackMileage,
+      });
+      mileageHistoryByVehicleId.set(key, history);
     }
+    for (const history of mileageHistoryByVehicleId.values()) {
+      history.sort((a, b) => a.recordedAt - b.recordedAt);
+    }
+
+    const previousMileageForReservation = (reservation: Doc<"vehicleReservations">) => {
+      const history = mileageHistoryByVehicleId.get(String(reservation.vehicleId)) ?? [];
+      const reservationId = String(reservation._id);
+      const recordedAt = feedbackMileageRecordedAt(reservation);
+      let previous: number | undefined;
+      for (const entry of history) {
+        if (entry.recordedAt > recordedAt) break;
+        if (entry.id !== reservationId) previous = entry.mileage;
+      }
+      return previous;
+    };
 
     return await Promise.all(
       reservations
@@ -881,7 +898,7 @@ export const listVehicleRemarks = query({
             end: r.end,
             submittedAt: r.feedbackSubmittedAt ?? 0,
             mileage: r.feedbackMileage,
-            lastRecordedMileage: lastMileageByVehicleId.get(String(r.vehicleId)),
+            lastRecordedMileage: previousMileageForReservation(r),
             fuelRestored: r.feedbackFuelRestored,
             vehicleEmpty: r.feedbackVehicleEmpty,
             vehicleClean: r.feedbackVehicleClean,
@@ -1365,7 +1382,7 @@ export const cancelVehicleReservation = mutation({
     const reservation = await ctx.db.get(args.reservationId);
     if (!reservation) return;
     const canManage = await hasCrmPermission(ctx, PAGE_KEY, "manage");
-    if (reservation.clerkId !== identity.subject && !canManage) {
+    if (!isReservationParticipant(reservation, identity.subject) && !canManage) {
       throw new Error("Annulation non autorisée.");
     }
     const vehicle = await ctx.db.get(reservation.vehicleId);

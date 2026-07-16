@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { action, mutation, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { accessAllows, customerFullName, requireCrmPermission, requireUser } from "./lib";
 import { buildAddressString, drivingDistanceKm, geocode } from "./livraison";
@@ -163,10 +163,22 @@ export const listVehicleTasks = query({
     });
     const vehicles = await ctx.db.query("vehicles").collect();
     const vehicleById = new Map(vehicles.map((vehicle) => [String(vehicle._id), vehicle]));
-    return filtered.map((task) => ({
-      ...task,
-      vehicle: vehicleById.get(String(task.vehicleId)) ?? null,
-    }));
+    return await Promise.all(
+      filtered.map(async (task) => {
+        const vehicle = vehicleById.get(String(task.vehicleId)) ?? null;
+        return {
+          ...task,
+          vehicle: vehicle
+            ? {
+                ...vehicle,
+                photoUrl: vehicle.photo
+                  ? await ctx.storage.getUrl(vehicle.photo)
+                  : vehicle.photoUrl,
+              }
+            : null,
+        };
+      }),
+    );
   },
 });
 
@@ -178,11 +190,13 @@ export const createVehicleTask = mutation({
     priority: taskPriority,
     dueDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
+    odometerKm: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, FLEET_PAGE_KEY, "create");
     const identity = await requireUser(ctx);
-    return await ctx.db.insert("vehicleMaintenanceTasks", {
+    const now = Date.now();
+    const taskId = await ctx.db.insert("vehicleMaintenanceTasks", {
       vehicleId: args.vehicleId,
       title: args.title.trim(),
       description: args.description?.trim() || undefined,
@@ -190,10 +204,21 @@ export const createVehicleTask = mutation({
       status: "todo",
       dueDate: args.dueDate,
       endDate: args.endDate,
+      odometerKm: args.odometerKm,
       createdBy: displayName(identity),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     });
+    if (typeof args.odometerKm === "number") {
+      const vehicle = await ctx.db.get(args.vehicleId);
+      if (vehicle && (vehicle.odometerKm === undefined || args.odometerKm > vehicle.odometerKm)) {
+        await ctx.db.patch(args.vehicleId, {
+          odometerKm: args.odometerKm,
+          odometerUpdatedAt: new Date(now).toISOString(),
+        });
+      }
+    }
+    return taskId;
   },
 });
 
@@ -256,16 +281,48 @@ export const removeVehicleDocument = mutation({
 export const updateVehicleTask = mutation({
   args: {
     taskId: v.id("vehicleMaintenanceTasks"),
-    status: taskStatus,
-    priority: taskPriority,
+    status: v.optional(taskStatus),
+    priority: v.optional(taskPriority),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    dueDate: v.optional(v.number()),
+    endDate: v.optional(v.union(v.number(), v.null())),
+    odometerKm: v.optional(v.union(v.number(), v.null())),
   },
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, FLEET_PAGE_KEY, "update");
-    await ctx.db.patch(args.taskId, {
-      status: args.status,
-      priority: args.priority,
-      updatedAt: Date.now(),
-    });
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Maintenance introuvable.");
+    const now = Date.now();
+    const patch: {
+      status?: "todo" | "in_progress" | "done";
+      priority?: "low" | "medium" | "high";
+      title?: string;
+      description?: string;
+      dueDate?: number;
+      endDate?: number | undefined;
+      odometerKm?: number | undefined;
+      updatedAt: number;
+    } = {
+      updatedAt: now,
+    };
+    if (args.status !== undefined) patch.status = args.status;
+    if (args.priority !== undefined) patch.priority = args.priority;
+    if (args.title !== undefined) patch.title = args.title.trim();
+    if (args.description !== undefined) patch.description = args.description.trim() || undefined;
+    if (args.dueDate !== undefined) patch.dueDate = args.dueDate;
+    if (args.endDate !== undefined) patch.endDate = args.endDate ?? undefined;
+    if (args.odometerKm !== undefined) patch.odometerKm = args.odometerKm ?? undefined;
+    await ctx.db.patch(args.taskId, patch);
+    if (typeof args.odometerKm === "number") {
+      const vehicle = await ctx.db.get(task.vehicleId);
+      if (vehicle && (vehicle.odometerKm === undefined || args.odometerKm > vehicle.odometerKm)) {
+        await ctx.db.patch(task.vehicleId, {
+          odometerKm: args.odometerKm,
+          odometerUpdatedAt: new Date(now).toISOString(),
+        });
+      }
+    }
   },
 });
 
@@ -444,5 +501,54 @@ export const updateRoom = mutation({
       photoUrl: patch.photoUrl?.trim() || undefined,
       unavailabilityNotes: patch.unavailabilityNotes?.trim() || undefined,
     });
+  },
+});
+
+/* ─── Maintenance (CLI uniquement) ────────────────────────────────────────── */
+
+/**
+ * Liste les auteurs (`createdBy`) des tâches de maintenance véhicule et leur nombre.
+ * `npx convex run gotravaux:adminListMaintenanceCreators --prod`
+ */
+export const adminListMaintenanceCreators = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const tasks = await ctx.db.query("vehicleMaintenanceTasks").collect();
+    const counts = new Map<string, number>();
+    for (const task of tasks) {
+      counts.set(task.createdBy, (counts.get(task.createdBy) ?? 0) + 1);
+    }
+    return {
+      total: tasks.length,
+      byCreator: [...counts.entries()]
+        .map(([createdBy, count]) => ({ createdBy, count }))
+        .sort((a, b) => b.count - a.count),
+    };
+  },
+});
+
+/**
+ * Supprime toutes les tâches de maintenance véhicule dont `createdBy` correspond
+ * (comparaison insensible à la casse/accents, sur nom exact ou fragment).
+ * Dry-run par défaut ; passer `{"createdBy":"Selim Lahmer","apply":true}` pour supprimer.
+ * `npx convex run gotravaux:adminDeleteMaintenanceByCreator '{"createdBy":"Selim Lahmer"}' --prod`
+ */
+export const adminDeleteMaintenanceByCreator = internalMutation({
+  args: { createdBy: v.string(), apply: v.optional(v.boolean()) },
+  handler: async (ctx, { createdBy, apply }) => {
+    const norm = (s: string) =>
+      s.trim().toLocaleLowerCase("fr-FR").normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const needle = norm(createdBy);
+    const tasks = await ctx.db.query("vehicleMaintenanceTasks").collect();
+    const matches = tasks.filter((t) => norm(t.createdBy).includes(needle));
+    if (apply) {
+      for (const t of matches) await ctx.db.delete(t._id);
+    }
+    return {
+      dryRun: !apply,
+      matched: matches.length,
+      deleted: apply ? matches.length : 0,
+      samples: matches.slice(0, 10).map((t) => ({ id: t._id, createdBy: t.createdBy, title: t.title })),
+    };
   },
 });
