@@ -113,6 +113,9 @@ type ArticlePhoto = {
   localPreview?: boolean;
 };
 
+const STOCK_BIN_OPTIONS = ["9282", "6220", "8764", "9369", "5525", "9281"] as const;
+const OTHER_BIN_VALUE = "__other__";
+
 function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
@@ -198,6 +201,10 @@ export function ArticleForm({
   const upload = useUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<ArticlePhoto[]>([]);
+  const initialLocation = article?.location?.trim() ?? "";
+  const initialLocationIsPreset = STOCK_BIN_OPTIONS.includes(
+    initialLocation as (typeof STOCK_BIN_OPTIONS)[number],
+  );
 
   const [title, setTitle] = useState(article?.title ?? "");
   const [description, setDescription] = useState(article?.description ?? "");
@@ -205,7 +212,18 @@ export function ArticleForm({
   const [weightKg, setWeightKg] = useState(
     article?.weightKg !== undefined ? String(article.weightKg) : "",
   );
-  const [location, setLocation] = useState(article?.location ?? "");
+  const [locationChoice, setLocationChoice] = useState(
+    initialLocation
+      ? initialLocationIsPreset
+        ? initialLocation
+        : OTHER_BIN_VALUE
+      : "",
+  );
+  const [customLocation, setCustomLocation] = useState(
+    initialLocation && !initialLocationIsPreset
+      ? initialLocation.replace(/\D/g, "").slice(0, 4)
+      : "",
+  );
   const [aiDetails, setAiDetails] = useState("");
   const [aiBrief, setAiBrief] = useState("");
   const [originalPrice, setOriginalPrice] = useState(
@@ -464,6 +482,11 @@ export function ArticleForm({
       );
     if (gdrReference.trim() !== "" && !/^\d{15}$/.test(gdrReference))
       return setError("La référence externe doit contenir exactement 15 chiffres.");
+    const resolvedLocation =
+      locationChoice === OTHER_BIN_VALUE ? customLocation.trim() : locationChoice.trim();
+    if (resolvedLocation && !/^\d{4}$/.test(resolvedLocation)) {
+      return setError("L'emplacement doit contenir exactement 4 chiffres.");
+    }
 
     setError("");
     setSaving(true);
@@ -476,7 +499,7 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          location: location.trim() || undefined,
+          location: resolvedLocation || undefined,
           originalPrice: originalPriceNum,
           internalReference,
           gdrReference: gdrReference.trim() || undefined,
@@ -497,7 +520,7 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          location: location.trim() || undefined,
+          location: resolvedLocation || undefined,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
           category,
@@ -903,12 +926,35 @@ export function ArticleForm({
               placeholder="39"
             />
           </Field>
-          <Field label="Emplacement">
-            <Input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Ex : Rayon A3, Réserve…"
-            />
+          <Field
+            label="Emplacement"
+            hint="Choisissez le bac de stockage, ou saisissez les 4 derniers chiffres."
+          >
+            <div className="space-y-2">
+              <Select
+                value={locationChoice}
+                onChange={(e) => setLocationChoice(e.target.value)}
+              >
+                <option value="">— Sélectionner un bac —</option>
+                {STOCK_BIN_OPTIONS.map((bin) => (
+                  <option key={bin} value={bin}>
+                    {bin}
+                  </option>
+                ))}
+                <option value={OTHER_BIN_VALUE}>Autres, veuillez préciser</option>
+              </Select>
+              {locationChoice === OTHER_BIN_VALUE && (
+                <Input
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={customLocation}
+                  onChange={(e) =>
+                    setCustomLocation(e.target.value.replace(/\D/g, "").slice(0, 4))
+                  }
+                  placeholder="4 chiffres"
+                />
+              )}
+            </div>
           </Field>
           <Field
             label="Référence interne"
