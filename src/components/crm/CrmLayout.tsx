@@ -8,6 +8,7 @@ import {
 } from "@clerk/clerk-react";
 import { AuthPanelInner } from "../AuthPanel";
 import { AppSwitcher } from "../AppSwitcher";
+import { HelpButton } from "../HelpButton";
 import {
   Menu,
   Sun,
@@ -85,6 +86,7 @@ export function CrmLayout() {
               <Outlet />
             </div>
           </div>
+          <HelpButton />
           <GlobalScanner />
         </PersonaProvider>
       </SignedIn>

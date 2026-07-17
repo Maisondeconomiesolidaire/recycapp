@@ -111,7 +111,9 @@ export function MessageThread({
                   <div className="max-w-[78%]">
                     {!mine && (
                       <p className={`mb-0.5 px-1 text-[11px] font-medium ${dark ? "text-zinc-500" : "text-zinc-400"}`}>
-                        {m.senderName}
+                        {viewerRole === "client" && m.senderRole === "staff"
+                          ? "Recyclerie"
+                          : m.senderName}
                       </p>
                     )}
                     <div
