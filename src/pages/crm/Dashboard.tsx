@@ -145,18 +145,21 @@ export function Dashboard() {
               value={formatPrice(stats.quoteTotals.open)}
               helper="Devis des demandes actives"
               large
+              valueColor="#ff7700"
             />
             <StatCard
               label="Montant gagné"
               value={formatPrice(stats.quoteTotals.won)}
               helper="Devis des demandes gagnées"
               large
+              valueColor="#34d399"
             />
             <StatCard
               label="Montant perdu"
               value={formatPrice(stats.quoteTotals.lost)}
               helper="Devis des demandes perdues"
               large
+              valueColor="#f87171"
             />
           </section>
 
@@ -531,12 +534,14 @@ function StatCard({
   helper,
   flat = false,
   large = false,
+  valueColor,
 }: {
   label: string;
   value: number | string;
   helper: string;
   flat?: boolean;
   large?: boolean;
+  valueColor?: string;
 }) {
   return (
     <div
@@ -549,9 +554,10 @@ function StatCard({
       }
     >
       <p
-        className={`font-semibold tracking-tight text-zinc-100 ${
-          large ? "text-4xl sm:text-5xl" : "text-4xl"
-        }`}
+        className={`font-semibold tracking-tight ${
+          valueColor ? "" : "text-zinc-100"
+        } ${large ? "text-4xl sm:text-5xl" : "text-4xl"}`}
+        style={valueColor ? { color: valueColor } : undefined}
       >
         {value}
       </p>
