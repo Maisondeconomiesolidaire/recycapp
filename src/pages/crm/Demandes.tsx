@@ -23,7 +23,9 @@ import {
   TYPE_LABELS,
   TYPE_COLORS,
   deriveStage,
+  getDisplayedProcessStep,
 } from "../../lib/constants";
+import { STEP } from "../../../convex/processes";
 import { cn } from "../../lib/cn";
 import { formatPrice } from "../../lib/format";
 
@@ -48,6 +50,24 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "closed", label: "Gagnées / Perdues" },
 ];
 
+/**
+ * Étapes proposées par le filtre « Étape du process ». On liste toutes les
+ * étapes de tous les types de demandes (une demande n'en utilise qu'un
+ * sous-ensemble) plus l'état initial, avant toute étape cochée.
+ */
+const NEW_REQUEST_STEP = "Nouvelle demande";
+const PROCESS_STEP_OPTIONS = [
+  NEW_REQUEST_STEP,
+  STEP.contact,
+  STEP.acompteVerse,
+  STEP.devisEdite,
+  STEP.devisSigne,
+  STEP.prestaPlanifiee,
+  STEP.prestaTerminee,
+  STEP.factureEditee,
+  STEP.factureReglee,
+];
+
 function quoteTotal(requests: Doc<"requests">[]) {
   return requests.reduce((sum, request) => sum + (request.quoteAmount ?? 0), 0);
 }
@@ -59,6 +79,7 @@ export function Demandes() {
   const [openId, setOpenId] = useState<Id<"requests"> | null>(null);
   const [staffFilter, setStaffFilter] = useState<string | null>(null);
   const [siteFilter, setSiteFilter] = useState<string | null>(null);
+  const [stepFilter, setStepFilter] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [search, setSearch] = useState("");
   const [newOpen, setNewOpen] = useState(false);
@@ -78,13 +99,22 @@ export function Demandes() {
       (requests ?? [])
         .filter((r) => !staffFilter || r.assignedTo === staffFilter)
         .filter((r) => !siteFilter || r.site === siteFilter)
+        .filter((r) => !stepFilter || getDisplayedProcessStep(r) === stepFilter)
         .filter((r) => matchesRequestSearch(r, normalizedSearch, assigneeName(r)))
         .sort((a, b) =>
           sortOrder === "desc"
             ? b.createdAt - a.createdAt
             : a.createdAt - b.createdAt,
         ),
-    [requests, staffFilter, siteFilter, normalizedSearch, sortOrder, team],
+    [
+      requests,
+      staffFilter,
+      siteFilter,
+      stepFilter,
+      normalizedSearch,
+      sortOrder,
+      team,
+    ],
   );
 
   useEffect(() => {
@@ -138,6 +168,7 @@ export function Demandes() {
           <div className="h-4 w-px shrink-0 bg-[var(--crm-surface-3)]" />
           <SiteFilter value={siteFilter} onChange={setSiteFilter} />
           <StaffFilter value={staffFilter} onChange={setStaffFilter} team={team} />
+          <StepFilter value={stepFilter} onChange={setStepFilter} />
         </div>
         <div className="pb-3">
           <SearchFilter value={search} onChange={setSearch} />
@@ -884,6 +915,30 @@ function StaffFilter({
       {team.map((m) => (
         <option key={m._id} value={m._id}>
           {m.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/** Filtre sur l'étape de process en cours (dernière étape cochée). */
+function StepFilter({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <Select
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      className="h-9 w-[200px] rounded-xl bg-[var(--crm-surface-2)] px-3 text-xs font-medium text-zinc-300"
+    >
+      <option value="">Toutes les étapes</option>
+      {PROCESS_STEP_OPTIONS.map((step) => (
+        <option key={step} value={step}>
+          {step}
         </option>
       ))}
     </Select>

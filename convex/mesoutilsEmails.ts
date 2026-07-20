@@ -673,3 +673,231 @@ export const sendDealInterestEmail = internalAction({
     );
   },
 });
+
+/** URL publique de l'app Feedback (les retours ne vivent pas dans Mes Outils). */
+function feedbackAppUrl() {
+  return (process.env.FEEDBACK_APP_URL ?? "https://feedback.groupemes.fr").replace(/\/$/, "");
+}
+
+const FEEDBACK_TYPE_LABELS: Record<string, string> = {
+  fonctionnalite: "Nouvelle fonctionnalité",
+  probleme: "Problème",
+  amelioration: "Amélioration",
+  question: "Question",
+};
+
+/**
+ * Prévient l'auteur d'un retour que sa demande vient d'être traitée.
+ *
+ * Le retour est marqué « Terminée » depuis le kanban : sans email, l'auteur n'a
+ * aucune raison de retourner voir, et les demandes traitées passent inaperçues.
+ * On rappelle sa demande dans le message — plusieurs jours peuvent s'écouler
+ * entre le dépôt et la clôture.
+ */
+export const sendFeedbackResolvedEmail = internalAction({
+  args: {
+    email: v.string(),
+    authorName: v.optional(v.string()),
+    resolvedByName: v.string(),
+    resolvedByPhotoUrl: v.optional(v.string()),
+    feedbackType: v.string(),
+    description: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const greeting = args.authorName?.trim() ? `Bonjour ${esc(args.authorName.trim())},` : "Bonjour,";
+    const typeLabel = FEEDBACK_TYPE_LABELS[args.feedbackType] ?? "Retour";
+    // Extrait borné : la description peut être longue, l'email n'est qu'un
+    // rappel, le détail complet reste dans l'app.
+    const excerpt =
+      args.description.length > 240 ? `${args.description.slice(0, 240).trimEnd()}…` : args.description;
+
+    const html = shell({
+      preheader: `${args.resolvedByName} a traité votre retour — venez vérifier que tout est bon.`,
+      heading: "Votre retour a été traité",
+      intro: `${greeting}<br/><br/><strong>${esc(args.resolvedByName)}</strong> vient de marquer votre retour comme terminé. Prenez un instant pour vérifier que le résultat correspond bien à ce que vous attendiez — si ce n'est pas le cas, répondez directement dans la conversation, nous rouvrirons la demande.`,
+      contentHtml: `
+        ${userChip(args.resolvedByName, args.resolvedByPhotoUrl, "A traité votre retour")}
+        ${detailCard([
+          ["Type", typeLabel],
+          ["Votre demande", excerpt],
+        ])}
+        ${button(feedbackAppUrl(), "Voir mon retour")}
+      `,
+    });
+
+    await resendSend(args.email, "Votre retour a été traité", html, FROM);
+  },
+});
+
+/** Destinataire des créations de maintenance (responsable de la flotte). */
+export const MAINTENANCE_NOTICE_EMAILS = ["f.henry@eco-solidaire.fr"];
+
+const MAINTENANCE_PRIORITY_LABELS: Record<string, string> = {
+  low: "Basse",
+  medium: "Moyenne",
+  high: "Haute",
+};
+
+/**
+ * Prévient le responsable de la flotte qu'une maintenance vient d'être créée.
+ *
+ * Une maintenance planifiée immobilise le véhicule pour les 3 apps qui gèrent
+ * la flotte : sans notification, l'information n'existe que pour qui pense à
+ * ouvrir Gotravaux.
+ */
+export const sendMaintenanceCreatedEmail = internalAction({
+  args: {
+    vehicleName: v.string(),
+    vehiclePlate: v.optional(v.string()),
+    title: v.string(),
+    description: v.optional(v.string()),
+    priority: v.string(),
+    dueDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    odometerKm: v.optional(v.number()),
+    createdByName: v.string(),
+    vehicleImageUrl: v.optional(v.string()),
+    vehicleImageStorageId: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const rows: Array<[string, string]> = [
+      ["Véhicule", [args.vehicleName, args.vehiclePlate].filter(Boolean).join(" · ")],
+      ["Intervention", args.title],
+      ["Priorité", MAINTENANCE_PRIORITY_LABELS[args.priority] ?? args.priority],
+    ];
+    // La date est facultative sur une maintenance : on ne montre la ligne que
+    // si elle existe, plutôt qu'un « — » qui laisse croire à un oubli.
+    if (typeof args.dueDate === "number") {
+      rows.push([
+        "Période",
+        typeof args.endDate === "number" && args.endDate !== args.dueDate
+          ? formatRange(args.dueDate, args.endDate)
+          : new Date(args.dueDate).toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            }),
+      ]);
+    }
+    if (typeof args.odometerKm === "number") {
+      rows.push(["Kilométrage", `${args.odometerKm.toLocaleString("fr-FR")} km`]);
+    }
+    if (args.description) rows.push(["Détail", args.description]);
+
+    const heroUrl = resolveImageUrl({
+      imageUrl: args.vehicleImageUrl,
+      imageStorageId: args.vehicleImageStorageId,
+    });
+
+    const html = shell({
+      preheader: `${args.createdByName} a créé une maintenance sur « ${args.vehicleName} ».`,
+      heading: "Nouvelle maintenance planifiée",
+      heroUrl,
+      intro: `Une maintenance vient d'être créée sur <strong>${esc(args.vehicleName)}</strong>. Le véhicule sera indisponible sur la période concernée.`,
+      contentHtml: `
+        ${userChip(args.createdByName, undefined, "A créé la maintenance")}
+        ${detailCard(rows)}
+        ${button(appLink("/gotravaux?v=tasks"), "Ouvrir la maintenance")}
+      `,
+    });
+
+    await resendSend(
+      MAINTENANCE_NOTICE_EMAILS,
+      `Nouvelle maintenance · ${args.vehicleName}`,
+      html,
+      FROM,
+    );
+  },
+});
+
+/** Boîte de réception des nouveaux retours (équipe produit). */
+export const FEEDBACK_INBOX_EMAILS = ["s.lahmer@eco-solidaire.fr"];
+
+const FEEDBACK_APP_LABELS: Record<string, string> = {
+  mesoutils: "Mes Outils",
+  recycapp: "Recycapp",
+  klyde: "Klyde",
+  cycleenbray: "Cycle en Bray",
+  bennespro: "Bennes & Pro",
+  pointeuse: "Pointeuse",
+  feedback: "Feedback",
+};
+
+/** Bloc citation pour reprendre un message tel qu'il a été écrit. */
+function quoteBlock(body: string) {
+  return `<div style="margin:0 0 22px;padding:14px 16px;border-left:3px solid ${BRAND};background:#f4f8f6;border-radius:0 12px 12px 0;">
+    <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#243b30;white-space:pre-wrap;">${esc(body)}</p>
+  </div>`;
+}
+
+/**
+ * Prévient l'auteur d'un retour qu'on lui a répondu, avec le message.
+ *
+ * Le contenu est repris dans l'email : sans lui, la notification force à
+ * rouvrir l'app pour savoir s'il s'agit d'une vraie réponse ou d'un accusé de
+ * réception, et les échanges s'enlisent.
+ */
+export const sendFeedbackCommentEmail = internalAction({
+  args: {
+    email: v.string(),
+    authorName: v.optional(v.string()),
+    commenterName: v.string(),
+    commenterPhotoUrl: v.optional(v.string()),
+    body: v.string(),
+    feedbackType: v.string(),
+    description: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const greeting = args.authorName?.trim() ? `Bonjour ${esc(args.authorName.trim())},` : "Bonjour,";
+    const excerpt =
+      args.description.length > 160 ? `${args.description.slice(0, 160).trimEnd()}…` : args.description;
+
+    const html = shell({
+      preheader: `${args.commenterName} a répondu à votre retour.`,
+      heading: "Réponse à votre retour",
+      intro: `${greeting}<br/><br/><strong>${esc(args.commenterName)}</strong> vous a répondu à propos de votre retour « ${esc(excerpt)} ».`,
+      contentHtml: `
+        ${userChip(args.commenterName, args.commenterPhotoUrl, "A répondu")}
+        ${quoteBlock(args.body)}
+        ${button(feedbackAppUrl(), "Répondre dans l'app")}
+      `,
+    });
+
+    await resendSend(args.email, `Réponse à votre retour · ${FEEDBACK_TYPE_LABELS[args.feedbackType] ?? "Retour"}`, html, FROM);
+  },
+});
+
+/** Prévient l'équipe produit qu'un nouveau retour vient d'être déposé. */
+export const sendFeedbackCreatedEmail = internalAction({
+  args: {
+    app: v.string(),
+    feedbackType: v.string(),
+    description: v.string(),
+    authorName: v.optional(v.string()),
+    authorEmail: v.string(),
+    authorPhotoUrl: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const appLabel = FEEDBACK_APP_LABELS[args.app] ?? args.app;
+    const typeLabel = FEEDBACK_TYPE_LABELS[args.feedbackType] ?? "Retour";
+    const authorLabel = args.authorName?.trim() || args.authorEmail;
+
+    const html = shell({
+      preheader: `${authorLabel} a déposé un retour sur ${appLabel}.`,
+      heading: "Nouveau retour utilisateur",
+      intro: `Un nouveau retour vient d'être déposé sur <strong>${esc(appLabel)}</strong>.`,
+      contentHtml: `
+        ${userChip(authorLabel, args.authorPhotoUrl, args.authorEmail)}
+        ${detailCard([
+          ["Application", appLabel],
+          ["Type", typeLabel],
+        ])}
+        ${quoteBlock(args.description)}
+        ${button(feedbackAppUrl(), "Traiter le retour")}
+      `,
+    });
+
+    await resendSend(FEEDBACK_INBOX_EMAILS, `Nouveau retour · ${appLabel} (${typeLabel})`, html, FROM);
+  },
+});

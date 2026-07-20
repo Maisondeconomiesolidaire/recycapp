@@ -1,4 +1,4 @@
-# Recyclerie — Notes de développement
+# Recycapp — Notes de développement
 
 SAAS / CRM pour la recyclerie **Cycle en Bray**. Ce document récapitule en détail
 tout ce qui a été construit, l'architecture, le modèle de données, les fonctions
@@ -233,11 +233,11 @@ CRM (protégées `requireStaff`) :
 - **`/velo`** — atelier Cycle en Bray (type de vélo, prestation, marque, état,
   description, photos).
 - **`/merci`** — confirmation (message selon `?type=`).
-- Header public **sans logo** (texte « Recyclerie »). `?embed=1` masque header/footer.
+- Header public **sans logo** (texte « Recycapp »). `?embed=1` masque header/footer.
 
 ### CRM (dark mode, `/crm`, protégé Clerk)
 - **Sidebar** : Tableau de bord, Demandes, Calendrier, Clients, Articles, Équipe.
-  En-tête **sans icône logo** (texte « Recyclerie / CRM Cycle en Bray »).
+  En-tête **sans icône logo** (texte « Recycapp / CRM Cycle en Bray »).
 - **Dashboard** — cartes de stats + répartition par type + pipeline.
 - **Demandes** — Kanban :
   - Onglets **Demandes complètes / Demandes incomplètes / Gagnées-Perdues**.
@@ -333,7 +333,7 @@ CRM (protégées `requireStaff`) :
 
 1. `npm install`
 2. **Convex** : `npx convex dev` (laisser tourner). Remplit `CONVEX_DEPLOYMENT` et
-   `VITE_CONVEX_URL`. Déploiement actuel : `sensible-gull-961`.
+   `VITE_CONVEX_URL`. Déploiement actuel : `nautical-eagle-786`.
 3. **Clerk** :
    - Copier la **Publishable key** dans `.env.local` → `VITE_CLERK_PUBLISHABLE_KEY`.
    - Créer un **JWT Template** nommé `convex`.
