@@ -139,6 +139,27 @@ export function Dashboard() {
 
       <div className="p-4 sm:p-6">
         <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-3">
+            <StatCard
+              label="Montant en cours"
+              value={formatPrice(stats.quoteTotals.open)}
+              helper="Devis des demandes actives"
+              large
+            />
+            <StatCard
+              label="Montant gagné"
+              value={formatPrice(stats.quoteTotals.won)}
+              helper="Devis des demandes gagnées"
+              large
+            />
+            <StatCard
+              label="Montant perdu"
+              value={formatPrice(stats.quoteTotals.lost)}
+              helper="Devis des demandes perdues"
+              large
+            />
+          </section>
+
           <section className="p-1">
             <div className="grid gap-6 xl:grid-cols-[1.18fr_1fr]">
               <div className="space-y-6">
@@ -165,26 +186,6 @@ export function Dashboard() {
                     label="Taux de gain"
                     value={`${winRate}%`}
                     helper={`${stats.won} gagnée(s) / ${stats.lost} perdue(s)`}
-                    flat
-                  />
-                </div>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <StatCard
-                    label="Montant en cours"
-                    value={formatPrice(stats.quoteTotals.open)}
-                    helper="Devis des demandes actives"
-                    flat
-                  />
-                  <StatCard
-                    label="Montant gagné"
-                    value={formatPrice(stats.quoteTotals.won)}
-                    helper="Devis des demandes gagnées"
-                    flat
-                  />
-                  <StatCard
-                    label="Montant perdu"
-                    value={formatPrice(stats.quoteTotals.lost)}
-                    helper="Devis des demandes perdues"
                     flat
                   />
                 </div>
@@ -529,24 +530,34 @@ function StatCard({
   value,
   helper,
   flat = false,
+  large = false,
 }: {
   label: string;
   value: number | string;
   helper: string;
   flat?: boolean;
+  large?: boolean;
 }) {
   return (
     <div
       className={
-        flat
-          ? "p-4"
-          : "rounded-3xl border border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-bg)_72%,transparent)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+        large
+          ? "rounded-3xl border border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-bg)_72%,transparent)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-8"
+          : flat
+            ? "p-4"
+            : "rounded-3xl border border-[var(--crm-border)] bg-[color:color-mix(in_srgb,var(--crm-bg)_72%,transparent)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
       }
     >
-      <p className="text-4xl font-semibold tracking-tight text-zinc-100">
+      <p
+        className={`font-semibold tracking-tight text-zinc-100 ${
+          large ? "text-4xl sm:text-5xl" : "text-4xl"
+        }`}
+      >
         {value}
       </p>
-      <p className="mt-3 text-sm text-zinc-400">{label}</p>
+      <p className={`mt-3 text-zinc-400 ${large ? "text-base" : "text-sm"}`}>
+        {label}
+      </p>
       <p className="mt-2 text-xs text-zinc-500">{helper}</p>
     </div>
   );
