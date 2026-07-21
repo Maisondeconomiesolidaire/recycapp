@@ -32,7 +32,11 @@ export function MessageThread({
   const markRead = useMutation(api.messages.markRead);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Conversation pour laquelle on s'est déjà calé en bas : sert à distinguer
+  // la première ouverture (saut instantané) d'un nouveau message (défilement
+  // animé).
+  const pinnedFor = useRef<Id<"requests"> | null>(null);
 
   const dark = theme === "dark";
 
@@ -51,9 +55,21 @@ export function MessageThread({
     if (unreadFromOther) void markRead({ requestId, as: viewerRole });
   }, [unreadFromOther, requestId, markRead, viewerRole]);
 
+  // On garde le fil collé à son dernier message, mais en défilant UNIQUEMENT le
+  // conteneur des messages — jamais la page. `scrollIntoView` remontait à tous
+  // les ancêtres scrollables et faisait sauter toute la page à l'ouverture d'une
+  // conversation. À la première ouverture, on se cale en bas d'un coup (sans
+  // animation) ; ensuite, un nouveau message défile en douceur.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages?.length]);
+    const container = scrollRef.current;
+    if (!container || messages === undefined) return;
+    const isInitial = pinnedFor.current !== requestId;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: isInitial ? "auto" : "smooth",
+    });
+    pinnedFor.current = requestId;
+  }, [messages?.length, requestId]);
 
   async function handleSend() {
     const trimmed = body.trim();
@@ -81,7 +97,7 @@ export function MessageThread({
 
   return (
     <div className={`flex h-full flex-col overflow-hidden rounded-2xl border ${surface}`}>
-      <div className="flex-1 space-y-2 overflow-y-auto p-4">
+      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages === undefined ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className={`h-5 w-5 animate-spin ${dark ? "text-zinc-500" : "text-zinc-400"}`} />
@@ -134,7 +150,6 @@ export function MessageThread({
             );
           })
         )}
-        <div ref={bottomRef} />
       </div>
 
       <div className={`flex items-end gap-2 border-t p-3 ${dark ? "border-[var(--crm-border)]" : "border-zinc-100"}`}>
