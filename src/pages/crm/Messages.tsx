@@ -246,6 +246,14 @@ function RequestRecap({ context, onViewRequest }: { context: any; onViewRequest:
         )}
       </div>
 
+      <button
+        type="button"
+        onClick={onViewRequest}
+        className="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-400"
+      >
+        Voir la demande
+      </button>
+
       <div className="space-y-3 border-t border-[var(--crm-border)] pt-4">
         <RecapRow label="Client" value={context.customerName || "—"} />
         {context.customerPhone && (
@@ -305,13 +313,6 @@ function RequestRecap({ context, onViewRequest }: { context: any; onViewRequest:
           <p className="mt-1 text-sm italic text-zinc-300">{context.comment}</p>
         </div>
       )}
-      <button
-        type="button"
-        onClick={onViewRequest}
-        className="mt-auto w-full rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-400"
-      >
-        Voir la demande
-      </button>
     </div>
   );
 }
