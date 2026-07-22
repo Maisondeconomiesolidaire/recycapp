@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CreditCard,
   FileText,
+  MessageSquare,
   ShoppingBag,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -96,6 +97,7 @@ function NotificationCard({
   notification: NotificationDoc;
   onOpenRequest?: (id: Id<"requests">) => void;
 }) {
+  const isMessage = notification.kind === "new_message";
   return (
     <button
       type="button"
@@ -105,6 +107,9 @@ function NotificationCard({
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
+          {isMessage ? (
+            <InfoChip icon={<MessageSquare className="h-3 w-3" />} label="Nouveau message client" tone="info" />
+          ) : null}
           <TypeBadge type={notification.requestType} size="sm" solid />
           <RequestOriginBadge origin={notification.requestOrigin} />
           {notification.requestReference && (
@@ -131,11 +136,11 @@ function NotificationCard({
           </div>
 
           <p className="mt-4 text-sm font-medium leading-6 text-zinc-200">
-            {notification.requestPreview}
+            {isMessage ? notification.title : notification.requestPreview}
           </p>
-          {notification.requestSecondaryPreview && (
+          {(isMessage ? notification.messagePreview : notification.requestSecondaryPreview) && (
             <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-zinc-500">
-              {notification.requestSecondaryPreview}
+              {isMessage ? notification.messagePreview : notification.requestSecondaryPreview}
             </p>
           )}
 
@@ -188,7 +193,7 @@ function InfoChip({
 }: {
   label: string;
   icon?: ReactNode;
-  tone?: "neutral" | "success" | "amber";
+  tone?: "neutral" | "success" | "amber" | "info";
 }) {
   return (
     <span
@@ -197,6 +202,7 @@ function InfoChip({
         tone === "neutral" && "bg-[var(--crm-surface-2)] text-zinc-300",
         tone === "success" && "bg-emerald-500/12 text-emerald-300 ring-1 ring-emerald-500/18",
         tone === "amber" && "bg-amber-500/12 text-amber-300 ring-1 ring-amber-500/18",
+        tone === "info" && "bg-sky-500/12 text-sky-300 ring-1 ring-sky-500/18",
       )}
     >
       {icon}
