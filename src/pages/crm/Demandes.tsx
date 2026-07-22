@@ -125,6 +125,15 @@ export function Demandes() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  useEffect(() => {
+    const requestId = searchParams.get("open");
+    if (!requestId) return;
+    setOpenId(requestId as Id<"requests">);
+    const next = new URLSearchParams(searchParams);
+    next.delete("open");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col lg:h-[calc(100vh)]">
       <PageHeader

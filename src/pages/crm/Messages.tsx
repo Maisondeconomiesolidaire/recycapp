@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { ArrowLeft, Loader2, Mail, MessageSquare, Phone } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MessageThread } from "../../components/MessageThread";
@@ -24,6 +25,7 @@ function formatAgo(ts: number) {
 }
 
 export function Messages() {
+  const navigate = useNavigate();
   const conversations = useQuery(api.messages.listConversations);
   const [selected, setSelected] = useState<Id<"requests"> | null>(null);
   const context = useQuery(
@@ -159,7 +161,7 @@ export function Messages() {
         {/* Recap column */}
         <div className="hidden xl:block">
           {selected && context ? (
-            <RequestRecap context={context} />
+            <RequestRecap context={context} onViewRequest={() => navigate(`/crm/demandes?open=${selected}`)} />
           ) : (
             <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 text-center text-sm text-zinc-500">
               Le récapitulatif de la demande s'affichera ici.
@@ -217,7 +219,7 @@ const OUTCOME_LABELS: Record<string, string> = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function RequestRecap({ context }: { context: any }) {
+function RequestRecap({ context, onViewRequest }: { context: any; onViewRequest: () => void }) {
   return (
     <div className="flex h-[70vh] flex-col gap-4 overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
       <div>
@@ -303,6 +305,13 @@ function RequestRecap({ context }: { context: any }) {
           <p className="mt-1 text-sm italic text-zinc-300">{context.comment}</p>
         </div>
       )}
+      <button
+        type="button"
+        onClick={onViewRequest}
+        className="mt-auto w-full rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-400"
+      >
+        Voir la demande
+      </button>
     </div>
   );
 }
