@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useAction } from "convex/react";
-import { ExternalLink, ImagePlus, Loader2, Sparkles, Star, X } from "lucide-react";
+import { Camera, ExternalLink, ImagePlus, Loader2, Sparkles, Star, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
@@ -202,6 +202,7 @@ export function ArticleForm({
   const generateFromKeywords = useAction(api.ai.generateArticleFromKeywords);
   const upload = useUpload();
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<ArticlePhoto[]>([]);
   const availableLocationOptions = useMemo(
     () =>
@@ -316,6 +317,7 @@ export function ArticleForm({
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
     }
   }
 
@@ -672,59 +674,68 @@ export function ArticleForm({
               onClose={() => setLightboxIndex(null)}
             />
           )}
-          <div
-            role="button"
-            tabIndex={uploading ? -1 : 0}
-            onClick={() => !uploading && inputRef.current?.click()}
-            onKeyDown={(e) => e.key === "Enter" && !uploading && inputRef.current?.click()}
-            onDragEnter={(e) => {
-              e.preventDefault();
-              dragCounter.current++;
-              if (dragCounter.current === 1) setIsDragging(true);
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDragLeave={() => {
-              dragCounter.current--;
-              if (dragCounter.current === 0) setIsDragging(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              dragCounter.current = 0;
-              setIsDragging(false);
-              if (!uploading) handleFiles(e.dataTransfer.files);
-            }}
-            className={cn(
-              "flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-6 text-sm font-medium transition-all",
-              isDragging
-                ? "border-brand-500 bg-brand-500/10 text-brand-300 scale-[1.01]"
-                : uploading
-                  ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-500 opacity-60"
-                  : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/60 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
-            )}
-          >
-            {uploading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Envoi des images…
-              </>
-            ) : isDragging ? (
-              <>
-                <ImagePlus className="h-5 w-5" />
-                Déposez les images ici
-              </>
-            ) : (
-              <>
-                <ImagePlus className="h-4 w-4" />
-                Ajouter des photos
-                <span className="text-zinc-600">ou glisser-déposer</span>
-              </>
-            )}
+          <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+            <div
+              role="button"
+              tabIndex={uploading ? -1 : 0}
+              onClick={() => !uploading && inputRef.current?.click()}
+              onKeyDown={(e) => e.key === "Enter" && !uploading && inputRef.current?.click()}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                dragCounter.current++;
+                if (dragCounter.current === 1) setIsDragging(true);
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDragLeave={() => {
+                dragCounter.current--;
+                if (dragCounter.current === 0) setIsDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                dragCounter.current = 0;
+                setIsDragging(false);
+                if (!uploading) handleFiles(e.dataTransfer.files);
+              }}
+              className={cn(
+                "flex min-h-28 w-full cursor-pointer select-none items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-6 text-sm font-medium transition-all",
+                isDragging
+                  ? "border-brand-500 bg-brand-500/10 text-brand-300 scale-[1.01]"
+                  : uploading
+                    ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-500 opacity-60"
+                    : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-300 hover:border-brand-500/60 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100",
+              )}
+            >
+              {uploading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Envoi des images…</>
+              ) : isDragging ? (
+                <><ImagePlus className="h-5 w-5" />Déposez les images ici</>
+              ) : (
+                <><ImagePlus className="h-4 w-4" />Ajouter des photos <span className="text-zinc-600">ou glisser-déposer</span></>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => !uploading && cameraInputRef.current?.click()}
+              disabled={uploading}
+              className="flex min-h-28 flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] px-4 py-5 text-sm font-medium text-zinc-300 transition hover:border-brand-500/60 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Camera className="h-7 w-7 text-[var(--muted-foreground)]" />
+              <span className="mt-2">Prendre une photo</span>
+            </button>
           </div>
           <input
             ref={inputRef}
             type="file"
             accept="image/*"
             multiple
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
             className="hidden"
             onChange={(e) => handleFiles(e.target.files)}
           />
