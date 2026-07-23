@@ -167,7 +167,7 @@ function ArticleCard({
     isLot?: boolean;
     bundledArticleIds?: string[];
     imageUrls: string[];
-    weightKg?: number;
+    location?: string;
   };
   wishlisted?: boolean;
   onToggleWishlist?: () => void;
@@ -265,9 +265,9 @@ function ArticleCard({
           {truncateDescription(article.description)}{" "}
           <span className="font-semibold text-brand-600">Lire plus...</span>
         </p>
-        {article.weightKg !== undefined ? (
+        {article.location ? (
           <p className="mt-1 text-[11px] text-zinc-500">
-            Poids : {article.weightKg} kg
+            Emplacement : {article.location}
           </p>
         ) : null}
 
@@ -457,7 +457,7 @@ function ProductOfDayHero({
         <div className="relative grid items-stretch md:grid-cols-2">
           <Link
             to={`/boutique/${product._id}`}
-            className="group relative block aspect-[4/3] overflow-hidden bg-[#f2eee7] md:aspect-auto md:min-h-[460px]"
+            className="group relative block aspect-[4/3] overflow-hidden bg-[#f2eee7] md:aspect-auto md:min-h-[380px]"
           >
             {product.imageUrls[0] ? (
               <img
@@ -486,8 +486,8 @@ function ProductOfDayHero({
             />
           </Link>
 
-          <div className="relative flex flex-col justify-center gap-5 p-8 sm:p-12 lg:p-14">
-            <h2 className="text-4xl font-black leading-[1.05] tracking-tight text-zinc-950 sm:text-5xl lg:text-6xl">
+          <div className="relative flex flex-col justify-center gap-4 p-7 sm:p-9 lg:p-10">
+            <h2 className="text-3xl font-black leading-[1.05] tracking-tight text-zinc-950 sm:text-4xl lg:text-5xl">
               {product.title}
             </h2>
             <p className="max-w-prose text-base leading-7 text-zinc-600 sm:text-lg">
@@ -496,7 +496,7 @@ function ProductOfDayHero({
             <div className="flex flex-wrap items-center gap-4">
               {product.originalPrice && product.originalPrice > product.price ? (
                 <>
-                  <span className="text-5xl font-black tracking-tight sm:text-6xl" style={{ color: BRAND }}>
+                  <span className="text-4xl font-black tracking-tight sm:text-5xl" style={{ color: BRAND }}>
                     {formatPrice(product.price)}
                   </span>
                   <span className="text-xl font-semibold text-zinc-400 line-through">
@@ -504,7 +504,7 @@ function ProductOfDayHero({
                   </span>
                 </>
               ) : (
-                <span className="text-5xl font-black tracking-tight sm:text-6xl" style={{ color: BRAND }}>
+                <span className="text-4xl font-black tracking-tight sm:text-5xl" style={{ color: BRAND }}>
                   {formatPrice(product.price)}
                 </span>
               )}
@@ -514,7 +514,7 @@ function ProductOfDayHero({
             </div>
             <Link
               to={`/boutique/${product._id}`}
-              className="inline-flex w-fit items-center gap-2.5 rounded-full px-8 py-4 text-base font-bold text-white shadow-[0_16px_40px_rgba(241,16,79,0.34)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(241,16,79,0.42)]"
+              className="inline-flex w-fit items-center gap-2.5 rounded-full px-7 py-3.5 text-sm font-bold text-white shadow-[0_16px_40px_rgba(241,16,79,0.34)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(241,16,79,0.42)]"
               style={{ backgroundColor: BRAND }}
             >
               Découvrir l'article

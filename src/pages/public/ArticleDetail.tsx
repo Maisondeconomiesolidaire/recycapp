@@ -268,9 +268,9 @@ export function ArticleDetail() {
                   Lot de {bundledArticles.length} articles
                 </p>
               )}
-              {currentArticle.weightKg !== undefined && (
+              {currentArticle.location && (
                 <p className="mt-3 text-sm font-medium text-zinc-500">
-                  Poids : {currentArticle.weightKg} kg
+                  Emplacement : {currentArticle.location}
                 </p>
               )}
 
