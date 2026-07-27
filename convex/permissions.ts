@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { action, env, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { esc, resendSend } from "./emails";
 import {
   type ClerkApiUser,
   fetchAllClerkUsers,
+  formatUserName,
   getCrmAccessForIdentity,
   hasCrmPermission,
   isAdminIdentity,
@@ -15,6 +17,18 @@ const grantValidator = v.object({
   pageKey: v.string(),
   actions: v.array(v.string()),
 });
+
+const ACCESS_REQUEST_RECIPIENT = "s.lahmer@eco-solidaire.fr";
+const ACCESS_REQUEST_FROM = "Mes Outils <no-reply@mesoutils.eco-solidaire.fr>";
+
+const requestedActionLabel = (value?: string) => {
+  const labels: Record<string, string> = {
+    read: "consulter",
+    create: "créer",
+    manage: "gérer",
+  };
+  return labels[value ?? "read"] ?? "consulter";
+};
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -54,6 +68,37 @@ export const myAccess = query({
       bootstrapMode: access.bootstrapMode,
       grants: access.grants,
     };
+  },
+});
+
+/** Envoie à l'administrateur une demande formulée depuis un écran d'accès refusé. */
+export const requestAccess = action({
+  args: {
+    pageKey: v.optional(v.string()),
+    pageLabel: v.string(),
+    requestedAction: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await requireUser(ctx);
+    const requesterName = formatUserName(identity);
+    const requesterEmail = identity.email?.trim() || "Adresse e-mail non renseignée";
+    const pageLabel = args.pageLabel.trim().slice(0, 120) || "une fonctionnalité du CRM";
+    const pageKey = args.pageKey?.trim().slice(0, 120);
+    const actionLabel = requestedActionLabel(args.requestedAction);
+
+    const sent = await resendSend(
+      ACCESS_REQUEST_RECIPIENT,
+      `Demande d'accès · ${pageLabel}`,
+      `<!doctype html><html lang="fr"><body style="font-family:Arial,Helvetica,sans-serif;color:#18181b;line-height:1.55;">
+        <h2 style="margin:0 0 16px;">Nouvelle demande d'accès</h2>
+        <p><strong>${esc(requesterName)}</strong> (${esc(requesterEmail)}) demande à <strong>${esc(actionLabel)}</strong> : <strong>${esc(pageLabel)}</strong>.</p>
+        ${pageKey ? `<p style="color:#71717a;font-size:13px;">Référence : ${esc(pageKey)}</p>` : ""}
+      </body></html>`,
+      ACCESS_REQUEST_FROM,
+    );
+
+    if (!sent) throw new Error("L'email n'a pas pu être envoyé.");
+    return { ok: true };
   },
 });
 
@@ -167,12 +212,10 @@ function normalizeClerkUser(user: ClerkUserPayload) {
   if (!email) return null;
   const firstName = stringOrNull(user.first_name);
   const lastName = stringOrNull(user.last_name);
-  const name = [firstName, lastName].filter(Boolean).join(" ").trim();
-
   return {
     clerkId: stringOrNull(user.id) ?? email,
     email,
-    name: name || stringOrNull(user.username) || email,
+    name: formatUserName({ givenName: firstName, familyName: lastName, name: stringOrNull(user.username), email }),
     role: roleFromMetadata(user.public_metadata),
     imageUrl: stringOrNull(user.image_url),
     createdAt: numberOrNull(user.created_at),

@@ -5,6 +5,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
   emailForClerkId,
+  formatUserName,
   hasCrmPermission,
   livePhoto,
   livePhotosByClerkId,
@@ -21,6 +22,15 @@ const dealType = v.union(
   v.literal("don"),
   v.literal("vente"),
   v.literal("echange"),
+  v.literal("location"),
+);
+
+/** Unité de facturation d'une location (le prix s'entend « par période »). */
+const rentalPeriod = v.union(
+  v.literal("jour"),
+  v.literal("semaine"),
+  v.literal("mois"),
+  v.literal("annee"),
 );
 
 const dealAdKind = v.union(v.literal("offre"), v.literal("demande"));
@@ -31,11 +41,7 @@ function displayName(identity: {
   familyName?: string | null;
   email?: string | null;
 }) {
-  const fullName = [identity.givenName, identity.familyName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  return identity.name?.trim() || fullName || identity.email?.trim() || "Utilisateur";
+  return formatUserName(identity);
 }
 
 function pictureUrl(identity: unknown) {
@@ -274,6 +280,7 @@ export const createDeal = mutation({
     adKind: dealAdKind,
     dealType,
     price: v.optional(v.number()),
+    rentalPeriod: v.optional(rentalPeriod),
     availableFrom: v.optional(v.number()),
     availableTo: v.optional(v.number()),
     images: v.optional(v.array(v.id("_storage"))),
@@ -291,6 +298,7 @@ export const createDeal = mutation({
       adKind: args.adKind,
       dealType: args.dealType,
       price: args.price,
+      rentalPeriod: args.dealType === "location" ? args.rentalPeriod : undefined,
       availableFrom: args.availableFrom,
       availableTo: args.availableTo,
       images: args.images ?? [],

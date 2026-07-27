@@ -30,6 +30,7 @@ import type * as gotravaux from "../gotravaux.js";
 import type * as http from "../http.js";
 import type * as importLegacy from "../importLegacy.js";
 import type * as klyde from "../klyde.js";
+import type * as klydeTaxonomy from "../klydeTaxonomy.js";
 import type * as leaves from "../leaves.js";
 import type * as lib from "../lib.js";
 import type * as livraison from "../livraison.js";
@@ -39,6 +40,7 @@ import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as permissions from "../permissions.js";
 import type * as pointeuse from "../pointeuse.js";
+import type * as points from "../points.js";
 import type * as posts from "../posts.js";
 import type * as processes from "../processes.js";
 import type * as requestAnalysis from "../requestAnalysis.js";
@@ -50,6 +52,7 @@ import type * as stripe from "../stripe.js";
 import type * as team from "../team.js";
 import type * as users from "../users.js";
 import type * as vehicleControlReminders from "../vehicleControlReminders.js";
+import type * as vehicleRemarkAnalysis from "../vehicleRemarkAnalysis.js";
 import type * as ventes from "../ventes.js";
 
 import type {
@@ -81,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   importLegacy: typeof importLegacy;
   klyde: typeof klyde;
+  klydeTaxonomy: typeof klydeTaxonomy;
   leaves: typeof leaves;
   lib: typeof lib;
   livraison: typeof livraison;
@@ -90,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   permissions: typeof permissions;
   pointeuse: typeof pointeuse;
+  points: typeof points;
   posts: typeof posts;
   processes: typeof processes;
   requestAnalysis: typeof requestAnalysis;
@@ -101,6 +106,7 @@ declare const fullApi: ApiFromModules<{
   team: typeof team;
   users: typeof users;
   vehicleControlReminders: typeof vehicleControlReminders;
+  vehicleRemarkAnalysis: typeof vehicleRemarkAnalysis;
   ventes: typeof ventes;
 }>;
 

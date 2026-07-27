@@ -8,6 +8,7 @@ import {
   clerkIdForEmail,
   emailForClerkId,
   fetchInternalClerkDirectory,
+  formatUserName,
   hasCrmPermission,
   isReservationParticipant,
   photoForClerkId,
@@ -18,6 +19,7 @@ import {
 } from "./lib";
 import { vehicleBusyReason } from "./fleet";
 import { createMesoutilsNotification } from "./mesoutilsNotifications";
+import { awardEngagementPoints } from "./points";
 
 /** Photo de profil de l'identité Clerk courante, si présente. */
 function pictureUrl(identity: unknown): string | undefined {
@@ -87,11 +89,7 @@ function displayName(identity: {
   familyName?: string | null;
   email?: string | null;
 }) {
-  const fullName = [identity.givenName, identity.familyName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  return identity.name?.trim() || fullName || identity.email?.trim() || "Utilisateur";
+  return formatUserName(identity);
 }
 
 function normalizeVehicleKind(kind: string) {
@@ -119,7 +117,13 @@ async function approvedReservationsForVehicle(
     .query("vehicleReservations")
     .withIndex("by_vehicleId", (q) => q.eq("vehicleId", vehicleId))
     .collect();
-  return reservations.filter((reservation) => reservation.status === "approved");
+  // Un retour enregistré clôt la réservation opérationnellement : elle reste
+  // dans l'historique, mais ne doit plus jamais entrer dans les conflits de
+  // disponibilité, quelle que soit l'heure à laquelle le formulaire a été
+  // envoyé.
+  return reservations.filter(
+    (reservation) => reservation.status === "approved" && !reservation.feedbackSubmittedAt,
+  );
 }
 
 /**
@@ -389,6 +393,11 @@ export const bookRoom = mutation({
       status: "confirmed",
       createdAt: Date.now(),
     });
+    await awardEngagementPoints(ctx, {
+      clerkId: target.clerkId ?? identity.subject,
+      displayName: target.name,
+      eventKey: `room-reservation:${reservationId}`,
+    });
     await createMesoutilsNotification(ctx, {
       recipientClerkId: target.clerkId ?? identity.subject,
       kind: "room_reservation_confirmed",
@@ -591,7 +600,12 @@ export const listVehiclesForSlot = query({
         return {
           ...vehicle,
           occupiedBy: conflict
-            ? { userName: conflict.userName, start: conflict.start, end: conflict.end }
+            ? {
+                userName: conflict.userName,
+                start: conflict.start,
+                end: conflict.end,
+                returnRequired: conflict.end < nowMs && !conflict.feedbackSubmittedAt,
+              }
             : null,
           unavailableReason,
         };
@@ -827,6 +841,76 @@ export const submitVehicleFeedback = mutation({
       feedbackVehicleClean: args.vehicleClean,
       feedbackIssues: args.issues?.trim() || undefined,
       feedbackNotes: args.notes?.trim() || undefined,
+    });
+    await awardEngagementPoints(ctx, {
+      clerkId: identity.subject,
+      displayName: displayName(identity),
+      eventKey: `vehicle-return:${args.reservationId}`,
+    });
+    // Chaque nouveau retour relance une synthèse qui tient compte de tout
+    // l'historique du véhicule et de ses éventuels problèmes récurrents.
+    await ctx.scheduler.runAfter(0, internal.vehicleRemarkAnalysis.analyze, {
+      vehicleId: reservation.vehicleId,
+    });
+  },
+});
+
+/**
+ * Libère manuellement un véhicule lorsqu'un utilisateur ne peut pas faire son
+ * retour. Réservé aux gestionnaires : l'opération est tracée sur la réservation.
+ */
+export const markVehicleReturned = mutation({
+  args: { reservationId: v.id("vehicleReservations") },
+  handler: async (ctx, { reservationId }) => {
+    await requireCrmPermission(ctx, PAGE_KEY, "manage");
+    const identity = await requireUser(ctx);
+    const reservation = await ctx.db.get(reservationId);
+    if (!reservation) throw new Error("Réservation introuvable.");
+    if (reservation.status !== "approved") {
+      throw new Error("Seule une réservation approuvée peut être clôturée.");
+    }
+    if (reservation.feedbackSubmittedAt) return;
+    const now = Date.now();
+    await ctx.db.patch(reservationId, {
+      feedbackSubmittedAt: now,
+      feedbackManualReturnAt: now,
+      feedbackManualReturnBy: displayName(identity),
+      feedbackNotes: [reservation.feedbackNotes, "Retour confirmé manuellement par l'équipe."].filter(Boolean).join("\n"),
+    });
+  },
+});
+
+/** Relance le demandeur d'une réservation terminée dont le retour manque encore. */
+export const remindVehicleReturn = mutation({
+  args: { reservationId: v.id("vehicleReservations") },
+  handler: async (ctx, { reservationId }) => {
+    await requireCrmPermission(ctx, PAGE_KEY, "manage");
+    const reservation = await ctx.db.get(reservationId);
+    if (!reservation) throw new Error("Réservation introuvable.");
+    if (reservation.status !== "approved" || reservation.end >= Date.now()) {
+      throw new Error("Seule une réservation approuvée et terminée peut être relancée.");
+    }
+    if (reservation.feedbackSubmittedAt) {
+      throw new Error("Le retour de cette réservation a déjà été effectué.");
+    }
+
+    const recipientClerkId = reservation.bookedForClerkId ?? reservation.clerkId;
+    const email = await emailForClerkId(ctx, recipientClerkId);
+    if (!email) throw new Error("Adresse e-mail introuvable pour cet utilisateur.");
+
+    const vehicle = await ctx.db.get(reservation.vehicleId);
+    const now = Date.now();
+    await ctx.db.patch(reservationId, { feedbackReminderSentAt: now });
+    await ctx.scheduler.runAfter(0, internal.mesoutilsEmails.sendVehicleFeedbackRequestEmail, {
+      email,
+      name: reservation.userName,
+      vehicleName: vehicle?.name ?? "Véhicule",
+      vehicleImageUrl:
+        (vehicle?.photo ? await ctx.storage.getUrl(vehicle.photo) : vehicle?.photoUrl) ??
+        undefined,
+      label: reservation.purpose,
+      start: reservation.start,
+      end: reservation.end,
     });
   },
 });
@@ -1188,6 +1272,11 @@ export const requestVehicle = mutation({
       end: args.end,
       status: "pending",
       createdAt: Date.now(),
+    });
+    await awardEngagementPoints(ctx, {
+      clerkId: target.clerkId ?? identity.subject,
+      displayName: target.name,
+      eventKey: `vehicle-reservation:${reservationId}`,
     });
 
     // Les responsables sont notifiés de chaque demande de réservation véhicule :

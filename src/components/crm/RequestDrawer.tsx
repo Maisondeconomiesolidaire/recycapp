@@ -1278,12 +1278,14 @@ function CollecteCategoryPhotos({ request }: { request: RequestDoc }) {
               key={cat.key}
               type="button"
               onClick={() => pickCategory(cat.key)}
-              className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3 text-center transition-colors hover:border-brand-500/60 hover:bg-[var(--crm-surface-3)]"
+              aria-label={cat.label}
+              className="block transition hover:opacity-90"
             >
-              <img src={cat.image} alt="" className="h-12 w-12 object-contain" />
-              <span className="text-[11px] leading-tight text-zinc-300">
-                {cat.label}
-              </span>
+              <img
+                src={cat.image}
+                alt={cat.label}
+                className="aspect-square w-full rounded-2xl object-cover"
+              />
             </button>
           ))}
         </div>

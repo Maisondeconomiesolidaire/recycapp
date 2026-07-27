@@ -223,6 +223,7 @@ function shell(opts: {
 
 /** Pièce jointe Resend : contenu en base64. */
 export type EmailAttachment = { filename: string; content: string };
+type ResendSendOptions = { bcc?: string[] };
 
 export async function resendSend(
   to: string | string[],
@@ -230,11 +231,12 @@ export async function resendSend(
   html: string,
   from: string = FROM,
   attachments?: EmailAttachment[],
+  options?: ResendSendOptions,
 ) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn("RESEND_API_KEY non configurée — email ignoré.");
-    return;
+    return false;
   }
   // Un SEUL appel Resend, même pour plusieurs destinataires (évite de dépasser
   // la limite de 2 requêtes/seconde de Resend qui faisait silencieusement
@@ -242,7 +244,10 @@ export async function resendSend(
   const recipients = (Array.isArray(to) ? to : [to])
     .map((email) => email.trim())
     .filter(Boolean);
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return false;
+  const bcc = (options?.bcc ?? [])
+    .map((email) => email.trim())
+    .filter(Boolean);
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -255,6 +260,7 @@ export async function resendSend(
       to: recipients,
       subject,
       html,
+      ...(bcc.length > 0 ? { bcc } : {}),
       ...(attachments && attachments.length > 0 ? { attachments } : {}),
     }),
   });
@@ -264,7 +270,10 @@ export async function resendSend(
       `Resend (${response.status}) :`,
       (await response.text()).slice(0, 300),
     );
+    return false;
   }
+
+  return true;
 }
 
 const articleArg = v.optional(

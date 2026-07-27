@@ -94,14 +94,24 @@ export const bpUnit = v.union(
   v.literal("unite"),
 );
 
-/** App « Bennes & Pro » — facturation Stripe du DIB d'un dépôt. */
+/** Une ligne de matière facturée sur une facture Stripe Bennes & Pro. */
+export const bpBillingLine = v.object({
+  material: bpMaterial,
+  weightKg: v.number(),
+  priceCentsPerKg: v.number(),
+  amountCents: v.number(),
+});
+
+/** App « Bennes & Pro » — facturation Stripe des matières payantes d'un dépôt. */
 export const bpBilling = v.object({
-  /** Poids DIB facturable en kg (lignes kg + tonnes converties). */
+  /** Poids total facturable en kg (lignes kg + tonnes converties). */
   weightKg: v.number(),
   /** Prix appliqué, en centimes d'euro par kg (HT). */
   priceCentsPerKg: v.number(),
   /** Montant HT en centimes d'euro (la TVA est ajoutée sur la facture Stripe). */
   amountCents: v.number(),
+  /** Détail par matière, conservé pour éditer exactement les lignes Stripe. */
+  items: v.optional(v.array(bpBillingLine)),
   /** Taux de TVA appliqué (ex. 20). Les anciens dépôts sans valeur sont affichés au taux courant. */
   vatRate: v.optional(v.number()),
   status: v.union(
@@ -161,7 +171,7 @@ export const requestOrigin = v.union(
   v.literal("external"),
 );
 
-export const hrEmployeeGender = v.union(v.literal("homme"), v.literal("femme"));
+export const hrEmployeeGender = v.union(v.literal("Monsieur"), v.literal("Madame"));
 
 export const hrEmployeeStructure = v.union(
   v.literal("Pays de Bray Services 60"),
@@ -179,6 +189,9 @@ export const hrContractWebhookPayload = v.object({
   adresse_salarie: v.string(),
   num_sec_sociale: v.string(),
   structure: v.string(),
+  Nom_contrat: v.optional(v.string()),
+  nom_contrat: v.optional(v.string()),
+  numero_contrat: v.optional(v.string()),
   type_contrat: v.string(),
   type_document: v.string(),
   date_fin_contrat: v.string(),
@@ -568,6 +581,25 @@ export default defineSchema(
   })
     .index("by_clerkId", ["clerkId"])
     .index("by_email", ["email"]),
+
+  /** Solde d'engagement partagé par toutes les applications. */
+  userPoints: defineTable({
+    clerkId: v.string(),
+    displayName: v.string(),
+    profileImageUrl: v.optional(v.string()),
+    points: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_clerkId", ["clerkId"])
+    .index("by_points", ["points"]),
+
+  /** Une attribution par action, afin qu'un même retour ne rapporte qu'une fois. */
+  userPointAwards: defineTable({
+    clerkId: v.string(),
+    eventKey: v.string(),
+    points: v.number(),
+    createdAt: v.number(),
+  }).index("by_clerkId_and_eventKey", ["clerkId", "eventKey"]),
 
   /** Demandes de congés / absences déposées depuis Mes Outils. */
   leaveRequests: defineTable({
@@ -1158,6 +1190,11 @@ export default defineSchema(
     decidedAt: v.optional(v.number()),
     feedbackRequestedAt: v.optional(v.number()),
     feedbackSubmittedAt: v.optional(v.number()),
+    /** Retour libéré manuellement par l'équipe quand l'utilisateur ne peut pas remplir le formulaire. */
+    feedbackManualReturnAt: v.optional(v.number()),
+    feedbackManualReturnBy: v.optional(v.string()),
+    /** Dernière relance manuelle envoyée au demandeur pour compléter son retour. */
+    feedbackReminderSentAt: v.optional(v.number()),
     feedbackMileage: v.optional(v.number()),
     feedbackFuelRestored: v.optional(v.boolean()),
     feedbackVehicleEmpty: v.optional(v.boolean()),
@@ -1187,6 +1224,14 @@ export default defineSchema(
     partsCost: v.optional(v.number()),
     /** Pièces jointes : photos de la panne, de la réparation, factures… */
     attachments: v.optional(v.array(v.id("_storage"))),
+    /** Photos de l'état AVANT intervention (constat, panne). */
+    beforePhotos: v.optional(v.array(v.id("_storage"))),
+    /** Descriptif AVANT intervention : constat, symptômes, état relevé. */
+    beforeNotes: v.optional(v.string()),
+    /** Photos APRÈS intervention (réparation, pièces posées). */
+    afterPhotos: v.optional(v.array(v.id("_storage"))),
+    /** Descriptif des opérations réalisées pendant l'intervention. */
+    afterNotes: v.optional(v.string()),
     createdBy: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -1194,6 +1239,28 @@ export default defineSchema(
     .index("by_vehicleId", ["vehicleId"])
     .index("by_status", ["status"])
     .index("by_dueDate", ["dueDate"]),
+
+  /** Synthèse IA des retours de réservation, une par véhicule. */
+  vehicleRemarkAnalyses: defineTable({
+    vehicleId: v.id("vehicles"),
+    summary: v.string(),
+    /** Hypothèses mécaniques de l'IA, à vérifier avant toute intervention. */
+    diagnosis: v.optional(v.string()),
+    /** Sources techniques trouvées lors de la recherche web liée au véhicule. */
+    webSources: v.optional(v.array(v.object({
+      title: v.string(),
+      url: v.string(),
+    }))),
+    proposals: v.array(v.object({
+      title: v.string(),
+      description: v.string(),
+      priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+    })),
+    sourceRemarkCount: v.number(),
+    latestRemarkAt: v.number(),
+    model: v.string(),
+    updatedAt: v.number(),
+  }).index("by_vehicleId", ["vehicleId"]),
 
   /** Documents rattachés à un véhicule (carte grise, facture, devis, assurance...). */
   vehicleDocuments: defineTable({
@@ -1443,6 +1510,10 @@ export default defineSchema(
     description: v.string(),
     category: v.string(),
     subcategory: v.optional(v.string()),
+    /** Niveau le plus précis de la taxonomie Klyd (ex. Robes courtes). */
+    subsubcategory: v.optional(v.string()),
+    /** Poids estimé ou corrigé de l'article, en kilogrammes. */
+    weightKg: v.optional(v.number()),
     brand: v.optional(v.string()),
     size: v.optional(v.string()),
     condition: v.string(),
@@ -1459,6 +1530,9 @@ export default defineSchema(
     sku: v.optional(v.string()),
     // Article mis en vente sur Vinted (case cochée dans le stock Klyd).
     vinted: v.optional(v.boolean()),
+    /** Publication indépendante dans la boutique Klyde (sans lien avec Vinted). */
+    publishedOnBoutique: v.optional(v.boolean()),
+    boutiquePublishedAt: v.optional(v.number()),
     // Date de mise en vente sur Vinted (pour l'alerte « 3 semaines »).
     vintedAt: v.optional(v.number()),
     // Date d'envoi de l'alerte email « 3 semaines sur Vinted » (anti-doublon).
@@ -1497,7 +1571,16 @@ export default defineSchema(
     .index("by_status", ["status"])
     .index("by_createdAt", ["createdAt"])
     .index("by_sku", ["sku"])
+    .index("by_boutiquePublished", ["publishedOnBoutique"])
     .index("by_featured", ["featured"]),
+
+  /** Visuels éditoriaux du header de la boutique Klyde. */
+  klydeStorefront: defineTable({
+    key: v.string(),
+    hommeCover: v.optional(v.id("_storage")),
+    femmeCover: v.optional(v.id("_storage")),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 
   /** Klyde — commandes boutique créées après connexion client. */
   klydeOrders: defineTable({
@@ -1549,7 +1632,7 @@ export default defineSchema(
     /** Documents obligatoires marqués « Signé » par le staff. */
     conventionSignedAt: v.optional(v.number()),
     protocoleSignedAt: v.optional(v.number()),
-    /** Client Stripe associé (facturation du DIB). */
+    /** Client Stripe associé à la facturation. */
     stripeCustomerId: v.optional(v.string()),
     createdAt: v.number(),
   })
@@ -1635,7 +1718,7 @@ export default defineSchema(
     attachments: v.array(v.id("_storage")),
     comment: v.optional(v.string()),
     signature: v.optional(v.id("_storage")),
-    /** Facturation Stripe du DIB (seul flux facturé, au poids). */
+    /** Facturation Stripe des matières payantes, au poids. */
     billing: v.optional(bpBilling),
     createdBy: v.optional(v.string()),
     createdAt: v.number(),

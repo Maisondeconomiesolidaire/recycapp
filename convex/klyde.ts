@@ -1,8 +1,18 @@
-import { action, internalQuery, mutation, query } from "./_generated/server";
+import {
+  action,
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireAnyCrmPermission, requireCrmPermission } from "./lib";
+import { esc, resendSend } from "./emails";
+import { KLYDE_GENDERS, KLYDE_TAXONOMY, isKlydeTaxonomyChoice, klydeAverageWeightKg, klydeCategories, klydeSubcategories, klydeSubsubcategories } from "./klydeTaxonomy";
 
 const CONDITIONS = [
   "Neuf avec étiquette",
@@ -14,81 +24,23 @@ const CONDITIONS = [
 
 const PARCEL_SIZES = ["Petit", "Moyen", "Grand"] as const;
 
-const CATEGORIES = {
-  Vêtements: [
-    "Manteaux et vestes",
-    "Blousons et bombers",
-    "Doudounes et parkas",
-    "Trenchs et imperméables",
-    "Pulls et gilets",
-    "Sweats",
-    "Chemises et blouses",
-    "T-shirts et tops",
-    "Tops et débardeurs",
-    "Robes",
-    "Combinaisons",
-    "Jupes",
-    "Pantalons",
-    "Jeans",
-    "Chinos et toiles",
-    "Shorts",
-    "Tailleurs et costumes",
-    "Ensembles",
-    "Joggings et survêtements",
-    "Leggings",
-    "Sport",
-    "Maillots de bain",
-    "Sous-vêtements",
-    "Lingerie",
-    "Pyjamas",
-  ],
-  Chaussures: [
-    "Baskets",
-    "Bottes et bottines",
-    "Sandales",
-    "Tongs et claquettes",
-    "Escarpins",
-    "Ballerines",
-    "Mocassins",
-    "Espadrilles",
-    "Chaussures de ville",
-    "Chaussures de sport",
-    "Chaussons",
-  ],
-  Accessoires: [
-    "Sacs",
-    "Sacs à dos",
-    "Portefeuilles et maroquinerie",
-    "Ceintures",
-    "Chapeaux et bonnets",
-    "Écharpes et foulards",
-    "Gants",
-    "Bijoux",
-    "Montres",
-    "Lunettes",
-    "Cravates et nœuds papillon",
-    "Accessoires cheveux",
-  ],
-  "Bébé et enfant": [
-    "Vêtements de naissance",
-    "Bodies",
-    "Pyjamas",
-    "Hauts",
-    "Bas",
-    "Robes et ensembles",
-    "Manteaux",
-    "Sport enfant",
-    "Maillots de bain enfant",
-    "Sous-vêtements enfant",
-    "Chaussures enfant",
-    "Accessoires enfant",
-  ],
-} as const;
-
-const GENDERS = ["Femme", "Homme", "Enfant", "Bébé", "Unisexe"] as const;
+/** Mots-clés recherchés sur Vinted : employés seulement s'ils sont justifiés par l'article. */
+const VINTED_KEYWORDS = [
+  "Vintage", "Retro", "Archive", "Deadstock", "Rare", "Collector", "Iconic", "Timeless", "Classic", "Premium", "Luxe", "Designer", "Minimalist", "Normcore", "Old Money", "Quiet Luxury", "Coquette", "Balletcore", "Cottagecore", "Fairycore", "Angelcore", "Soft Girl", "Clean Girl", "Y2K", "McBling", "Indie Sleaze", "Grunge", "Soft Grunge", "Gorpcore", "Techwear", "Streetwear", "Workwear", "Utility", "Cargo", "Skater", "Skate", "Surf", "Boho", "Bohemian", "Hippie Chic", "Western", "Cowboy", "Rock", "Punk", "Goth", "Emo", "Dark Academia", "Light Academia", "Preppy", "Tenniscore", "Blokecore", "Moto", "Racing", "Sportswear", "Athleisure",
+  "70s", "Seventies", "80s", "Eighties", "90s", "Nineties", "2000s", "2010s", "Vintage 90", "Vintage 2000",
+  "Oversize", "Boxy", "Relaxed Fit", "Loose Fit", "Cropped", "Slim Fit", "Straight", "Wide Leg", "Baggy", "Flare", "Bootcut", "High Waist", "Low Rise", "Maxi", "Mini", "Midi", "Tailored", "Structured", "Overshirt", "Layering", "Statement Piece", "Must Have", "Trend", "Fashion", "Look", "Outfit", "Capsule Wardrobe", "Essential", "Intemporel", "Chic", "Élégant", "Casual", "Authentique",
+  "Denim", "Leather", "Suede", "Wool", "Cashmere", "Linen", "Cotton", "Silk", "Satin", "Velvet", "Corduroy", "Knit", "Crochet", "Lace", "Mesh", "Sheer", "Faux Fur", "Sherpa", "Teddy", "Mohair",
+  "Bomber", "Harrington", "Blazer", "Trench", "Varsity", "Letterman", "Racing Jacket", "Moto Jacket", "Biker", "Windbreaker", "Puffer", "Parka", "Utility Jacket", "Work Jacket", "Denim Jacket",
+  "Carpenter", "Loose", "Barrel", "Balloon", "Baby Tee", "Graphic Tee", "Oversized Tee", "Polo", "Knitwear", "Cardigan", "Hoodie", "Sweatshirt", "Zip Hoodie", "Tank Top", "Corset", "Bustier",
+  "MotoGP", "Racing Team", "Yamaha", "Honda", "Ducati", "Kawasaki", "Vintage Racing", "Leather Jacket", "Motorcycle", "Motorsport",
+] as const;
+const VINTED_KEYWORD_BY_NORMALIZED = new Map(
+  VINTED_KEYWORDS.map((keyword) => [keyword.normalize("NFC").toLocaleLowerCase("fr"), keyword]),
+);
 
 const itemStatus = v.union(
   v.literal("stock"),
+  v.literal("stock_b"),
   v.literal("en_ligne"),
   v.literal("en_cours_envoi"),
   v.literal("envoye"),
@@ -101,6 +53,8 @@ type KlydeAIResult = {
   description: string;
   category: string;
   subcategory?: string | null;
+  subsubcategory?: string | null;
+  weightKg?: number | null;
   brand?: string | null;
   size?: string | null;
   condition: string;
@@ -110,6 +64,7 @@ type KlydeAIResult = {
   parcelSize?: string | null;
   gender?: string | null;
   style?: string | null;
+  vintedKeywords?: string[] | null;
   aiConfidence?: number | null;
   aiNotes?: string | null;
 };
@@ -153,6 +108,46 @@ function normalizeQuantity(value?: number) {
   return Math.floor(value);
 }
 
+function vintedKeywordsFrom(value?: string[] | null) {
+  const seen = new Set<string>();
+  for (const keyword of value ?? []) {
+    const canonical = VINTED_KEYWORD_BY_NORMALIZED.get(keyword.trim().normalize("NFC").toLocaleLowerCase("fr"));
+    if (canonical) seen.add(canonical);
+    if (seen.size === 6) break;
+  }
+  return [...seen];
+}
+
+function workflowRank(status: string) {
+  return {
+    stock: 0,
+    en_stock: 0,
+    reserve: 0,
+    en_ligne: 1,
+    en_cours_envoi: 2,
+    envoye: 3,
+    gagne: 4,
+    vendu: 4,
+  }[status] ?? -1;
+}
+
+/**
+ * Génère une référence interne unique (6 chiffres) pour un article Klyd.
+ * Même principe que la réf. interne de la boutique recyclerie : on tire au
+ * hasard jusqu'à tomber sur une référence libre (vérifiée via l'index by_sku).
+ */
+async function generateKlydeReference(ctx: MutationCtx): Promise<string> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const candidate = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+    const existing = await ctx.db
+      .query("klydeItems")
+      .withIndex("by_sku", (q) => q.eq("sku", candidate))
+      .first();
+    if (!existing) return candidate;
+  }
+  throw new Error("Impossible de générer une référence unique.");
+}
+
 function sanitizeAnalysis(result: KlydeAIResult): KlydeAIResult {
   const condition = CONDITIONS.includes(result.condition as (typeof CONDITIONS)[number])
     ? result.condition
@@ -160,24 +155,31 @@ function sanitizeAnalysis(result: KlydeAIResult): KlydeAIResult {
   const parcelSize = PARCEL_SIZES.includes(result.parcelSize as (typeof PARCEL_SIZES)[number])
     ? result.parcelSize
     : undefined;
-  const category = Object.keys(CATEGORIES).includes(result.category)
+  const gender = KLYDE_GENDERS.includes(result.gender as (typeof KLYDE_GENDERS)[number])
+    ? result.gender
+    : "Unisexe";
+  const category = isKlydeTaxonomyChoice(gender, result.category)
     ? result.category
-    : "Vêtements";
-  const subcategories = CATEGORIES[category as keyof typeof CATEGORIES] as readonly string[];
-  const subcategory = subcategories.includes(result.subcategory ?? "")
+    : klydeCategories(gender)[0] ?? "Vêtements";
+  const subcategory = klydeSubcategories(gender, category).includes(result.subcategory ?? "")
     ? result.subcategory
     : undefined;
-  const gender = GENDERS.includes(result.gender as (typeof GENDERS)[number])
-    ? result.gender
+  const subsubcategory = subcategory && klydeSubsubcategories(gender, category, subcategory).includes(result.subsubcategory ?? "")
+    ? result.subsubcategory
     : undefined;
+  const keywords = vintedKeywordsFrom(result.vintedKeywords);
+  const description =
+    cleanOptional(result.description)?.slice(0, 1050) ||
+    "Article textile d'occasion. Détails à vérifier avant publication.";
 
   return {
     title: cleanOptional(result.title)?.slice(0, 80) || "Article textile",
-    description:
-      cleanOptional(result.description)?.slice(0, 1200) ||
-      "Article textile d'occasion. Détails à vérifier avant publication.",
+    description: keywords.length > 0
+      ? `${description}\n\nMots-clés Vinted : ${keywords.join(" · ")}`
+      : description,
     category,
     subcategory,
+    subsubcategory,
     brand: cleanOptional(result.brand),
     size: cleanOptional(result.size),
     condition,
@@ -190,6 +192,7 @@ function sanitizeAnalysis(result: KlydeAIResult): KlydeAIResult {
     aiConfidence:
       result.aiConfidence == null ? undefined : Math.max(0, Math.min(1, result.aiConfidence)),
     aiNotes: cleanOptional(result.aiNotes),
+    weightKg: klydeAverageWeightKg(category, subcategory, subsubcategory),
   };
 }
 
@@ -244,6 +247,7 @@ export const list = query({
             item.description,
             item.category,
             item.subcategory,
+            item.subsubcategory,
             item.brand,
             item.size,
             item.color,
@@ -273,7 +277,7 @@ export const listPublic = query({
   handler: async (ctx, args) => {
     const items = await ctx.db
       .query("klydeItems")
-      .withIndex("by_status", (q) => q.eq("status", "en_ligne"))
+      .withIndex("by_boutiquePublished", (q) => q.eq("publishedOnBoutique", true))
       .order("desc")
       .collect();
 
@@ -284,7 +288,7 @@ export const listPublic = query({
       if (args.subcategory && nfc(item.subcategory) !== nfc(args.subcategory)) return false;
       if (args.gender && item.gender !== args.gender) return false;
       if (args.size && item.size !== args.size) return false;
-      if (item.price == null) return false;
+      if (!item.publishedOnBoutique || item.price == null) return false;
       if (!search) return true;
       return [
         item.title,
@@ -307,6 +311,47 @@ export const listPublic = query({
   },
 });
 
+/** Visuels du header public de la boutique. */
+export const getStorefront = query({
+  args: {},
+  handler: async (ctx) => {
+    const storefront = await ctx.db
+      .query("klydeStorefront")
+      .withIndex("by_key", (q) => q.eq("key", "default"))
+      .unique();
+    if (!storefront) return { hommeUrl: null, femmeUrl: null };
+    const [hommeUrl, femmeUrl] = await Promise.all([
+      storefront.hommeCover ? ctx.storage.getUrl(storefront.hommeCover) : null,
+      storefront.femmeCover ? ctx.storage.getUrl(storefront.femmeCover) : null,
+    ]);
+    return { hommeUrl, femmeUrl };
+  },
+});
+
+/** Met à jour un visuel éditorial ; réservé aux gestionnaires de la boutique. */
+export const updateStorefront = mutation({
+  args: {
+    hommeCover: v.optional(v.id("_storage")),
+    femmeCover: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    await requireAnyCrmPermission(ctx, [
+      ["klyde:boutique", "manage"],
+      ["klyde:stock", "update"],
+    ]);
+    const existing = await ctx.db
+      .query("klydeStorefront")
+      .withIndex("by_key", (q) => q.eq("key", "default"))
+      .unique();
+    const patch = { ...args, updatedAt: Date.now() };
+    if (existing) {
+      await ctx.db.patch(existing._id, patch);
+    } else {
+      await ctx.db.insert("klydeStorefront", { key: "default", ...patch });
+    }
+  },
+});
+
 export const getFeatured = query({
   args: {},
   handler: async (ctx) => {
@@ -315,7 +360,7 @@ export const getFeatured = query({
       .withIndex("by_featured", (q) => q.eq("featured", true))
       .collect();
     const online = featured.find(
-      (item) => item.status === "en_ligne" && item.price != null,
+      (item) => item.publishedOnBoutique && item.price != null,
     );
     if (!online) return null;
     return await withPhotoUrls(ctx, online);
@@ -326,7 +371,7 @@ export const getPublic = query({
   args: { id: v.id("klydeItems") },
   handler: async (ctx, { id }) => {
     const item = await ctx.db.get(id);
-    if (!item || item.status !== "en_ligne" || item.price == null) return null;
+    if (!item || !item.publishedOnBoutique || item.price == null) return null;
     return await withPhotoUrls(ctx, item);
   },
 });
@@ -338,7 +383,7 @@ export const getManyPublic = query({
     const items = await Promise.all(uniqueIds.map((id) => ctx.db.get(id)));
     return Promise.all(
       items
-        .filter((item): item is Doc<"klydeItems"> => Boolean(item))
+        .filter((item): item is Doc<"klydeItems"> => Boolean(item?.publishedOnBoutique && item.price != null))
         .map((item) => withPhotoUrls(ctx, item)),
     );
   },
@@ -349,11 +394,11 @@ export const latestByCategory = query({
   handler: async (ctx, { category, limit }) => {
     const items = await ctx.db
       .query("klydeItems")
-      .withIndex("by_status", (q) => q.eq("status", "en_ligne"))
+      .withIndex("by_boutiquePublished", (q) => q.eq("publishedOnBoutique", true))
       .order("desc")
       .take(80);
     const filtered = items
-      .filter((item) => item.category === category && item.price != null)
+      .filter((item) => item.publishedOnBoutique && item.category === category && item.price != null)
       .slice(0, Math.min(limit ?? 4, 8));
     return Promise.all(filtered.map((item) => withPhotoUrls(ctx, item)));
   },
@@ -467,42 +512,69 @@ export const create = mutation({
     description: v.string(),
     category: v.string(),
     subcategory: v.optional(v.string()),
+    subsubcategory: v.optional(v.string()),
+    weightKg: v.optional(v.number()),
     brand: v.optional(v.string()),
     size: v.optional(v.string()),
     condition: v.string(),
     color: v.optional(v.string()),
     material: v.optional(v.string()),
     price: v.optional(v.number()),
+    actualSalePrice: v.optional(v.number()),
     parcelSize: v.optional(v.string()),
     gender: v.optional(v.string()),
     style: v.optional(v.string()),
     location: v.optional(v.string()),
     sku: v.optional(v.string()),
+    vinted: v.optional(v.boolean()),
+    outlet: v.optional(v.union(v.literal("klyd"), v.literal("mobifrip"))),
     quantity: v.optional(v.number()),
     aiConfidence: v.optional(v.number()),
     aiNotes: v.optional(v.string()),
+    // Publier directement l'annonce sur la boutique à la création.
+    publishOnBoutique: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, "klyde:stock", "create");
     if (args.photos.length === 0) throw new Error("Ajoutez au moins une photo.");
+    // Mise en ligne immédiate : mêmes droits que updateStatus("en_ligne").
+    if (args.publishOnBoutique) {
+      await requireAnyCrmPermission(ctx, [
+        ["klyde:boutique", "manage"],
+        ["klyde:stock", "update"],
+      ]);
+      if (normalizePrice(args.price) == null) {
+        throw new Error("Renseignez un prix pour mettre l'article en ligne.");
+      }
+    }
     const now = Date.now();
+    // Référence auto si l'utilisateur n'en a pas saisi.
+    const sku = cleanOptional(args.sku) ?? (await generateKlydeReference(ctx));
     return await ctx.db.insert("klydeItems", {
       photos: args.photos,
       title: args.title.trim() || "Article textile",
       description: args.description.trim(),
       category: (args.category.trim() || "Vêtements").normalize("NFC"),
       subcategory: cleanOptional(args.subcategory)?.normalize("NFC"),
+      subsubcategory: cleanOptional(args.subsubcategory)?.normalize("NFC"),
+      weightKg: typeof args.weightKg === "number" && args.weightKg > 0
+        ? Math.round(args.weightKg * 1000) / 1000
+        : klydeAverageWeightKg(args.category, args.subcategory, args.subsubcategory),
       brand: cleanOptional(args.brand),
       size: cleanOptional(args.size),
       condition: args.condition.trim() || "Bon état",
       color: cleanOptional(args.color),
       material: cleanOptional(args.material),
       price: normalizePrice(args.price),
+      actualSalePrice: normalizePrice(args.actualSalePrice),
       parcelSize: cleanOptional(args.parcelSize),
       gender: cleanOptional(args.gender),
       style: cleanOptional(args.style),
       location: cleanOptional(args.location),
-      sku: cleanOptional(args.sku),
+      sku,
+      publishedOnBoutique: args.publishOnBoutique || undefined,
+      boutiquePublishedAt: args.publishOnBoutique ? now : undefined,
+      outlet: args.outlet,
       quantity: normalizeQuantity(args.quantity),
       status: "stock",
       aiConfidence: args.aiConfidence,
@@ -519,7 +591,8 @@ export const updateStatus = mutation({
     status: itemStatus,
   },
   handler: async (ctx, { id, status }) => {
-    // Mettre en ligne = publier sur la boutique ; sinon gestion de stock.
+    // Cette mutation générique est aussi utilisée par les vues de suivi : elle
+    // doit toujours permettre de décocher/revenir à un état antérieur.
     if (status === "en_ligne") {
       await requireAnyCrmPermission(ctx, [
         ["klyde:boutique", "manage"],
@@ -528,7 +601,119 @@ export const updateStatus = mutation({
     } else {
       await requireCrmPermission(ctx, "klyde:stock", "update");
     }
-    await ctx.db.patch(id, { status, updatedAt: Date.now() });
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    const now = Date.now();
+    await ctx.db.patch(id, {
+      status,
+      vinted: status === "stock" || status === "stock_b" ? undefined : status === "en_ligne" ? true : item.vinted,
+      vintedAt: status === "en_ligne" ? item.vintedAt ?? now : status === "stock" || status === "stock_b" ? undefined : item.vintedAt,
+      updatedAt: now,
+    });
+  },
+});
+
+/** Avance d'une étape dans la carte de vente et applique ses champs requis. */
+export const advanceWorkflow = mutation({
+  args: { id: v.id("klydeItems"), status: itemStatus },
+  handler: async (ctx, { id, status }) => {
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    if (workflowRank(status) <= workflowRank(item.status)) {
+      throw new Error("Utilisez le décochage pour revenir en arrière.");
+    }
+    if (status === "en_ligne") {
+      await requireAnyCrmPermission(ctx, [
+        ["klyde:boutique", "manage"],
+        ["klyde:stock", "update"],
+      ]);
+    } else {
+      await requireCrmPermission(ctx, "klyde:stock", "update");
+    }
+
+    if (status === "en_ligne" && item.price == null) {
+      throw new Error("Renseignez le prix affiché avant la mise en ligne.");
+    }
+    if (status === "en_cours_envoi" && item.actualSalePrice == null) {
+      throw new Error("Renseignez le prix de vente réel avant de marquer l'article comme vendu.");
+    }
+    if (status === "envoye" && !cleanOptional(item.trackingNotes)) {
+      throw new Error("Ajoutez le numéro de suivi ou une note d'expédition avant cette étape.");
+    }
+    if (status === "gagne" && item.status !== "envoye") {
+      throw new Error("Marquez d'abord l'article comme expédié avant de confirmer qu'il est gagné.");
+    }
+    const now = Date.now();
+    await ctx.db.patch(id, {
+      status,
+      vinted: status === "en_ligne" ? true : item.vinted,
+      vintedAt: status === "en_ligne" ? item.vintedAt ?? now : item.vintedAt,
+      updatedAt: now,
+    });
+  },
+});
+
+/** Prix effectivement encaissé : distinct du prix catalogue de l'article. */
+export const setActualSalePrice = mutation({
+  args: { id: v.id("klydeItems"), actualSalePrice: v.optional(v.number()) },
+  handler: async (ctx, { id, actualSalePrice }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    await ctx.db.patch(id, {
+      actualSalePrice: normalizePrice(actualSalePrice),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/** Décision après trois semaines sur Vinted : retrait vers Stock B. */
+export const moveToStockB = mutation({
+  args: { id: v.id("klydeItems") },
+  handler: async (ctx, { id }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    await ctx.db.patch(id, {
+      status: "stock_b",
+      vinted: undefined,
+      vintedAt: undefined,
+      vintedAlertSentAt: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/** Prolonge une annonce Vinted et redémarre son délai de trois semaines. */
+export const extendVintedListing = mutation({
+  args: { id: v.id("klydeItems") },
+  handler: async (ctx, { id }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    if (!item.vinted) throw new Error("Cet article n'est pas en vente sur Vinted.");
+    const now = Date.now();
+    await ctx.db.patch(id, {
+      vintedAt: now,
+      vintedAlertSentAt: undefined,
+      vintedExtensionCount: (item.vintedExtensionCount ?? 0) + 1,
+      vintedLastExtendedAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+/** Oriente un article de Stock B vers une vente exceptionnelle ou le magasin. */
+export const setStockBDisposition = mutation({
+  args: {
+    id: v.id("klydeItems"),
+    disposition: v.union(v.literal("vente_exceptionnelle"), v.literal("magasin")),
+  },
+  handler: async (ctx, { id, disposition }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const item = await ctx.db.get(id);
+    if (!item || item.status !== "stock_b") throw new Error("Article Stock B introuvable.");
+    await ctx.db.patch(id, { stockBDisposition: disposition, updatedAt: Date.now() });
   },
 });
 
@@ -554,17 +739,22 @@ export const update = mutation({
     description: v.string(),
     category: v.string(),
     subcategory: v.optional(v.string()),
+    subsubcategory: v.optional(v.string()),
+    weightKg: v.optional(v.number()),
     brand: v.optional(v.string()),
     size: v.optional(v.string()),
     condition: v.string(),
     color: v.optional(v.string()),
     material: v.optional(v.string()),
     price: v.optional(v.number()),
+    actualSalePrice: v.optional(v.number()),
     parcelSize: v.optional(v.string()),
     gender: v.optional(v.string()),
     style: v.optional(v.string()),
     location: v.optional(v.string()),
     sku: v.optional(v.string()),
+    vinted: v.optional(v.boolean()),
+    outlet: v.optional(v.union(v.literal("klyd"), v.literal("mobifrip"))),
     quantity: v.optional(v.number()),
     aiConfidence: v.optional(v.number()),
     aiNotes: v.optional(v.string()),
@@ -572,27 +762,44 @@ export const update = mutation({
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, "klyde:stock", "update");
     if (args.photos.length === 0) throw new Error("Ajoutez au moins une photo.");
+    const existing = await ctx.db.get(args.id);
+    const now = Date.now();
+    // On complète la référence si elle manque encore (articles antérieurs).
+    const sku = cleanOptional(args.sku) ?? (await generateKlydeReference(ctx));
+    // Date Vinted : conservée si déjà en vente, initialisée à la 1re mise en
+    // vente, effacée (avec l'alerte) si l'article est retiré de Vinted.
+    const vintedAt = args.vinted ? existing?.vintedAt ?? now : undefined;
+    const vintedAlertSentAt = args.vinted ? existing?.vintedAlertSentAt : undefined;
     await ctx.db.patch(args.id, {
       photos: args.photos,
       title: args.title.trim() || "Article textile",
       description: args.description.trim(),
       category: (args.category.trim() || "Vêtements").normalize("NFC"),
       subcategory: cleanOptional(args.subcategory)?.normalize("NFC"),
+      subsubcategory: cleanOptional(args.subsubcategory)?.normalize("NFC"),
+      weightKg: typeof args.weightKg === "number" && args.weightKg > 0
+        ? Math.round(args.weightKg * 1000) / 1000
+        : klydeAverageWeightKg(args.category, args.subcategory, args.subsubcategory),
       brand: cleanOptional(args.brand),
       size: cleanOptional(args.size),
       condition: args.condition.trim() || "Bon état",
       color: cleanOptional(args.color),
       material: cleanOptional(args.material),
       price: normalizePrice(args.price),
+      actualSalePrice: normalizePrice(args.actualSalePrice),
       parcelSize: cleanOptional(args.parcelSize),
       gender: cleanOptional(args.gender),
       style: cleanOptional(args.style),
       location: cleanOptional(args.location),
-      sku: cleanOptional(args.sku),
+      sku,
+      vinted: args.vinted ? true : undefined,
+      vintedAt,
+      vintedAlertSentAt,
+      outlet: args.outlet,
       quantity: normalizeQuantity(args.quantity),
       aiConfidence: args.aiConfidence,
       aiNotes: cleanOptional(args.aiNotes),
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
   },
 });
@@ -614,6 +821,7 @@ export const setFeatured = mutation({
     ]);
     const target = await ctx.db.get(id);
     if (!target) throw new Error("Article introuvable.");
+    if (!target.publishedOnBoutique) throw new Error("Publiez d'abord cet article sur la boutique.");
 
     const currentlyFeatured = await ctx.db
       .query("klydeItems")
@@ -627,6 +835,23 @@ export const setFeatured = mutation({
     }
     await ctx.db.patch(id, { featured: !target.featured, updatedAt: now });
     return { featured: !target.featured };
+  },
+});
+
+/** Publication Boutique indépendante du statut Vinted. */
+export const setBoutiquePublished = mutation({
+  args: { id: v.id("klydeItems"), published: v.boolean() },
+  handler: async (ctx, { id, published }) => {
+    await requireAnyCrmPermission(ctx, [["klyde:boutique", "manage"], ["klyde:stock", "update"]]);
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    if (published && normalizePrice(item.price) == null) throw new Error("Renseignez un prix avant de publier sur la boutique.");
+    await ctx.db.patch(id, {
+      publishedOnBoutique: published || undefined,
+      boutiquePublishedAt: published ? item.boutiquePublishedAt ?? Date.now() : undefined,
+      featured: published ? item.featured : false,
+      updatedAt: Date.now(),
+    });
   },
 });
 
@@ -662,8 +887,10 @@ Retourne uniquement un JSON valide avec ces champs:
 {
   "title": "titre boutique clair, max 80 caractères",
   "description": "description prête à publier, objective, mentionne l'état et les défauts visibles",
-  "category": "une de: Vêtements | Chaussures | Accessoires | Bébé et enfant",
+  "gender": "Femme | Homme | Enfant | Unisexe",
+  "category": "une catégorie exacte de la taxonomie fournie",
   "subcategory": "une sous-catégorie exacte de la catégorie choisie",
+  "subsubcategory": "une sous-sous-catégorie exacte, ou null si aucun niveau plus précis n'existe",
   "brand": "marque si visible ou null",
   "size": "taille si visible ou estimée prudemment, sinon null",
   "condition": "une de: Neuf avec étiquette | Neuf sans étiquette | Très bon état | Bon état | Satisfaisant",
@@ -671,17 +898,17 @@ Retourne uniquement un JSON valide avec ces champs:
   "material": "matière si visible/probable, sinon null",
   "price": prix conseillé en euros pour la boutique, nombre ou null,
   "parcelSize": "Petit | Moyen | Grand",
-  "gender": "une de: Femme | Homme | Enfant | Bébé | Unisexe",
   "style": "style/mots utiles: vintage, casual, sport, chic... ou null",
+  "vintedKeywords": ["3 à 6 mots-clés Vinted exacts, pertinents et justifiés par l'article"],
   "aiConfidence": nombre entre 0 et 1,
   "aiNotes": "points à vérifier humainement"
 }
-Sous-catégories autorisées:
-- Vêtements: Manteaux et vestes, Blousons et bombers, Doudounes et parkas, Trenchs et imperméables, Pulls et gilets, Sweats, Chemises et blouses, T-shirts et tops, Tops et débardeurs, Robes, Combinaisons, Jupes, Pantalons, Jeans, Chinos et toiles, Shorts, Tailleurs et costumes, Ensembles, Joggings et survêtements, Leggings, Sport, Maillots de bain, Sous-vêtements, Lingerie, Pyjamas
-- Chaussures: Baskets, Bottes et bottines, Sandales, Tongs et claquettes, Escarpins, Ballerines, Mocassins, Espadrilles, Chaussures de ville, Chaussures de sport, Chaussons
-- Accessoires: Sacs, Sacs à dos, Portefeuilles et maroquinerie, Ceintures, Chapeaux et bonnets, Écharpes et foulards, Gants, Bijoux, Montres, Lunettes, Cravates et nœuds papillon, Accessoires cheveux
-- Bébé et enfant: Vêtements de naissance, Bodies, Pyjamas, Hauts, Bas, Robes et ensembles, Manteaux, Sport enfant, Maillots de bain enfant, Sous-vêtements enfant, Chaussures enfant, Accessoires enfant
+Taxonomie autorisée (genre → catégorie → sous-catégorie → sous-sous-catégorie):
+${JSON.stringify(KLYDE_TAXONOMY)}
 Sois prudent: si marque, taille ou matière ne sont pas visibles, mets null.
+Optimise la description pour la recherche Vinted : sélectionne entre 3 et 6 mots-clés strictement pertinents dans la liste ci-dessous. Ne les invente jamais, n'ajoute pas de marque absente, et n'utilise pas de mots-clés sans rapport avec la photo. La réponse doit les mettre dans \`vintedKeywords\`; ils seront ajoutés proprement à la description.
+Mots-clés Vinted autorisés :
+${JSON.stringify(VINTED_KEYWORDS)}
 ${extraDetails?.trim() ? `Contexte fourni par l'utilisateur: ${extraDetails.trim()}` : ""}`;
 
     const result = await callOpenAI<KlydeAIResult>(apiKey, {
@@ -703,5 +930,280 @@ ${extraDetails?.trim() ? `Contexte fourni par l'utilisateur: ${extraDetails.trim
     });
 
     return sanitizeAnalysis(result);
+  },
+});
+
+/**
+ * Lance une prédiction FASHN et attend son résultat (polling), en renvoyant
+ * l'URL de l'image générée. Chaque étape « quality » prend ~1 min.
+ */
+async function runFashnPrediction(
+  apiKey: string,
+  modelName: string,
+  inputs: Record<string, unknown>,
+): Promise<string> {
+  const runResponse = await fetch("https://api.fashn.ai/v1/run", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model_name: modelName, inputs }),
+  });
+  if (!runResponse.ok) {
+    const errorText = await runResponse.text();
+    throw new Error(`Erreur FASHN (${runResponse.status}): ${errorText.slice(0, 300)}`);
+  }
+  const runData = (await runResponse.json()) as { id?: string; error?: unknown };
+  if (runData.error || !runData.id) {
+    throw new Error(`FASHN: ${JSON.stringify(runData.error ?? "réponse invalide").slice(0, 300)}`);
+  }
+
+  const deadline = Date.now() + 150_000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const statusResponse = await fetch(`https://api.fashn.ai/v1/status/${runData.id}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!statusResponse.ok) continue;
+    const statusData = (await statusResponse.json()) as {
+      status?: string;
+      output?: string[];
+      error?: unknown;
+    };
+    if (statusData.status === "completed") {
+      const output = statusData.output?.[0];
+      if (!output) throw new Error("FASHN n'a renvoyé aucune image.");
+      return output;
+    }
+    if (statusData.status === "failed" || statusData.error) {
+      throw new Error(
+        `Génération FASHN échouée: ${JSON.stringify(statusData.error ?? "inconnue").slice(0, 300)}`,
+      );
+    }
+  }
+  throw new Error("Génération FASHN expirée, réessayez.");
+}
+
+/**
+ * Prompt de « mise en scène » : garde le mannequin et le vêtement principal
+ * intacts, puis ajoute des accessoires/pièces complémentaires assortis et un
+ * environnement/contexte sur mesure correspondant à l'univers du vêtement.
+ */
+function buildStylingPrompt(garment?: {
+  category?: string;
+  subcategory?: string;
+  gender?: string;
+  style?: string;
+  color?: string;
+  brand?: string;
+}): string {
+  const descriptors = [
+    cleanOptional(garment?.subcategory) ?? cleanOptional(garment?.category),
+    cleanOptional(garment?.style),
+    cleanOptional(garment?.color),
+    cleanOptional(garment?.brand),
+  ].filter(Boolean);
+  const garmentDesc = descriptors.length ? ` (${descriptors.join(", ")})` : "";
+
+  return (
+    `Keep the same person, face, body, pose and the main worn garment${garmentDesc} exactly the same. ` +
+    `Style the look by adding tasteful, complementary fashion accessories and additional clothing pieces ` +
+    `(such as shoes, bag, jewelry, layers) that match the garment's style and colours. ` +
+    `Replace the background with a bespoke environment and context that fits the garment's universe: ` +
+    `choose the setting, location, season, lighting, colours and mood that best tell its story. ` +
+    `Be creative and vary the scene (studio, outdoor, urban, nature, stylish interior), ` +
+    `keeping it coherent with the style. High-end editorial lookbook / brand e-commerce rendering, photorealistic.`
+  );
+}
+
+/**
+ * Essayage FASHN en deux temps : (1) Try-On Max place l'article sur le
+ * mannequin (image) choisi par l'utilisateur — le mannequin est conservé ;
+ * (2) un passage `edit` ajoute des accessoires/pièces complémentaires assortis
+ * et génère un environnement/contexte sur mesure. Un seed aléatoire varie la
+ * mise en scène à chaque fois. L'image finale est stockée dans Convex.
+ */
+export const generateTryOn = action({
+  args: {
+    storageId: v.id("_storage"),
+    // Image du mannequin choisi (asset public de l'app Klyd), URL absolue.
+    modelImageUrl: v.string(),
+    // Qualité/résolution de sortie FASHN (défaut: 2k).
+    resolution: v.optional(v.union(v.literal("1k"), v.literal("2k"), v.literal("4k"))),
+    // Attributs de l'article pour orienter accessoires et contexte générés.
+    garment: v.optional(
+      v.object({
+        category: v.optional(v.string()),
+        subcategory: v.optional(v.string()),
+        gender: v.optional(v.string()),
+        style: v.optional(v.string()),
+        color: v.optional(v.string()),
+        brand: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, { storageId, modelImageUrl, resolution, garment }) => {
+    await ctx.runQuery(internal.klyde.assertCanAnalyze, {});
+
+    const apiKey = process.env.FASHN_API_KEY;
+    if (!apiKey) {
+      throw new Error("Clé FASHN absente du déploiement Convex partagé.");
+    }
+    if (!/^https?:\/\//i.test(modelImageUrl)) {
+      throw new Error("Image du mannequin invalide.");
+    }
+    const outputResolution = resolution ?? "2k";
+
+    const productUrl = await ctx.storage.getUrl(storageId);
+    if (!productUrl) throw new Error("Photo introuvable dans le stockage Convex.");
+
+    // 1) Try-On Max : l'article porté par le mannequin choisi (mannequin conservé).
+    const tryOnUrl = await runFashnPrediction(apiKey, "tryon-max", {
+      product_image: productUrl,
+      model_image: modelImageUrl,
+      resolution: outputResolution,
+      generation_mode: "quality",
+      output_format: "png",
+      num_images: 1,
+    });
+
+    // 2) Mise en scène : accessoires/pièces complémentaires + contexte sur mesure.
+    const resultUrl = await runFashnPrediction(apiKey, "edit", {
+      image: tryOnUrl,
+      prompt: buildStylingPrompt(garment),
+      resolution: outputResolution,
+      generation_mode: "quality",
+      output_format: "png",
+      num_images: 1,
+      // Seed aléatoire : une mise en scène différente à chaque génération.
+      seed: Math.floor(Math.random() * 2_147_483_647),
+    });
+
+    // 3) Téléchargement et stockage de l'image générée dans Convex.
+    const imageResponse = await fetch(resultUrl);
+    if (!imageResponse.ok) throw new Error("Image générée par FASHN inaccessible.");
+    const blob = await imageResponse.blob();
+    const newStorageId = await ctx.storage.store(blob);
+    const url = await ctx.storage.getUrl(newStorageId);
+    return { storageId: newStorageId, url };
+  },
+});
+
+/* ─── Alerte email « 3 semaines sur Vinted sans être gagné » ──────────────── */
+
+const VINTED_ALERT_RECIPIENT = "s.maccioni@eco-solidaire.fr";
+const VINTED_ALERT_AFTER_MS = 21 * 24 * 60 * 60 * 1000; // 3 semaines
+const KLYD_FROM = "Klyd <no-reply@mesoutils.eco-solidaire.fr>";
+
+/** Articles en vente sur Vinted depuis 3 semaines, non gagnés, sans alerte encore envoyée. */
+export const listVintedAlertCandidates = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - VINTED_ALERT_AFTER_MS;
+    const items = await ctx.db
+      .query("klydeItems")
+      .withIndex("by_status")
+      .collect();
+    return items
+      .filter(
+        (item) =>
+          item.vinted === true &&
+          item.vintedAt != null &&
+          item.vintedAt <= cutoff &&
+          item.status !== "gagne" &&
+          item.status !== "archive" &&
+          item.vintedAlertSentAt == null,
+      )
+      .map((item) => ({
+        _id: item._id,
+        title: item.title,
+        sku: item.sku ?? null,
+        price: item.price ?? null,
+        brand: item.brand ?? null,
+        size: item.size ?? null,
+        status: item.status,
+        vintedAt: item.vintedAt ?? null,
+      }));
+  },
+});
+
+export const markVintedAlertSent = internalMutation({
+  args: { id: v.id("klydeItems") },
+  handler: async (ctx, { id }) => {
+    await ctx.db.patch(id, { vintedAlertSentAt: Date.now() });
+  },
+});
+
+function buildVintedAlertEmail(item: {
+  title: string;
+  sku: string | null;
+  price: number | null;
+  brand: string | null;
+  size: string | null;
+  vintedAt: number | null;
+}): { subject: string; html: string } {
+  const ref = item.sku ? ` (réf. ${item.sku})` : "";
+  const since = item.vintedAt
+    ? new Date(item.vintedAt).toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "—";
+  const details = [
+    item.brand ? `Marque : ${item.brand}` : null,
+    item.size ? `Taille : ${item.size}` : null,
+    item.price != null ? `Prix : ${item.price.toFixed(2)} €` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const subject = `⏰ Vinted : « ${item.title} » en vente depuis 3 semaines`;
+  const html = `<!doctype html>
+<html lang="fr"><body style="margin:0;background:#f6eee5;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e7d8ca;">
+      <tr><td style="background:#e8306a;padding:18px 26px;">
+        <p style="margin:0;color:#ffffff;font-size:16px;font-weight:bold;">Klyd — Alerte Vinted</p>
+      </td></tr>
+      <tr><td style="padding:26px;">
+        <p style="margin:0 0 6px;font-size:12px;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#e8306a;">
+          En vente depuis 3 semaines
+        </p>
+        <p style="margin:0 0 14px;font-size:19px;font-weight:bold;color:#111111;">
+          ${esc(item.title)}${esc(ref)}
+        </p>
+        <p style="margin:0 0 12px;font-size:14px;line-height:22px;color:#3d3d3d;">
+          Cet article est mis en vente sur <strong>Vinted</strong> depuis le
+          <strong>${esc(since)}</strong> et n'est toujours pas gagné.
+          Pensez à vérifier l'annonce (prix, visibilité) ou à le réorienter.
+        </p>
+        ${details ? `<p style="margin:0;font-size:13px;line-height:20px;color:#6b6b6b;">${esc(details)}</p>` : ""}
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+  return { subject, html };
+}
+
+/**
+ * Cron quotidien : alerte à s.maccioni pour chaque article en vente sur Vinted
+ * depuis 3 semaines et toujours non gagné (une seule alerte par article).
+ */
+export const sendVintedAlerts = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ sent: number }> => {
+    const candidates = await ctx.runQuery(internal.klyde.listVintedAlertCandidates, {});
+    let sent = 0;
+    for (const item of candidates) {
+      const { subject, html } = buildVintedAlertEmail(item);
+      await resendSend(VINTED_ALERT_RECIPIENT, subject, html, KLYD_FROM);
+      await ctx.runMutation(internal.klyde.markVintedAlertSent, { id: item._id });
+      sent += 1;
+      if (sent < candidates.length) {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+    }
+    return { sent };
   },
 });

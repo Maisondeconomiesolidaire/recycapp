@@ -58,15 +58,6 @@ export function CollecteCategoryPicker({
     onChange(next);
   }
 
-  const tileBase = dark
-    ? "border-[var(--crm-border)] bg-[var(--crm-surface-2)] hover:border-[var(--crm-border-strong)]"
-    : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50";
-  const tileActive = dark
-    ? "border-brand-500 bg-brand-500/10"
-    : "border-brand-500 bg-brand-50 shadow-sm";
-  const labelActive = dark ? "text-brand-300" : "text-brand-700";
-  const labelIdle = dark ? "text-zinc-300" : "text-zinc-700";
-
   return (
     <div>
       <input
@@ -83,38 +74,30 @@ export function CollecteCategoryPicker({
           const checked = photos.length > 0;
           const uploading = uploadingCategory === cat.key;
           return (
-            <div
-              key={cat.key}
-              className={cn(
-                "relative flex flex-col rounded-2xl border-2 p-3 transition",
-                checked ? tileActive : tileBase,
-              )}
-            >
+            <div key={cat.key} className="relative flex flex-col">
               <button
                 type="button"
                 onClick={() => openPicker(cat.key)}
                 aria-pressed={checked}
-                className="flex flex-col items-center gap-2 text-center"
+                aria-label={cat.label}
+                className="relative block"
               >
                 {checked && (
-                  <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-white">
-                    <Check className="h-3 w-3" strokeWidth={3} />
+                  <span className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-white shadow">
+                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
                   </span>
                 )}
                 <img
                   src={cat.image}
-                  alt=""
+                  alt={cat.label}
                   loading="lazy"
-                  className="h-16 w-16 object-contain"
-                />
-                <span
                   className={cn(
-                    "text-xs font-semibold leading-tight",
-                    checked ? labelActive : labelIdle,
+                    "aspect-square w-full rounded-2xl object-cover transition",
+                    checked
+                      ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-transparent"
+                      : "hover:opacity-90",
                   )}
-                >
-                  {cat.label}
-                </span>
+                />
               </button>
 
               {(photos.length > 0 || uploading) && (

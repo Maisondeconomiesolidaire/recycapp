@@ -22,7 +22,7 @@ const RH_PAGE_KEY = "mesoutils:rh";
 const CONTRACT_WEBHOOK_URL =
   "https://hook.eu2.make.com/huqlb8dif2n27j5bpnp5tycwniqrt1ow";
 
-const genderValidator = v.union(v.literal("homme"), v.literal("femme"));
+const genderValidator = v.union(v.literal("Monsieur"), v.literal("Madame"));
 const structureValidator = v.union(
   v.literal("Pays de Bray Services 60"),
   v.literal("Pays de Bray Services 76"),
@@ -35,6 +35,7 @@ const structureValidator = v.union(
 
 const contractPayloadArgs = {
   employeeId: v.id("hrEmployees"),
+  numero_contrat: v.string(),
   type_contrat: v.union(
     v.literal("CDDI"),
     v.literal("CDI-Inclusion"),
@@ -69,7 +70,7 @@ function normalizeAddress(value: string) {
 function normalizeEmployeeInput(args: {
   firstName: string;
   lastName: string;
-  gender: "homme" | "femme";
+  gender: "Monsieur" | "Madame";
   address: string;
   structure:
     | "Pays de Bray Services 60"
@@ -178,6 +179,7 @@ function contractPayloadFromEmployee(
   employee: Doc<"hrEmployees">,
   args: {
     employeeId: Id<"hrEmployees">;
+    numero_contrat: string;
     type_contrat: "CDDI" | "CDI-Inclusion" | "CDD-Pec" | "CDI";
     type_document: "contrat_initial" | "avenant_prolong";
     date_fin_contrat: string;
@@ -196,9 +198,12 @@ function contractPayloadFromEmployee(
   return {
     genre_salarie: employee.gender,
     nom_prenom_salarie: employee.fullName,
+    Nom_contrat: `${employee.lastName.replace(/\s+/g, "")}-${employee.firstName.replace(/\s+/g, "")}`,
+    nom_contrat: `${employee.lastName.replace(/\s+/g, "")}-${employee.firstName.replace(/\s+/g, "")}-${args.type_document}-${todayInParis()}`,
     adresse_salarie: employee.address,
     num_sec_sociale: employee.socialSecurityNumber,
     structure: structureForWebhook(employee.structure),
+    numero_contrat: args.numero_contrat.trim(),
     type_contrat: args.type_contrat,
     type_document: args.type_document,
     date_fin_contrat: args.date_fin_contrat.trim(),
@@ -220,6 +225,39 @@ function contractPayloadFromEmployee(
     PREMIER_CONTRAT:
       args.PREMIER_CONTRAT.trim() || employee.firstContractDate?.trim() || "",
   };
+}
+
+function todayInParis() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function sharePointUrlFromWebhookResponse(responseText: string) {
+  const text = responseText.trim();
+  const candidates = [text];
+  try {
+    const body = JSON.parse(text) as Record<string, unknown>;
+    for (const key of ["url", "webUrl", "web_url", "link"]) {
+      if (typeof body[key] === "string") candidates.push(body[key]);
+    }
+  } catch {
+    // Le module Webhook response de Make renvoie généralement l'URL en texte brut.
+  }
+
+  return candidates.find((candidate) => {
+    try {
+      const url = new URL(candidate);
+      return url.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }) ?? null;
 }
 
 export const listEmployees = query({
@@ -392,9 +430,12 @@ export const recordContractWebhook = internalMutation({
       payload: v.object({
         genre_salarie: v.string(),
         nom_prenom_salarie: v.string(),
+        Nom_contrat: v.string(),
+        nom_contrat: v.string(),
         adresse_salarie: v.string(),
         num_sec_sociale: v.string(),
         structure: v.string(),
+        numero_contrat: v.string(),
         type_contrat: v.string(),
         type_document: v.string(),
         date_fin_contrat: v.string(),
@@ -457,7 +498,7 @@ export const generateContract = action({
       throw new Error(`Webhook Make en échec (${response.status}).`);
     }
 
-    return { ok: true };
+    return { ok: true, contractUrl: sharePointUrlFromWebhookResponse(responseText) };
   },
 });
 
@@ -524,8 +565,8 @@ export const importEmployeesFromLegacyCsv = mutation({
           socialSecurityNumber: row.socialSecurityNumber,
           gender:
             (row.genderLabel.trim().toLowerCase() === "madame"
-              ? "femme"
-              : "homme") as "homme" | "femme",
+              ? "Madame"
+              : "Monsieur") as "Monsieur" | "Madame",
           address: row.address.trim(),
           structure,
           firstContractDate: row.firstContractDate?.trim() || undefined,

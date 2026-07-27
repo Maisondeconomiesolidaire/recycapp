@@ -2,15 +2,17 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
-import { feedbackApp, feedbackStatus, feedbackType } from "./schema";
+import { feedbackApp, feedbackPriority, feedbackStatus, feedbackType } from "./schema";
 import {
   hasCrmPermission,
+  formatUserName,
   livePhoto,
   livePhotosByClerkId,
   normalizeEmail,
   requireCrmPermission,
   requireUser,
 } from "./lib";
+import { awardEngagementPoints } from "./points";
 
 /**
  * App « Feedback » (feedback.groupemes.fr) — retours des utilisateurs sur les
@@ -38,8 +40,7 @@ function feedbackDisplayName(identity: {
   familyName?: string | null;
   email?: string | null;
 }) {
-  const fullName = [identity.givenName, identity.familyName].filter(Boolean).join(" ").trim();
-  return identity.name?.trim() || fullName || identity.email?.trim() || "L'équipe produit";
+  return formatUserName(identity, "L'équipe produit");
 }
 
 /** Peut traiter les retours (kanban) : statut, réponse d'équipe, suppression. */
@@ -107,6 +108,8 @@ export const submit = mutation({
     app: feedbackApp,
     type: feedbackType,
     description: v.string(),
+    attachments: v.optional(v.array(v.id("_storage"))),
+    priority: v.optional(feedbackPriority),
   },
   handler: async (ctx, args) => {
     await requireCrmPermission(ctx, FEEDBACK_PAGE_KEY, "create");
@@ -126,20 +129,27 @@ export const submit = mutation({
       app: args.app,
       type: args.type,
       description,
+      attachments: args.attachments?.slice(0, 8),
       status: "nouveau",
+      priority: args.priority ?? "normale",
       authorClerkId: identity.subject,
       authorEmail: email,
-      authorName: identity.name ?? undefined,
+      authorName: feedbackDisplayName(identity),
       authorImageUrl: identity.pictureUrl ?? undefined,
       createdAt: now,
       updatedAt: now,
+    });
+    await awardEngagementPoints(ctx, {
+      clerkId: identity.subject,
+      displayName: feedbackDisplayName(identity),
+      eventKey: `feedback:${feedbackId}`,
     });
 
     await ctx.scheduler.runAfter(0, internal.mesoutilsEmails.sendFeedbackCreatedEmail, {
       app: args.app,
       feedbackType: args.type,
       description,
-      authorName: identity.name ?? undefined,
+      authorName: feedbackDisplayName(identity),
       authorEmail: email,
       authorPhotoUrl: typeof identity.pictureUrl === "string" ? identity.pictureUrl : undefined,
     });
@@ -254,10 +264,14 @@ export const thread = query({
       item.authorClerkId,
       ...comments.map((comment) => comment.authorClerkId),
     ]);
+    const attachmentUrls = await Promise.all(
+      (item.attachments ?? []).map((attachment) => ctx.storage.getUrl(attachment)),
+    );
     return {
       item: {
         ...item,
         authorImageUrl: livePhoto(photos, item.authorClerkId, item.authorImageUrl),
+        attachmentUrls: attachmentUrls.filter((url): url is string => Boolean(url)),
       },
       comments: comments.map((comment) => ({
         ...comment,
@@ -296,7 +310,7 @@ export const addComment = mutation({
       body,
       authorClerkId: identity.subject,
       authorEmail: email,
-      authorName: identity.name ?? undefined,
+      authorName: feedbackDisplayName(identity),
       authorImageUrl: identity.pictureUrl ?? undefined,
       fromTeam: admin,
       createdAt: now,
@@ -358,6 +372,35 @@ export const list = query({
       authorImageUrl: livePhoto(photos, item.authorClerkId, item.authorImageUrl),
       commentCount: countById.get(item._id) ?? 0,
     }));
+  },
+});
+
+/**
+ * Changement d'urgence d'un retour.
+ *
+ * Contrairement au statut (qui appartient à l'équipe produit), l'urgence est
+ * la parole de **l'auteur** : c'est lui qui sait si sa situation s'est
+ * aggravée. Il peut donc la revoir depuis « Mes retours » à tout moment.
+ * L'équipe produit y a aussi accès, pour arbitrer depuis le kanban.
+ */
+export const setPriority = mutation({
+  args: {
+    id: v.id("feedback"),
+    priority: feedbackPriority,
+  },
+  handler: async (ctx, args) => {
+    await requireCrmPermission(ctx, FEEDBACK_PAGE_KEY, "read");
+    const identity = await requireUser(ctx);
+    const item = await ctx.db.get(args.id);
+    if (!item) throw new Error("Retour introuvable.");
+
+    const email = normalizeEmail(identity.email);
+    const admin = await canModerateFeedback(ctx);
+    if (!admin && !isAuthor(item, identity.subject, email)) {
+      throw new Error("Ce retour ne vous appartient pas.");
+    }
+
+    await ctx.db.patch(args.id, { priority: args.priority, updatedAt: Date.now() });
   },
 });
 

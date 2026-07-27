@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { normalizeCustomer, normalizeEmail, requireUser, titleCaseName } from "./lib";
+import { action, env, internalAction, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { api, internal } from "./_generated/api";
+import { fetchAllClerkUsers, normalizeCustomer, normalizeEmail, requireCrmPermission, requireUser, titleCaseName } from "./lib";
 import { STEP } from "./processes";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 
 /**
  * Statut client dérivé de l'avancement réel de la demande (et non du champ
@@ -54,6 +55,58 @@ async function getProfileByEmail(ctx: QueryCtx | MutationCtx, email: string) {
 function directPairKey(a: string, b: string) {
   return [a, b].sort().join("__");
 }
+
+async function updateClerkNameCase(
+  secret: string,
+  clerkId: string,
+  firstName?: string,
+  lastName?: string,
+) {
+  if (!firstName && !lastName) return false;
+  const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(clerkId)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ ...(firstName ? { first_name: firstName } : {}), ...(lastName ? { last_name: lastName } : {}) }),
+  });
+  if (!response.ok) throw new Error(`Clerk a répondu ${response.status} lors de la normalisation du nom.`);
+  return true;
+}
+
+export const normalizeClerkUserName = internalAction({
+  args: { clerkId: v.string(), firstName: v.optional(v.string()), lastName: v.optional(v.string()) },
+  handler: async (_ctx, args) => {
+    const secret = env.CLERK_SECRET_KEY;
+    if (!secret) throw new Error("Annuaire Clerk indisponible.");
+    return await updateClerkNameCase(secret, args.clerkId, args.firstName, args.lastName);
+  },
+});
+
+export const assertCanNormalizeNames = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, "mesoutils:admin", "manage");
+    return true;
+  },
+});
+
+export const normalizeAllClerkUserNames = action({
+  args: {},
+  handler: async (ctx) => {
+    await ctx.runQuery(api.users.assertCanNormalizeNames, {});
+    const secret = env.CLERK_SECRET_KEY;
+    if (!secret) throw new Error("Annuaire Clerk indisponible.");
+    let updated = 0;
+    for (const user of await fetchAllClerkUsers(secret)) {
+      const clerkId = user.id ?? "";
+      const firstName = user.first_name ? titleCaseName(user.first_name) : undefined;
+      const lastName = user.last_name ? titleCaseName(user.last_name) : undefined;
+      if (!clerkId || (firstName === user.first_name && lastName === user.last_name)) continue;
+      await updateClerkNameCase(secret, clerkId, firstName, lastName);
+      updated += 1;
+    }
+    return { updated };
+  },
+});
 
 function replaceClerkIdInHref(href: string | undefined, oldClerkId: string, newClerkId: string) {
   if (!href) return href;
@@ -219,6 +272,11 @@ async function remapClerkIdEverywhere(
   for (const wishlist of klydeWishlists) {
     await ctx.db.patch(wishlist._id, { clerkId: newClerkId });
   }
+
+  const feedback = await ctx.db.query("feedback").withIndex("by_author_and_createdAt", (q) => q.eq("authorClerkId", oldClerkId)).collect();
+  for (const item of feedback) await ctx.db.patch(item._id, { authorClerkId: newClerkId });
+  const feedbackComments = (await ctx.db.query("feedbackComments").take(1000)).filter((item) => item.authorClerkId === oldClerkId);
+  for (const item of feedbackComments) await ctx.db.patch(item._id, { authorClerkId: newClerkId });
 }
 
 /**
@@ -288,12 +346,19 @@ export const syncProfile = mutation({
     }
 
     if (profile) {
-      const patch: { email?: string; imageUrl?: string; updatedAt?: number } = {};
+      const patch: { email?: string; imageUrl?: string; firstName?: string; lastName?: string; updatedAt?: number } = {};
       if (email && profile.email !== email) patch.email = email;
       if (imageUrl && profile.imageUrl !== imageUrl) patch.imageUrl = imageUrl;
+      const firstName = identity.givenName ? titleCaseName(identity.givenName) : undefined;
+      const lastName = identity.familyName ? titleCaseName(identity.familyName) : undefined;
+      if (firstName && profile.firstName !== firstName) patch.firstName = firstName;
+      if (lastName && profile.lastName !== lastName) patch.lastName = lastName;
       if (Object.keys(patch).length > 0) {
         patch.updatedAt = now;
         await ctx.db.patch(profile._id, patch);
+      }
+      if (firstName !== identity.givenName || lastName !== identity.familyName) {
+        await ctx.scheduler.runAfter(0, internal.users.normalizeClerkUserName, { clerkId, firstName, lastName });
       }
     }
 
@@ -309,6 +374,50 @@ export const syncProfile = mutation({
     }
 
     return profile;
+  },
+});
+
+/** Rattrapage administrateur des noms historiques conservés dans les écrans. */
+export const normalizeExistingUserNames = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, "mesoutils:admin", "manage");
+    const normalize = (value: string | undefined) => value ? titleCaseName(value) : undefined;
+    let updated = 0;
+    const patchName = async <TableName extends keyof DataModel>(
+      doc: { _id: Id<TableName> },
+      fields: Partial<Doc<TableName>>,
+    ) => {
+      const patch = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
+      if (Object.keys(patch).length > 0) { await ctx.db.patch(doc._id, patch as Partial<Doc<TableName>>); updated += 1; }
+    };
+    for (const user of await ctx.db.query("users").take(1000)) {
+      await patchName(user, {
+        firstName: user.firstName && normalize(user.firstName) !== user.firstName ? normalize(user.firstName) : undefined,
+        lastName: user.lastName && normalize(user.lastName) !== user.lastName ? normalize(user.lastName) : undefined,
+      });
+    }
+    for (const row of await ctx.db.query("userPoints").take(1000)) {
+      await patchName(row, { displayName: normalize(row.displayName) !== row.displayName ? normalize(row.displayName) : undefined });
+    }
+    for (const row of await ctx.db.query("feedback").take(1000)) {
+      await patchName(row, { authorName: row.authorName && normalize(row.authorName) !== row.authorName ? normalize(row.authorName) : undefined });
+    }
+    for (const row of await ctx.db.query("posts").take(1000)) {
+      await patchName(row, { authorName: normalize(row.authorName) !== row.authorName ? normalize(row.authorName) : undefined });
+    }
+    for (const row of await ctx.db.query("postComments").take(1000)) {
+      await patchName(row, { authorName: normalize(row.authorName) !== row.authorName ? normalize(row.authorName) : undefined });
+    }
+    for (const table of ["roomReservations", "vehicleReservations", "equipmentReservations"] as const) {
+      for (const row of await ctx.db.query(table).take(1000)) {
+        await patchName(row, {
+          userName: normalize(row.userName) !== row.userName ? normalize(row.userName) : undefined,
+          bookedByName: row.bookedByName && normalize(row.bookedByName) !== row.bookedByName ? normalize(row.bookedByName) : undefined,
+        });
+      }
+    }
+    return { updated };
   },
 });
 

@@ -15,6 +15,16 @@ export function titleCaseName(value: string): string {
     );
 }
 
+/** Nom à afficher pour une identité Clerk, homogène dans toutes les apps. */
+export function formatUserName(
+  identity: { name?: string | null; givenName?: string | null; familyName?: string | null; email?: string | null },
+  fallback = "Utilisateur",
+): string {
+  const fullName = [identity.givenName, identity.familyName].filter(Boolean).join(" ").trim();
+  const value = fullName || identity.name?.trim();
+  return value ? titleCaseName(value) : identity.email?.trim() || fallback;
+}
+
 /** Normalise une adresse email pour comparaison/rattachement (trim + minuscules). */
 export function normalizeEmail(email: string | null | undefined): string {
   return (email ?? "").trim().toLowerCase();
@@ -627,7 +637,12 @@ export async function fetchInternalClerkDirectory(
     if (self && email === self) continue;
     directory.push({
       clerkId,
-      name: [user.first_name, user.last_name].filter(Boolean).join(" ").trim() || email,
+      name: formatUserName({
+        givenName: user.first_name,
+        familyName: user.last_name,
+        name: user.username,
+        email,
+      }),
       imageUrl: typeof user.image_url === "string" ? user.image_url : null,
     });
   }
@@ -639,27 +654,28 @@ export async function fetchInternalClerkDirectory(
  * Fin effective d'une réservation de véhicule, pour tout calcul de
  * disponibilité.
  *
- * C'est le retour de l'utilisateur qui libère le véhicule, pas la date de fin
- * prévue : rendu en avance, il redevient réservable immédiatement ; pas encore
- * rendu, il reste occupé au-delà du créneau initial. Sans cette règle, un
- * véhicule non rendu réapparaissait comme libre à la fin du créneau et pouvait
- * être réservé — ou affecté à une tournée recyclerie — alors qu'il n'était pas
- * revenu au dépôt.
+ * Un retour renseigné en avance libère immédiatement le véhicule. Sans retour,
+ * le créneau prévu reste la limite d'occupation : l'absence de formulaire de
+ * retour déclenche une relance, mais ne doit pas immobiliser toute la flotte
+ * après l'heure de fin annoncée.
  *
  * Règle unique pour les 7 apps : Mes Outils, recycapp et cycleenbray planifient
  * les mêmes véhicules physiques.
  */
 export function vehicleReservationBusyEnd(
   reservation: { start: number; end: number; feedbackSubmittedAt?: number },
-  now: number,
+  _now: number,
 ) {
   if (typeof reservation.feedbackSubmittedAt === "number") {
-    return Math.max(reservation.start, reservation.feedbackSubmittedAt);
+    // Un retour peut être saisi après coup. Il libère donc plus tôt quand il
+    // est fait avant la fin prévue, mais ne doit jamais rallonger le créneau
+    // au-delà de son heure de fin (ex. fin à 11 h, formulaire envoyé à 14 h).
+    return Math.min(
+      reservation.end,
+      Math.max(reservation.start, reservation.feedbackSubmittedAt),
+    );
   }
-  // Réservations antérieures à la règle : on s'en tient à la fin prévue (cf.
-  // MANDATORY_RETURN_SINCE), sinon 11 véhicules seraient immobilisés d'un coup.
-  if (reservation.end < MANDATORY_RETURN_SINCE) return reservation.end;
-  return Math.max(reservation.end, now);
+  return reservation.end;
 }
 
 /**
