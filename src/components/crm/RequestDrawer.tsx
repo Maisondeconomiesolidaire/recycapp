@@ -2415,17 +2415,20 @@ function RequestDetails({
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {c.objectCategories!.map((key) => {
                   const cat = COLLECTE_CATEGORY_BY_KEY[key];
-                  return (
+                  return cat?.image ? (
+                    <img
+                      key={key}
+                      src={cat.image}
+                      alt={cat?.label ?? key}
+                      title={cat?.label ?? key}
+                      className="aspect-square w-full rounded-2xl object-cover"
+                    />
+                  ) : (
                     <div
                       key={key}
-                      className="flex flex-col items-center gap-1 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-2"
+                      className="flex aspect-square items-center justify-center rounded-2xl bg-[var(--crm-surface-2)] p-2 text-center text-[11px] leading-tight text-zinc-300"
                     >
-                      {cat?.image && (
-                        <img src={cat.image} alt="" className="h-12 w-12 object-contain" />
-                      )}
-                      <span className="text-center text-[11px] leading-tight text-zinc-300">
-                        {cat?.label ?? key}
-                      </span>
+                      {cat?.label ?? key}
                     </div>
                   );
                 })}
