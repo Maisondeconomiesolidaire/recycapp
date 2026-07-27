@@ -2412,7 +2412,7 @@ function RequestDetails({
           <SectionTitle>Objets</SectionTitle>
           {(c.objectCategories?.length ?? 0) > 0 ? (
             <>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
                 {c.objectCategories!.map((key) => {
                   const cat = COLLECTE_CATEGORY_BY_KEY[key];
                   return cat?.image ? (
