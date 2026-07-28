@@ -447,13 +447,13 @@ function ResourceDayPanel({
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-100">
-                    <UsersRound className="h-3.5 w-3.5 text-brand-300" />
-                    {activity.workerName}
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-zinc-100">
+                    <UsersRound className="h-3.5 w-3.5 shrink-0 text-brand-300" />
+                    <span className="truncate">{activity.workerName}</span>
                   </p>
-                  <p className="mt-0.5 inline-flex items-center gap-1.5 text-sm text-brand-300">
-                    <ListChecks className="h-3.5 w-3.5" />
-                    {activity.taskName}
+                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-brand-300">
+                    <ListChecks className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{activity.taskName}</span>
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
@@ -480,8 +480,8 @@ function ResourceDayPanel({
                 </div>
               </div>
               <p className="mt-1.5 text-xs text-zinc-400">
-                {format(new Date(activity.startAt), "d MMM HH:mm", { locale: fr })} →{" "}
-                {format(new Date(activity.endAt), "d MMM HH:mm", { locale: fr })}
+                {format(new Date(activity.startAt), "HH:mm", { locale: fr })} →{" "}
+                {format(new Date(activity.endAt), "HH:mm", { locale: fr })}
               </p>
             </div>
           ))
