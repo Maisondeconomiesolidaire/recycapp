@@ -13,6 +13,7 @@ import {
   Truck,
   UserCog,
   Users,
+  UsersRound,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -47,6 +48,7 @@ export type CrmPageKey =
   | "flotte"
   | "reservations"
   | "equipe"
+  | "agents-polyvalents"
   | "admin";
 
 export type CrmGrant = {
@@ -212,10 +214,18 @@ export const CRM_PAGES: CrmPageDefinition[] = [
   },
   {
     key: "equipe",
-    label: "Équipe",
-    description: "Salariés, attribution et informations internes.",
+    label: "Agents permanents",
+    description: "Agents permanents (salariés), attribution et informations internes.",
     to: "/crm/equipe",
     icon: UserCog,
+    actions: ["read", "create", "update", "delete"],
+  },
+  {
+    key: "agents-polyvalents",
+    label: "Agents polyvalents",
+    description: "Ouvriers polyvalents : tâches, ouvriers et planning d'activités.",
+    to: "/crm/agents-polyvalents",
+    icon: UsersRound,
     actions: ["read", "create", "update", "delete"],
   },
 ];
