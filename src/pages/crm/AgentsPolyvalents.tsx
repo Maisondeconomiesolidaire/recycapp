@@ -1,11 +1,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { format } from "date-fns";
+import { addDays, format, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   CalendarClock,
+  CalendarDays,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ListChecks,
+  Pencil,
   Plus,
   Trash2,
   UserPlus,
@@ -25,8 +29,18 @@ import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { cn } from "../../lib/cn";
 
-type Tab = "planning" | "ouvriers" | "taches";
+type Tab = "planning" | "calendrier" | "ouvriers" | "taches";
+
+type ActivityList = NonNullable<
+  ReturnType<typeof useQuery<typeof api.polyvalents.listActivities>>
+>;
+type Activity = ActivityList[number];
+type TaskList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
+type WorkerList = NonNullable<
+  ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>
+>;
 
 function formatRange(startAt: number, endAt: number) {
   const start = new Date(startAt);
@@ -47,9 +61,20 @@ export function AgentsPolyvalents() {
 
   const [tab, setTab] = useState<Tab>("planning");
   const [activityOpen, setActivityOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
 
   const canCreate = canAccess(access, "agents-polyvalents", "create");
+  const canUpdate = canAccess(access, "agents-polyvalents", "update");
   const canDelete = canAccess(access, "agents-polyvalents", "delete");
+
+  function openActivity(activity: Activity | null) {
+    setEditingActivity(activity);
+    setActivityOpen(true);
+  }
+  function closeActivity() {
+    setActivityOpen(false);
+    setEditingActivity(null);
+  }
 
   const workersWithoutActivity = useMemo(() => {
     if (!workers || !activities) return [];
@@ -68,7 +93,7 @@ export function AgentsPolyvalents() {
         subtitle="Ouvriers polyvalents : tâches, ouvriers et planning des activités."
         actions={
           canCreate ? (
-            <Button onClick={() => setActivityOpen(true)}>
+            <Button onClick={() => openActivity(null)}>
               <Plus className="h-4 w-4" />
               Nouvelle activité
             </Button>
@@ -81,6 +106,7 @@ export function AgentsPolyvalents() {
           className="mb-5"
           items={[
             { key: "planning", label: "Planning" },
+            { key: "calendrier", label: "Calendrier" },
             { key: "ouvriers", label: "Ouvriers" },
             { key: "taches", label: "Tâches" },
           ]}
@@ -92,21 +118,36 @@ export function AgentsPolyvalents() {
           <PlanningTab
             activities={activities}
             workersWithoutActivity={workersWithoutActivity}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
+            onEdit={openActivity}
+          />
+        ) : tab === "calendrier" ? (
+          <CalendarTab activities={activities} canUpdate={canUpdate} onEdit={openActivity} />
+        ) : tab === "ouvriers" ? (
+          <WorkersTab
+            workers={workers}
+            canCreate={canCreate}
+            canUpdate={canUpdate}
             canDelete={canDelete}
           />
-        ) : tab === "ouvriers" ? (
-          <WorkersTab workers={workers} canCreate={canCreate} canDelete={canDelete} />
         ) : (
-          <TasksTab tasks={tasks} canCreate={canCreate} canDelete={canDelete} />
+          <TasksTab
+            tasks={tasks}
+            canCreate={canCreate}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
+          />
         )}
       </div>
 
       {activityOpen ? (
-        <NewActivityModal
+        <ActivityModal
           tasks={tasks}
           workers={workers}
           canCreate={canCreate}
-          onClose={() => setActivityOpen(false)}
+          activity={editingActivity}
+          onClose={closeActivity}
         />
       ) : null}
     </div>
@@ -118,13 +159,15 @@ export function AgentsPolyvalents() {
 function PlanningTab({
   activities,
   workersWithoutActivity,
+  canUpdate,
   canDelete,
+  onEdit,
 }: {
-  activities: NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listActivities>>>;
-  workersWithoutActivity: NonNullable<
-    ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>
-  >;
+  activities: ActivityList;
+  workersWithoutActivity: WorkerList;
+  canUpdate: boolean;
   canDelete: boolean;
+  onEdit: (activity: Activity) => void;
 }) {
   const removeActivity = useMutation(api.polyvalents.deleteActivity);
   const [deleting, setDeleting] = useState<Id<"polyvalentActivities"> | null>(null);
@@ -177,16 +220,28 @@ function PlanningTab({
                       {activity.taskName}
                     </p>
                   </div>
-                  {canDelete ? (
-                    <button
-                      type="button"
-                      onClick={() => setDeleting(activity._id)}
-                      className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-red-400"
-                      aria-label="Supprimer l'activité"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  ) : null}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {canUpdate ? (
+                      <button
+                        type="button"
+                        onClick={() => onEdit(activity)}
+                        className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-brand-300"
+                        aria-label="Modifier l'activité"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => setDeleting(activity._id)}
+                        className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-red-400"
+                        aria-label="Supprimer l'activité"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <p className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
                   <CalendarClock className="h-3.5 w-3.5" />
@@ -218,18 +273,24 @@ function PlanningTab({
 function WorkersTab({
   workers,
   canCreate,
+  canUpdate,
   canDelete,
 }: {
-  workers: NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
+  workers: WorkerList;
   canCreate: boolean;
+  canUpdate: boolean;
   canDelete: boolean;
 }) {
   const createWorker = useMutation(api.polyvalents.createWorker);
+  const updateWorker = useMutation(api.polyvalents.updateWorker);
   const removeWorker = useMutation(api.polyvalents.deleteWorker);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Id<"polyvalentWorkers"> | null>(null);
+  const [editingId, setEditingId] = useState<Id<"polyvalentWorkers"> | null>(null);
+  const [editFirst, setEditFirst] = useState("");
+  const [editLast, setEditLast] = useState("");
 
   async function add() {
     if (!firstName.trim() && !lastName.trim()) return;
@@ -241,6 +302,18 @@ function WorkersTab({
     } finally {
       setSaving(false);
     }
+  }
+
+  function startEdit(worker: WorkerList[number]) {
+    setEditingId(worker._id);
+    setEditFirst(worker.firstName);
+    setEditLast(worker.lastName);
+  }
+
+  async function saveEdit() {
+    if (!editingId || (!editFirst.trim() && !editLast.trim())) return;
+    await updateWorker({ id: editingId, firstName: editFirst, lastName: editLast });
+    setEditingId(null);
   }
 
   return (
@@ -276,27 +349,77 @@ function WorkersTab({
         />
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {workers.map((worker) => (
-            <div
-              key={worker._id}
-              className="flex items-center justify-between gap-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3"
-            >
-              <span className="inline-flex items-center gap-2 text-sm font-medium text-zinc-100">
-                <UsersRound className="h-4 w-4 text-brand-300" />
-                {worker.firstName} {worker.lastName}
-              </span>
-              {canDelete ? (
+          {workers.map((worker) =>
+            editingId === worker._id ? (
+              <div
+                key={worker._id}
+                className="flex items-center gap-2 rounded-xl border border-brand-500/40 bg-[var(--crm-surface)] px-3 py-2"
+              >
+                <Input value={editFirst} onChange={(event) => setEditFirst(event.target.value)} placeholder="Prénom" />
+                <Input
+                  value={editLast}
+                  onChange={(event) => setEditLast(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void saveEdit();
+                    }
+                  }}
+                  placeholder="Nom"
+                />
                 <button
                   type="button"
-                  onClick={() => setDeleting(worker._id)}
-                  className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-red-400"
-                  aria-label="Supprimer l'ouvrier"
+                  onClick={() => void saveEdit()}
+                  className="rounded-lg p-1.5 text-emerald-400 transition hover:bg-[var(--crm-surface-2)]"
+                  aria-label="Enregistrer"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Check className="h-4 w-4" />
                 </button>
-              ) : null}
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => setEditingId(null)}
+                  className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)]"
+                  aria-label="Annuler"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                key={worker._id}
+                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3"
+              >
+                <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-100">
+                  <UsersRound className="h-4 w-4 shrink-0 text-brand-300" />
+                  <span className="truncate">
+                    {worker.firstName} {worker.lastName}
+                  </span>
+                </span>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {canUpdate ? (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(worker)}
+                      className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-brand-300"
+                      aria-label="Modifier l'ouvrier"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeleting(worker._id)}
+                      className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-red-400"
+                      aria-label="Supprimer l'ouvrier"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ),
+          )}
         </div>
       )}
 
@@ -320,17 +443,22 @@ function WorkersTab({
 function TasksTab({
   tasks,
   canCreate,
+  canUpdate,
   canDelete,
 }: {
-  tasks: NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
+  tasks: TaskList;
   canCreate: boolean;
+  canUpdate: boolean;
   canDelete: boolean;
 }) {
   const createTask = useMutation(api.polyvalents.createTask);
+  const updateTask = useMutation(api.polyvalents.updateTask);
   const removeTask = useMutation(api.polyvalents.deleteTask);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Id<"polyvalentTasks"> | null>(null);
+  const [editingId, setEditingId] = useState<Id<"polyvalentTasks"> | null>(null);
+  const [editName, setEditName] = useState("");
 
   async function add() {
     if (!name.trim()) return;
@@ -341,6 +469,12 @@ function TasksTab({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editName.trim()) return;
+    await updateTask({ id: editingId, name: editName });
+    setEditingId(null);
   }
 
   return (
@@ -373,27 +507,77 @@ function TasksTab({
         />
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {tasks.map((task) => (
-            <div
-              key={task._id}
-              className="flex items-center justify-between gap-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3"
-            >
-              <span className="inline-flex items-center gap-2 text-sm font-medium text-zinc-100">
-                <ListChecks className="h-4 w-4 text-brand-300" />
-                {task.name}
-              </span>
-              {canDelete ? (
+          {tasks.map((task) =>
+            editingId === task._id ? (
+              <div
+                key={task._id}
+                className="flex items-center gap-2 rounded-xl border border-brand-500/40 bg-[var(--crm-surface)] px-3 py-2"
+              >
+                <Input
+                  value={editName}
+                  onChange={(event) => setEditName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void saveEdit();
+                    }
+                  }}
+                  placeholder="Nom de la tâche"
+                />
                 <button
                   type="button"
-                  onClick={() => setDeleting(task._id)}
-                  className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-red-400"
-                  aria-label="Supprimer la tâche"
+                  onClick={() => void saveEdit()}
+                  className="rounded-lg p-1.5 text-emerald-400 transition hover:bg-[var(--crm-surface-2)]"
+                  aria-label="Enregistrer"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Check className="h-4 w-4" />
                 </button>
-              ) : null}
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => setEditingId(null)}
+                  className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)]"
+                  aria-label="Annuler"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                key={task._id}
+                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3"
+              >
+                <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-100">
+                  <ListChecks className="h-4 w-4 shrink-0 text-brand-300" />
+                  <span className="truncate">{task.name}</span>
+                </span>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {canUpdate ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingId(task._id);
+                        setEditName(task.name);
+                      }}
+                      className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-brand-300"
+                      aria-label="Modifier la tâche"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeleting(task._id)}
+                      className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-red-400"
+                      aria-label="Supprimer la tâche"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ),
+          )}
         </div>
       )}
 
@@ -412,27 +596,32 @@ function TasksTab({
   );
 }
 
-/* ─── Nouvelle activité ───────────────────────────────────────────────────── */
+/* ─── Créer / modifier une activité ───────────────────────────────────────── */
 
-function NewActivityModal({
+function ActivityModal({
   tasks,
   workers,
   canCreate,
+  activity,
   onClose,
 }: {
-  tasks: NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
-  workers: NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
+  tasks: TaskList;
+  workers: WorkerList;
   canCreate: boolean;
+  activity: Activity | null;
   onClose: () => void;
 }) {
   const createActivity = useMutation(api.polyvalents.createActivity);
+  const updateActivity = useMutation(api.polyvalents.updateActivity);
   const createTask = useMutation(api.polyvalents.createTask);
   const createWorker = useMutation(api.polyvalents.createWorker);
 
-  const [taskId, setTaskId] = useState<Id<"polyvalentTasks"> | "">("");
-  const [workerId, setWorkerId] = useState<Id<"polyvalentWorkers"> | "">("");
-  const [startAt, setStartAt] = useState<number | undefined>(undefined);
-  const [endAt, setEndAt] = useState<number | undefined>(undefined);
+  const [taskId, setTaskId] = useState<Id<"polyvalentTasks"> | "">(activity?.taskId ?? "");
+  const [workerId, setWorkerId] = useState<Id<"polyvalentWorkers"> | "">(
+    activity?.workerId ?? "",
+  );
+  const [startAt, setStartAt] = useState<number | undefined>(activity?.startAt);
+  const [endAt, setEndAt] = useState<number | undefined>(activity?.endAt);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -469,7 +658,11 @@ function NewActivityModal({
     if (endAt < startAt) return setError("La fin doit être après le début.");
     setSaving(true);
     try {
-      await createActivity({ taskId, workerId, startAt, endAt });
+      if (activity) {
+        await updateActivity({ id: activity._id, taskId, workerId, startAt, endAt });
+      } else {
+        await createActivity({ taskId, workerId, startAt, endAt });
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Enregistrement impossible.");
@@ -479,7 +672,12 @@ function NewActivityModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Nouvelle activité" className="max-w-lg">
+    <Modal
+      open
+      onClose={onClose}
+      title={activity ? "Modifier l'activité" : "Nouvelle activité"}
+      className="max-w-lg"
+    >
       <div className="grid gap-4">
         <div className="grid gap-1.5">
           <div className="flex items-center justify-between">
@@ -599,10 +797,206 @@ function NewActivityModal({
             Annuler
           </Button>
           <Button onClick={() => void save()} disabled={saving}>
-            {saving ? "Enregistrement…" : "Créer l'activité"}
+            {saving ? "Enregistrement…" : activity ? "Enregistrer" : "Créer l'activité"}
           </Button>
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* ─── Calendrier (vue semaine) ────────────────────────────────────────────── */
+
+const CAL_DAY_MS = 24 * 60 * 60 * 1000;
+const CAL_HOUR_PX = 44;
+
+/** Segment d'une activité visible dans une journée donnée (heures locales). */
+function daySegment(activity: Activity, dayStartMs: number) {
+  const dayEndMs = dayStartMs + CAL_DAY_MS;
+  const overlapStart = Math.max(activity.startAt, dayStartMs);
+  const overlapEnd = Math.min(activity.endAt, dayEndMs);
+  if (overlapStart >= overlapEnd) return null;
+  return {
+    startHour: (overlapStart - dayStartMs) / (60 * 60 * 1000),
+    endHour: (overlapEnd - dayStartMs) / (60 * 60 * 1000),
+  };
+}
+
+function CalendarTab({
+  activities,
+  canUpdate,
+  onEdit,
+}: {
+  activities: ActivityList;
+  canUpdate: boolean;
+  onEdit: (activity: Activity) => void;
+}) {
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 }),
+  );
+
+  const days = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
+    [weekStart],
+  );
+
+  // Fenêtre horaire affichée : 8–18 par défaut, élargie si des activités de la
+  // semaine débordent de cette plage.
+  const { minHour, maxHour } = useMemo(() => {
+    let min = 8;
+    let max = 18;
+    for (const day of days) {
+      const dayStartMs = day.getTime();
+      for (const activity of activities) {
+        const segment = daySegment(activity, dayStartMs);
+        if (!segment) continue;
+        min = Math.min(min, Math.floor(segment.startHour));
+        max = Math.max(max, Math.ceil(segment.endHour));
+      }
+    }
+    return { minHour: Math.max(0, min), maxHour: Math.min(24, Math.max(max, min + 1)) };
+  }, [days, activities]);
+
+  const hours = useMemo(
+    () => Array.from({ length: maxHour - minHour }, (_, index) => minHour + index),
+    [minHour, maxHour],
+  );
+  const gridHeight = (maxHour - minHour) * CAL_HOUR_PX;
+  const todayStr = new Date().toDateString();
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setWeekStart((current) => addDays(current, -7))}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--crm-border)] text-zinc-400 transition hover:text-zinc-100"
+            aria-label="Semaine précédente"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+            className="rounded-lg border border-[var(--crm-border)] px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:text-zinc-100"
+          >
+            Aujourd'hui
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekStart((current) => addDays(current, 7))}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--crm-border)] text-zinc-400 transition hover:text-zinc-100"
+            aria-label="Semaine suivante"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-200">
+          <CalendarDays className="h-4 w-4 text-brand-300" />
+          {format(days[0], "d MMM", { locale: fr })} – {format(days[6], "d MMM yyyy", { locale: fr })}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
+        <div className="min-w-[720px]">
+          {/* En-tête des jours */}
+          <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-[var(--crm-border)]">
+            <div />
+            {days.map((day) => {
+              const isToday = day.toDateString() === todayStr;
+              return (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    "border-l border-[var(--crm-border)] px-2 py-2 text-center",
+                    isToday && "bg-brand-500/10",
+                  )}
+                >
+                  <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                    {format(day, "EEE", { locale: fr })}
+                  </div>
+                  <div
+                    className={cn(
+                      "text-sm font-semibold",
+                      isToday ? "text-brand-300" : "text-zinc-200",
+                    )}
+                  >
+                    {format(day, "d")}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Grille horaire */}
+          <div className="grid grid-cols-[48px_repeat(7,1fr)]">
+            <div className="relative" style={{ height: gridHeight }}>
+              {hours.map((hour, index) => (
+                <div
+                  key={hour}
+                  className="absolute right-1 -translate-y-1/2 text-[10px] tabular-nums text-zinc-500"
+                  style={{ top: index * CAL_HOUR_PX }}
+                >
+                  {String(hour).padStart(2, "0")}h
+                </div>
+              ))}
+            </div>
+            {days.map((day) => {
+              const dayStartMs = day.getTime();
+              const isToday = day.toDateString() === todayStr;
+              const segments = activities
+                .map((activity) => ({ activity, segment: daySegment(activity, dayStartMs) }))
+                .filter((entry) => entry.segment !== null);
+              return (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    "relative border-l border-[var(--crm-border)]",
+                    isToday && "bg-brand-500/[0.04]",
+                  )}
+                  style={{ height: gridHeight }}
+                >
+                  {hours.map((hour, index) => (
+                    <div
+                      key={hour}
+                      className="absolute inset-x-0 border-t border-[var(--crm-border)]/40"
+                      style={{ top: index * CAL_HOUR_PX }}
+                    />
+                  ))}
+                  {segments.map(({ activity, segment }) => {
+                    const top = (segment!.startHour - minHour) * CAL_HOUR_PX;
+                    const height = Math.max(
+                      18,
+                      (segment!.endHour - segment!.startHour) * CAL_HOUR_PX - 2,
+                    );
+                    return (
+                      <button
+                        key={activity._id}
+                        type="button"
+                        onClick={() => canUpdate && onEdit(activity)}
+                        title={`${activity.workerName} — ${activity.taskName}\n${formatRange(activity.startAt, activity.endAt)}`}
+                        className={cn(
+                          "absolute inset-x-1 overflow-hidden rounded-lg border border-brand-500/40 bg-brand-500/15 px-1.5 py-1 text-left transition",
+                          canUpdate ? "cursor-pointer hover:bg-brand-500/25" : "cursor-default",
+                        )}
+                        style={{ top, height }}
+                      >
+                        <div className="truncate text-[11px] font-semibold leading-tight text-brand-200">
+                          {activity.taskName}
+                        </div>
+                        <div className="truncate text-[10px] leading-tight text-zinc-300">
+                          {activity.workerName}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
