@@ -8,8 +8,11 @@ import {
   Trash2,
   Package,
   Search,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
+  LayoutGrid,
+  Rows3,
   ShoppingBag,
   Warehouse,
   Boxes,
@@ -145,6 +148,18 @@ function StatusDropdown({
   );
 }
 
+type StockView = "grid" | "table";
+
+const STOCK_VIEW_STORAGE_KEY = "crm-articles-view";
+
+/** Vue par défaut : la grille, comme la boutique Klyde. */
+function readStoredStockView(): StockView {
+  if (typeof window === "undefined") return "grid";
+  return window.localStorage.getItem(STOCK_VIEW_STORAGE_KEY) === "table"
+    ? "table"
+    : "grid";
+}
+
 const TABS: { key: Tab; label: string }[] = [
   { key: "stock", label: "Stock" },
   { key: "lots", label: "Lots potentiels" },
@@ -172,6 +187,7 @@ export function Articles() {
   const canPrint = canAccess(access, "articles", "print");
   const canAnalyze = canAccess(access, "articles", "analyze");
   const [tab, setTab] = useState<Tab>("stock");
+  const [stockView, setStockView] = useState<StockView>(readStoredStockView);
   const [searchText, setSearchText] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState("");
@@ -244,6 +260,11 @@ export function Articles() {
       return textMatch || digitMatch;
     });
   }, [articles, searchText, selectedCategories, selectedLocation]);
+
+  function changeStockView(next: StockView) {
+    setStockView(next);
+    window.localStorage.setItem(STOCK_VIEW_STORAGE_KEY, next);
+  }
 
   function openNew() {
     setEditing(null);
@@ -426,6 +447,37 @@ export function Articles() {
               </Field>
             </div>
 
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-sm text-zinc-400">
+                {filteredArticles.length}{" "}
+                {filteredArticles.length > 1 ? "articles" : "article"}
+              </p>
+              <div className="inline-flex overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-1">
+                {(
+                  [
+                    { value: "grid", label: "Grille", icon: LayoutGrid },
+                    { value: "table", label: "Liste", icon: Rows3 },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => changeStockView(option.value)}
+                    aria-pressed={stockView === option.value}
+                    title={`Vue ${option.label.toLowerCase()}`}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                      stockView === option.value
+                        ? "bg-brand-500 text-white"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    <option.icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {filteredArticles.length === 0 ? (
               <EmptyState
                 icon={<Package className="h-10 w-10" />}
@@ -447,6 +499,28 @@ export function Articles() {
                   ) : undefined
                 }
               />
+            ) : stockView === "grid" ? (
+              // Même anatomie que la grille boutique de Klyde (ShopProductCard) :
+              // bordures portées par les cartes, photo carrée survolable, bloc
+              // d'infos en dessous. Les couleurs passent par les tokens `--crm-*`
+              // car le CRM a un thème clair/sombre, contrairement à la boutique.
+              <div className="overflow-hidden rounded-2xl border-l border-t border-[var(--crm-border)]">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {filteredArticles.map((a) => (
+                    <ArticleGridCard
+                      key={a._id}
+                      article={a}
+                      canUpdate={canUpdate}
+                      canDelete={canDelete}
+                      canPrint={canPrint}
+                      onEdit={() => openEdit(a)}
+                      onDelete={() => setDeleting(a)}
+                      onPrint={() => setPrintArticles([a])}
+                      onToggleProductOfDay={() => toggleProductOfDay({ articleId: a._id })}
+                    />
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)]">
                 <table className="min-w-[760px] w-full text-sm">
@@ -661,6 +735,201 @@ export function Articles() {
 
       {/* Barcode scanner modal is handled globally by GlobalScanner in CrmLayout */}
     </div>
+  );
+}
+
+/**
+ * Carte de la vue grille, reprise de `ShopProductCard` de Klyde : photo carrée
+ * qui défile au survol, puis un bloc d'infos titre / méta / prix.
+ *
+ * S'y ajoute ce que la boutique n'a pas à porter : badge lot, statut
+ * modifiable et actions CRM (produit du jour, étiquette, édition, suppression).
+ */
+function ArticleGridCard({
+  article,
+  canUpdate,
+  canDelete,
+  canPrint,
+  onEdit,
+  onDelete,
+  onPrint,
+  onToggleProductOfDay,
+}: {
+  article: ArticleDoc;
+  canUpdate: boolean;
+  canDelete: boolean;
+  canPrint: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onPrint: () => void;
+  onToggleProductOfDay: () => void;
+}) {
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const hasMultiplePhotos = article.imageUrls.length > 1;
+  const currentPhoto = article.imageUrls[photoIndex] ?? article.imageUrls[0];
+
+  function previousPhoto() {
+    setPhotoIndex(
+      (index) => (index - 1 + article.imageUrls.length) % article.imageUrls.length,
+    );
+  }
+
+  function nextPhoto() {
+    setPhotoIndex((index) => (index + 1) % article.imageUrls.length);
+  }
+
+  const meta = [
+    article.isLot
+      ? `${article.bundledArticleIds?.length ?? 0} articles`
+      : article.condition,
+    article.category,
+    article.subcategory,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <article className="group border-b border-r border-[var(--crm-border)] bg-[var(--crm-surface)]">
+      <div
+        className="relative aspect-square overflow-hidden bg-[var(--crm-surface-2)]"
+        onMouseEnter={() => hasMultiplePhotos && setPhotoIndex(1)}
+        onMouseLeave={() => setPhotoIndex(0)}
+      >
+        <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
+          <StatusDropdown id={article._id} status={article.status} disabled={!canUpdate} />
+          {article.isLot && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-300">
+              <Boxes className="h-3 w-3" />
+              Lot
+            </span>
+          )}
+        </div>
+        {canUpdate && (
+          <button
+            type="button"
+            onClick={onToggleProductOfDay}
+            className={`absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--crm-surface)]/80 transition ${
+              article.productOfDay
+                ? "text-brand-400"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+            title={
+              article.productOfDay
+                ? "Retirer le produit du jour"
+                : "Définir comme produit du jour"
+            }
+          >
+            <Star className={`h-4 w-4 ${article.productOfDay ? "fill-current" : ""}`} />
+          </button>
+        )}
+        {article.imageUrls[0] ? (
+          <button type="button" onClick={onEdit} className="block h-full w-full">
+            <img
+              key={currentPhoto}
+              src={currentPhoto}
+              alt={article.title}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]"
+            />
+          </button>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-zinc-600">
+            <Package className="h-12 w-12" />
+          </div>
+        )}
+        {hasMultiplePhotos ? (
+          <>
+            <button
+              type="button"
+              onClick={previousPhoto}
+              className="absolute left-2 top-1/2 inline-flex h-10 w-8 -translate-y-1/2 items-center justify-center text-zinc-300 opacity-0 transition hover:text-white group-hover:opacity-100 focus:opacity-100"
+              aria-label="Photo précédente"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={nextPhoto}
+              className="absolute right-2 top-1/2 inline-flex h-10 w-8 -translate-y-1/2 items-center justify-center text-zinc-300 opacity-0 transition hover:text-white group-hover:opacity-100 focus:opacity-100"
+              aria-label="Photo suivante"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 opacity-0 transition group-hover:opacity-100">
+              {article.imageUrls.slice(0, 5).map((_, index) => (
+                <span
+                  key={index}
+                  className={`h-1.5 rounded-full transition-all ${
+                    index === photoIndex ? "w-4 bg-white" : "w-1.5 bg-white/70"
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
+      </div>
+      <div className="min-h-[92px] p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="line-clamp-2 text-left text-sm font-medium text-zinc-100 hover:opacity-55"
+            >
+              {article.title}
+            </button>
+            <p className="mt-1 text-xs text-zinc-500">{meta || "—"}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-sm font-semibold text-zinc-100">
+              {formatPrice(article.price)}
+            </p>
+            {article.originalPrice && article.originalPrice > article.price && (
+              <p className="text-xs text-zinc-500 line-through">
+                {formatPrice(article.originalPrice)}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="mt-3 space-y-0.5 text-xs text-zinc-500">
+          <p className="truncate">Interne : {article.internalReference ?? "—"}</p>
+          <p className="truncate">Réf. ext. : {article.gdrReference ?? "—"}</p>
+          <p className="truncate">
+            Emplacement : {article.location?.trim() ? article.location : "—"}
+          </p>
+        </div>
+        <div className="mt-2 flex items-center justify-end gap-1">
+          {canPrint && (
+            <button
+              onClick={onPrint}
+              className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
+              title="Imprimer l'étiquette"
+            >
+              <Printer className="h-4 w-4" />
+            </button>
+          )}
+          {canUpdate && (
+            <button
+              onClick={onEdit}
+              className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
+              title="Modifier"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={onDelete}
+              className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-red-400"
+              title="Supprimer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
