@@ -1,6 +1,6 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { esc, resendSend, storageImageUrl } from "./emails";
+import { esc, resendSend, storageImageUrl, type EmailAttachment } from "./emails";
 
 // Emails internes de l'application Mes Outils (équipe), distincts des emails
 // clients de la recyclerie (cf. `emails.ts`). Expéditeur et gabarit dédiés.
@@ -695,6 +695,7 @@ const FEEDBACK_TYPE_LABELS: Record<string, string> = {
   probleme: "Problème",
   amelioration: "Amélioration",
   question: "Question",
+  nouvelle_application: "Nouvelle application",
 };
 
 /**
@@ -822,6 +823,80 @@ export const sendMaintenanceCreatedEmail = internalAction({
   },
 });
 
+// ─── RH : contrats générés ───────────────────────────────────────────────────
+
+/**
+ * Destinataires prévenus des contrats générés pour les structures MES et LSDB
+ * (direction : ces deux structures n'ont pas de service RH sur place).
+ */
+export const CONTRACT_NOTICE_EMAILS = ["m.lahmer@eco-solidaire.fr"];
+
+/**
+ * Prévient la direction qu'un contrat MES / LSDB vient d'être généré, avec le
+ * document en pièce jointe.
+ *
+ * La pièce jointe peut manquer : le document vit sur le SharePoint du tenant et
+ * n'est pas toujours téléchargeable sans session (cf. `rh.ts`). Dans ce cas
+ * l'email part quand même, avec le lien SharePoint et une mention explicite —
+ * mieux vaut une notification sans fichier qu'aucune notification.
+ */
+export const sendContractGeneratedEmail = internalAction({
+  args: {
+    employeeName: v.string(),
+    structureLabel: v.string(),
+    documentLabel: v.string(),
+    contractType: v.string(),
+    numeroContrat: v.string(),
+    poste: v.string(),
+    dateDebut: v.string(),
+    dateFin: v.string(),
+    requestedBy: v.string(),
+    contractUrl: v.optional(v.string()),
+    attachment: v.optional(
+      v.object({ filename: v.string(), content: v.string() }),
+    ),
+  },
+  handler: async (_ctx, args) => {
+    const attachments: EmailAttachment[] = args.attachment ? [args.attachment] : [];
+    const missingNotice = args.attachment
+      ? ""
+      : `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 22px;padding:16px 18px;background:#fff8e8;border:1px solid #f5d99a;border-radius:14px;">
+          <tr><td>
+            <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;color:#6b562c;">Le document n'a pas pu être joint automatiquement (accès SharePoint requis). Utilisez le lien ci-dessous pour l'ouvrir.</p>
+          </td></tr>
+        </table>`;
+
+    const html = shell({
+      preheader: `${args.documentLabel} généré pour ${args.employeeName} (${args.structureLabel}).`,
+      heading: `${args.documentLabel} — ${args.employeeName}`,
+      intro: `Un ${args.documentLabel.toLowerCase()} vient d'être généré pour <strong>${esc(args.employeeName)}</strong> (${esc(args.structureLabel)})${args.attachment ? ", il est joint à cet email" : ""}.`,
+      contentHtml: `
+        ${detailCard([
+          ["Salarié", args.employeeName],
+          ["Structure", args.structureLabel],
+          ["Document", args.documentLabel],
+          ["Type de contrat", args.contractType],
+          ["N° de contrat", args.numeroContrat || "—"],
+          ["Poste", args.poste || "—"],
+          ["Début", args.dateDebut || "—"],
+          ["Fin", args.dateFin || "—"],
+          ["Généré par", args.requestedBy],
+        ])}
+        ${missingNotice}
+        ${button(args.contractUrl ?? null, "Ouvrir le contrat")}
+      `,
+    });
+
+    await resendSend(
+      CONTRACT_NOTICE_EMAILS,
+      `${args.documentLabel} · ${args.employeeName} (${args.structureLabel})`,
+      html,
+      FROM,
+      attachments,
+    );
+  },
+});
+
 /** Boîte de réception des nouveaux retours (équipe produit). */
 export const FEEDBACK_INBOX_EMAILS = ["s.lahmer@eco-solidaire.fr"];
 
@@ -882,7 +957,8 @@ export const sendFeedbackCommentEmail = internalAction({
 /** Prévient l'équipe produit qu'un nouveau retour vient d'être déposé. */
 export const sendFeedbackCreatedEmail = internalAction({
   args: {
-    app: v.string(),
+    /** Absente pour une idée de « nouvelle application » (aucune app visée). */
+    app: v.optional(v.string()),
     feedbackType: v.string(),
     description: v.string(),
     authorName: v.optional(v.string()),
@@ -890,18 +966,24 @@ export const sendFeedbackCreatedEmail = internalAction({
     authorPhotoUrl: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
-    const appLabel = FEEDBACK_APP_LABELS[args.app] ?? args.app;
+    const appLabel = args.app
+      ? FEEDBACK_APP_LABELS[args.app] ?? args.app
+      : "Nouvelle application";
     const typeLabel = FEEDBACK_TYPE_LABELS[args.feedbackType] ?? "Retour";
     const authorLabel = args.authorName?.trim() || args.authorEmail;
 
     const html = shell({
-      preheader: `${authorLabel} a déposé un retour sur ${appLabel}.`,
-      heading: "Nouveau retour utilisateur",
-      intro: `Un nouveau retour vient d'être déposé sur <strong>${esc(appLabel)}</strong>.`,
+      preheader: args.app
+        ? `${authorLabel} a déposé un retour sur ${appLabel}.`
+        : `${authorLabel} propose une idée de nouvelle application.`,
+      heading: args.app ? "Nouveau retour utilisateur" : "Idée de nouvelle application",
+      intro: args.app
+        ? `Un nouveau retour vient d'être déposé sur <strong>${esc(appLabel)}</strong>.`
+        : `Une idée d'application vient d'être proposée.`,
       contentHtml: `
         ${userChip(authorLabel, args.authorPhotoUrl, args.authorEmail)}
         ${detailCard([
-          ["Application", appLabel],
+          ...(args.app ? ([["Application", appLabel]] as Array<[string, string]>) : []),
           ["Type", typeLabel],
         ])}
         ${quoteBlock(args.description)}
@@ -909,6 +991,11 @@ export const sendFeedbackCreatedEmail = internalAction({
       `,
     });
 
-    await resendSend(FEEDBACK_INBOX_EMAILS, `Nouveau retour · ${appLabel} (${typeLabel})`, html, FROM);
+    await resendSend(
+      FEEDBACK_INBOX_EMAILS,
+      args.app ? `Nouveau retour · ${appLabel} (${typeLabel})` : `Nouveau retour · ${typeLabel}`,
+      html,
+      FROM,
+    );
   },
 });

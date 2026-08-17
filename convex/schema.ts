@@ -21,12 +21,19 @@ export const feedbackApp = v.union(
   v.literal("feedback"),
 );
 
-/** App « Feedback » — nature du retour. */
+/**
+ * App « Feedback » — nature du retour.
+ *
+ * `nouvelle_application` est le seul type qui ne vise **aucune** app existante
+ * (idée d'outil à créer) : les retours de ce type sont enregistrés sans champ
+ * `app`, d'où son caractère optionnel dans la table `feedback`.
+ */
 export const feedbackType = v.union(
   v.literal("fonctionnalite"),
   v.literal("probleme"),
   v.literal("amelioration"),
   v.literal("question"),
+  v.literal("nouvelle_application"),
 );
 
 /**
@@ -1201,6 +1208,16 @@ export default defineSchema(
     feedbackVehicleClean: v.optional(v.boolean()),
     feedbackIssues: v.optional(v.string()),
     feedbackNotes: v.optional(v.string()),
+    /** Photos / vidéos jointes au retour pour illustrer un problème constaté. */
+    feedbackMedia: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          contentType: v.optional(v.string()),
+          name: v.optional(v.string()),
+        }),
+      ),
+    ),
     createdAt: v.number(),
   })
     .index("by_vehicleId", ["vehicleId"])
@@ -1825,6 +1842,48 @@ export default defineSchema(
     .index("by_project", ["projectId"])
     .index("by_date", ["date"]),
 
+  /**
+   * Tâches planifiées (nouveau flux) : un encadrant crée une tâche (projet,
+   * date, déplacement, salariés affectés + temps estimé). Chaque salarié
+   * affecté confirme ensuite son temps réel depuis « Pointages ». Distinct de
+   * `ptTimeEntries` (pointages historiques, inchangés).
+   */
+  ptTasks: defineTable({
+    projectId: v.id("ptProjects"),
+    /** Dénormalisé depuis le projet à la création. */
+    clientId: v.id("ptClients"),
+    date: v.number(),
+    travel: v.optional(
+      v.object({
+        roundTrips: v.number(),
+        distanceKm: v.number(),
+        ratePerKm: v.optional(v.number()),
+        cost: v.number(),
+      }),
+    ),
+    notes: v.optional(v.string()),
+    documentIds: v.array(v.id("ptDocuments")),
+    assignments: v.array(
+      v.object({
+        employeeId: v.id("ptEmployees"),
+        /** Snapshot du taux horaire à la création de la tâche. */
+        hourlyRate: v.number(),
+        /** Temps estimé à la création (heures). */
+        estimatedHours: v.number(),
+        /** Temps réel confirmé par le salarié (heures). */
+        confirmedHours: v.optional(v.number()),
+        confirmedAt: v.optional(v.number()),
+      }),
+    ),
+    /** « confirmed » dès que toutes les affectations ont un temps réel. */
+    status: v.union(v.literal("pending"), v.literal("confirmed")),
+    createdAt: v.number(),
+    createdBy: v.optional(v.string()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_date", ["date"])
+    .index("by_status", ["status"]),
+
   /** Fournisseurs. */
   ptSuppliers: defineTable({
     name: v.string(),
@@ -1947,8 +2006,12 @@ export default defineSchema(
    * `requests` de la recyclerie (autre métier, autres droits).
    */
   feedback: defineTable({
-    /** App concernée par le retour (clé de tuile du portail Mes Outils). */
-    app: feedbackApp,
+    /**
+     * App concernée par le retour (clé de tuile du portail Mes Outils).
+     * Absente pour les retours de type `nouvelle_application` : l'idée ne vise
+     * par définition aucune app existante.
+     */
+    app: v.optional(feedbackApp),
     type: feedbackType,
     description: v.string(),
     /** Captures, photos ou documents fournis avec le retour. */
