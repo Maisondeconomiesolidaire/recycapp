@@ -362,9 +362,12 @@ export function Articles() {
       <PageHeader
         title="Articles de la boutique"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          // Sept actions : sous `xl` on ne garde que les icônes (le libellé est
+          // repris dans `title`), sinon la barre déborde sur deux lignes.
+          <div className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 py-0.5 lg:flex-wrap lg:overflow-visible">
             <Button
               variant="outline"
+              className="shrink-0 max-xl:w-10 max-xl:px-0"
               onClick={printQrCodes}
               disabled={!canPrint || !filteredArticles?.length}
               title={
@@ -373,53 +376,73 @@ export function Articles() {
                   : "Imprimer les QR codes des articles visibles"
               }
             >
-              <QrCodeIcon className="h-4 w-4" />
-              QR codes
-              {selectedArticles.length > 0 ? ` (${selectedArticles.length})` : ""}
+              <QrCodeIcon className="h-4 w-4 shrink-0" />
+              <span className="hidden whitespace-nowrap xl:inline">
+                QR codes
+                {selectedArticles.length > 0 ? ` (${selectedArticles.length})` : ""}
+              </span>
             </Button>
             <Button
               variant="outline"
+              className="shrink-0 max-xl:w-10 max-xl:px-0"
               onClick={() => filteredArticles?.length && setPrintRequest({ articles: filteredArticles, mode: "labels" })}
               disabled={!canPrint || !filteredArticles?.length}
               title="Imprimer les étiquettes des articles visibles"
             >
-              <Printer className="h-4 w-4" />
-              Étiquettes
+              <Printer className="h-4 w-4 shrink-0" />
+              <span className="hidden whitespace-nowrap xl:inline">Étiquettes</span>
             </Button>
             <Button
               variant="outline"
+              className="shrink-0 max-xl:w-10 max-xl:px-0"
               onClick={() => setRunOpen(true)}
               disabled={!canAnalyze || !articles?.length}
               title="Générer les annonces IA et détourer les photos d'une liste d'articles"
             >
-              <Play className="h-4 w-4" />
-              Nouveau run
-              {draftCount > 0 ? ` (${draftCount})` : ""}
+              <Play className="h-4 w-4 shrink-0" />
+              <span className="hidden whitespace-nowrap xl:inline">
+                Nouveau run
+                {draftCount > 0 ? ` (${draftCount})` : ""}
+              </span>
             </Button>
             <Button
               variant="outline"
+              className="shrink-0 max-xl:w-10 max-xl:px-0"
               onClick={handleAnalyzeLots}
               disabled={!canAnalyze || analyzingLots || !articles?.length}
+              title="Analyser les lots potentiels"
             >
               {analyzingLots ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-4 w-4 shrink-0" />
               )}
-              Analyser les lots potentiels
+              <span className="hidden whitespace-nowrap xl:inline">Lots potentiels</span>
             </Button>
-            <Button variant="outline" onClick={() => setScanOpen(true)}>
-              <ScanLine className="h-4 w-4" />
-              Scanner
+            <Button
+              variant="outline"
+              className="shrink-0 max-xl:w-10 max-xl:px-0"
+              onClick={() => setScanOpen(true)}
+              title="Scanner un QR code"
+            >
+              <ScanLine className="h-4 w-4 shrink-0" />
+              <span className="hidden whitespace-nowrap xl:inline">Scanner</span>
             </Button>
             {canCreate && (
-              <Button variant="outline" onClick={() => setQuickAddOpen(true)}>
-                <Camera className="h-4 w-4" /> Ajouter par photo
+              <Button
+                variant="outline"
+                className="shrink-0 max-xl:w-10 max-xl:px-0"
+                onClick={() => setQuickAddOpen(true)}
+                title="Ajouter des articles par photo"
+              >
+                <Camera className="h-4 w-4 shrink-0" />
+                <span className="hidden whitespace-nowrap xl:inline">Ajouter par photo</span>
               </Button>
             )}
             {canCreate && (
-              <Button onClick={openNew}>
-                <Plus className="h-4 w-4" /> Nouvel article
+              <Button className="shrink-0" onClick={openNew} title="Nouvel article">
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap">Nouvel article</span>
               </Button>
             )}
           </div>
