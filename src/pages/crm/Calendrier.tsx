@@ -19,6 +19,7 @@ import { fr } from "date-fns/locale";
 import {
   ChevronLeft,
   ChevronRight,
+  CalendarCog,
   ListChecks,
   PackagePlus,
   Pencil,
@@ -35,6 +36,7 @@ import { Field, Select } from "../../components/ui/Field";
 import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Modal } from "../../components/ui/Modal";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { RequestDrawer } from "../../components/crm/RequestDrawer";
@@ -46,6 +48,7 @@ import {
   REQUEST_TYPES,
   TYPE_COLORS,
   TYPE_LABELS,
+  type DepotSite,
 } from "../../lib/constants";
 import { cn } from "../../lib/cn";
 
@@ -110,20 +113,39 @@ export function Calendrier() {
 
 /* ─── Dépôts en recyclerie ───────────────────────────────────────────────── */
 
+type DepotSiteFilter = "all" | DepotSite;
+
+const DEPOT_SITE_FILTERS: { key: DepotSiteFilter; label: string }[] = [
+  { key: "all", label: "Toutes" },
+  { key: "60", label: "Pays de Bray 60" },
+  { key: "76", label: "Gournay 76" },
+];
+
 /**
- * Rendez-vous de dépôt du mois affiché, groupés par lundi.
+ * Calendrier des rendez-vous de dépôt, au même format que celui des demandes.
  *
- * Vue à part : un dépôt n'est pas une demande à traiter, il n'apparaît donc ni
- * sur le tableau des demandes ni dans le calendrier ci-dessus.
+ * Les dépôts n'apparaissent pas dans le calendrier des demandes : ils ont leur
+ * propre vue, filtrable par recyclerie, avec la gestion des créneaux ouverts.
  */
 function DepotCalendar({ month }: { month: Date }) {
+  const access = useCrmAccess();
+  const canManage = canAccess(access, "calendrier", "update");
   const [openId, setOpenId] = useState<Id<"requests"> | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [siteFilter, setSiteFilter] = useState<DepotSiteFilter>("all");
+  const [slotsOpen, setSlotsOpen] = useState(false);
 
-  const range = useMemo(
-    () => ({ from: startOfMonth(month).getTime(), to: endOfMonth(month).getTime() }),
-    [month],
-  );
-  const depots = useQuery(api.requests.scheduledDepots, range);
+  const range = useMemo(() => {
+    const from = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
+    const to = endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
+    return { from: from.getTime(), to: to.getTime() };
+  }, [month]);
+
+  const depots = useQuery(api.requests.scheduledDepots, {
+    ...range,
+    ...(siteFilter === "all" ? {} : { site: siteFilter }),
+  });
+  const days = useMonthDays(month);
 
   const byDay = useMemo(() => {
     const map = new Map<string, Doc<"requests">[]>();
@@ -137,72 +159,271 @@ function DepotCalendar({ month }: { month: Date }) {
     return map;
   }, [depots]);
 
-  const days = useMemo(() => Array.from(byDay.keys()).sort(), [byDay]);
-
-  if (depots === undefined) return <FullSpinner label="Chargement des dépôts..." />;
+  const selectedDayDepots = useMemo(() => {
+    if (!selectedDay) return [];
+    return byDay.get(format(selectedDay, "yyyy-MM-dd")) ?? [];
+  }, [selectedDay, byDay]);
 
   return (
     <div className="p-4 sm:p-6">
-      {days.length === 0 ? (
-        <EmptyState
-          icon={<PackagePlus className="h-10 w-10" />}
-          title="Aucun dépôt ce mois-ci"
-          description="Les créneaux réservés depuis le formulaire de dépôt apparaîtront ici."
-        />
-      ) : (
-        <div className="space-y-4">
-          {days.map((day) => {
-            const items = byDay.get(day) ?? [];
-            return (
-              <div
-                key={day}
-                className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]"
-              >
-                <div className="flex items-baseline justify-between gap-3 border-b border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-2.5">
-                  <p className="text-sm font-semibold capitalize text-zinc-100">
-                    {format(new Date(`${day}T12:00:00`), "EEEE d MMMM yyyy", { locale: fr })}
-                  </p>
-                  <p className="text-xs text-zinc-400">
-                    {items.length} dépôt{items.length > 1 ? "s" : ""}
-                  </p>
-                </div>
-                <ul className="divide-y divide-[var(--crm-border)]">
-                  {items.map((request) => {
-                    const detail = request.depot!;
-                    return (
-                      <li key={request._id}>
-                        <button
-                          type="button"
-                          onClick={() => setOpenId(request._id)}
-                          className="grid w-full grid-cols-[64px_1fr_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-[var(--crm-surface-2)]"
-                        >
-                          <span className="text-sm font-bold tabular-nums text-zinc-100">
-                            {format(new Date(detail.slotStart), "HH'h'mm")}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium text-zinc-100">
-                              {request.customer.firstName} {request.customer.lastName}
-                            </span>
-                            <span className="block truncate text-xs text-zinc-400">
-                              {DEPOT_SITE_LABELS[detail.site]} · {DEPOT_VEHICLE_LABELS[detail.vehicleType]}
-                            </span>
-                          </span>
-                          <span className="text-xs text-zinc-500">
-                            {request.reference ? `#${request.reference}` : ""}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-1">
+          {DEPOT_SITE_FILTERS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setSiteFilter(option.key)}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                siteFilter === option.key
+                  ? "bg-brand-500 text-white"
+                  : "text-zinc-400 hover:text-zinc-200",
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-      )}
+        {canManage ? (
+          <Button variant="outline" size="sm" onClick={() => setSlotsOpen(true)}>
+            <CalendarCog className="h-4 w-4" />
+            Gérer les créneaux
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
+        <div className="min-w-[720px]">
+          <WeekdayHeader />
+          <div className="grid grid-cols-7">
+            {days.map((day) => {
+              const key = format(day, "yyyy-MM-dd");
+              const items = byDay.get(key) ?? [];
+              return (
+                <DayCell
+                  key={key}
+                  day={day}
+                  inMonth={isSameMonth(day, month)}
+                  isSelected={selectedDay ? isSameDay(day, selectedDay) : false}
+                  onClick={() => setSelectedDay(day)}
+                >
+                  {items.map((depot) => (
+                    <button
+                      key={depot._id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenId(depot._id);
+                      }}
+                      className="w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-white hover:opacity-90"
+                      style={{ backgroundColor: TYPE_COLORS.depot }}
+                    >
+                      {format(new Date(depot.depot!.slotStart), "HH'h'mm")} ·{" "}
+                      {depot.customer.lastName}
+                    </button>
+                  ))}
+                </DayCell>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <Drawer
+        open={selectedDay !== null}
+        onClose={() => setSelectedDay(null)}
+        variant="left"
+        title={selectedDay ? format(selectedDay, "EEEE d MMMM yyyy", { locale: fr }) : ""}
+        bodyClassName="p-0"
+      >
+        {selectedDay ? (
+          <DepotDayPanel depots={selectedDayDepots} onOpenDepot={setOpenId} />
+        ) : null}
+      </Drawer>
+
+      {slotsOpen ? <DepotSlotsModal onClose={() => setSlotsOpen(false)} /> : null}
 
       <RequestDrawer requestId={openId} onClose={() => setOpenId(null)} />
     </div>
+  );
+}
+
+/** Détail d'une journée de dépôts (panneau latéral). */
+function DepotDayPanel({
+  depots,
+  onOpenDepot,
+}: {
+  depots: Doc<"requests">[];
+  onOpenDepot: (id: Id<"requests">) => void;
+}) {
+  if (depots.length === 0) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={<PackagePlus className="h-9 w-9" />}
+          title="Aucun dépôt ce jour"
+          description="Les créneaux réservés depuis le formulaire de dépôt apparaîtront ici."
+        />
+      </div>
+    );
+  }
+  return (
+    <ul className="divide-y divide-[var(--crm-border)]">
+      {depots.map((depot) => {
+        const detail = depot.depot!;
+        return (
+          <li key={depot._id}>
+            <button
+              type="button"
+              onClick={() => onOpenDepot(depot._id)}
+              className="grid w-full grid-cols-[64px_1fr] items-center gap-3 px-4 py-3 text-left transition hover:bg-[var(--crm-surface-2)]"
+            >
+              <span className="text-sm font-bold tabular-nums text-zinc-100">
+                {format(new Date(detail.slotStart), "HH'h'mm")}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium text-zinc-100">
+                  {depot.customer.firstName} {depot.customer.lastName}
+                </span>
+                <span className="block truncate text-xs text-zinc-400">
+                  {DEPOT_SITE_LABELS[detail.site]} · {DEPOT_VEHICLE_LABELS[detail.vehicleType]}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Gestion des créneaux ouverts : fermer une journée entière ou des horaires
+ * précis, par recyclerie. Un créneau déjà réservé ne peut pas être fermé — il
+ * faut d'abord traiter le rendez-vous avec le client.
+ */
+function DepotSlotsModal({ onClose }: { onClose: () => void }) {
+  const [site, setSite] = useState<DepotSite>("60");
+  const [dateIndex, setDateIndex] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const days = useQuery(api.requests.depotSlots, { site });
+  const setAvailability = useMutation(api.requests.setDepotAvailability);
+
+  const day = days?.[Math.min(dateIndex, (days?.length ?? 1) - 1)];
+
+  async function toggle(next: boolean, slotStart?: number) {
+    if (!day) return;
+    setSaving(true);
+    try {
+      await setAvailability({ site, date: day.date, slotStart, blocked: next });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Gérer les créneaux de dépôt">
+      <div className="space-y-5">
+        <div className="flex flex-wrap gap-3">
+          <Field label="Recyclerie">
+            <Select
+              value={site}
+              onChange={(event) => {
+                setSite(event.target.value as DepotSite);
+                setDateIndex(0);
+              }}
+            >
+              <option value="60">{DEPOT_SITE_LABELS["60"]}</option>
+              <option value="76">{DEPOT_SITE_LABELS["76"]}</option>
+            </Select>
+          </Field>
+          <Field label="Lundi">
+            <Select
+              value={String(dateIndex)}
+              onChange={(event) => setDateIndex(Number(event.target.value))}
+            >
+              {(days ?? []).map((option, index) => (
+                <option key={option.date} value={index}>
+                  {format(new Date(`${option.date}T12:00:00`), "EEEE d MMMM yyyy", {
+                    locale: fr,
+                  })}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        {days === undefined ? (
+          <FullSpinner label="Chargement des créneaux..." />
+        ) : !day ? (
+          <EmptyState title="Aucun lundi à configurer" />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-zinc-100">
+                  {day.dayBlocked ? "Journée fermée" : "Journée ouverte"}
+                </p>
+                <p className="text-xs text-zinc-400">
+                  Fermer la journée retire tous ses créneaux du formulaire public.
+                </p>
+              </div>
+              <Button
+                variant={day.dayBlocked ? "secondary" : "outline"}
+                size="sm"
+                disabled={saving}
+                onClick={() => void toggle(!day.dayBlocked)}
+              >
+                {day.dayBlocked ? "Rouvrir la journée" : "Fermer la journée"}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {day.slots.map((slot) => {
+                const state = slot.booked
+                  ? "booked"
+                  : slot.blocked
+                    ? "blocked"
+                    : "open";
+                return (
+                  <button
+                    key={slot.start}
+                    type="button"
+                    disabled={saving || slot.booked}
+                    onClick={() => void toggle(!slot.blocked, slot.start)}
+                    title={
+                      state === "booked"
+                        ? "Créneau déjà réservé"
+                        : state === "blocked"
+                          ? "Cliquer pour rouvrir"
+                          : "Cliquer pour fermer"
+                    }
+                    className={cn(
+                      "rounded-xl border px-2 py-2.5 text-sm font-semibold transition",
+                      state === "booked"
+                        ? "cursor-not-allowed border-brand-500/40 bg-brand-500/15 text-brand-300"
+                        : state === "blocked"
+                          ? "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-500 line-through"
+                          : "border-[var(--crm-border)] text-zinc-100 hover:border-brand-500 hover:text-brand-300",
+                    )}
+                  >
+                    {slot.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-brand-500/60" /> Réservé
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-zinc-600" /> Fermé
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 

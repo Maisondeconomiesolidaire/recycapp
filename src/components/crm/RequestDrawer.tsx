@@ -134,10 +134,17 @@ export function RequestDrawer({
     request?.type === "aerogommage" ||
     (request?.type === "collecte" && request.collecteType === "C3");
   const isC3Collecte = request?.type === "collecte" && request.collecteType === "C3";
-  const visibleTabs = hasQuoteCalculator
-    ? [TABS[0], TABS[1], C3_QUOTE_TAB, TABS[2], TABS[3], TABS[4]]
-    : TABS;
-  const activeTab = hasQuoteCalculator || tab !== "calculDevis" ? tab : "gestion";
+  // Un dépôt est un rendez-vous déjà calé : ni process à piloter, ni devis, ni
+  // documents à échanger. On ne garde que la demande et la fiche client.
+  const isDepot = request?.type === "depot";
+  const visibleTabs = isDepot
+    ? [TABS[0], TABS[3]]
+    : hasQuoteCalculator
+      ? [TABS[0], TABS[1], C3_QUOTE_TAB, TABS[2], TABS[3], TABS[4]]
+      : TABS;
+  // Le tiroir garde l'onglet ouvert d'une demande à l'autre : il faut retomber
+  // sur « Demande » quand cet onglet n'existe pas pour le type affiché.
+  const activeTab = visibleTabs.some((item) => item.key === tab) ? tab : "demande";
 
   return (
     <Drawer
