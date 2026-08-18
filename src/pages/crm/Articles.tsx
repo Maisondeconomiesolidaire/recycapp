@@ -992,7 +992,10 @@ function ActionsMenu({ items }: { items: HeaderAction[] }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-1 w-60 overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1 shadow-xl"
+          // Le bouton est calé à gauche sur mobile : le panneau s'ouvre donc
+          // vers la droite, sinon il sort de l'écran. Il s'aligne à droite du
+          // bouton dès que l'en-tête repasse en ligne.
+          className="absolute left-0 right-auto z-40 mt-1 w-60 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1 shadow-xl lg:left-auto lg:right-0"
         >
           {items.map((item) => (
             <button
