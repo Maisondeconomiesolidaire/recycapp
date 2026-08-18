@@ -30,15 +30,17 @@ import { api } from "../../../convex/_generated/api";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
+import { Select } from "../../components/ui/Field";
 import {
   REQUEST_TYPES,
   STAGES,
   TYPE_COLORS,
   TYPE_LABELS,
+  type RequestType,
 } from "../../lib/constants";
 import { formatPrice } from "../../lib/format";
 
-type StatsType = "aerogommage" | "collecte" | "article" | "velo" | null;
+type StatsType = RequestType | null;
 
 function StatsTypeSelect({
   value,
@@ -48,16 +50,16 @@ function StatsTypeSelect({
   onChange: (v: StatsType) => void;
 }) {
   return (
-    <select
+    <Select
       value={value ?? ""}
       onChange={(e) => onChange((e.target.value as StatsType) || null)}
-      className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none"
+      className="h-9 w-52 text-xs"
     >
       <option value="">Tous les types</option>
       {REQUEST_TYPES.map((t) => (
         <option key={t} value={t}>{TYPE_LABELS[t]}</option>
       ))}
-    </select>
+    </Select>
   );
 }
 

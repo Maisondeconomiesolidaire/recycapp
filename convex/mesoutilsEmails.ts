@@ -897,6 +897,72 @@ export const sendContractGeneratedEmail = internalAction({
   },
 });
 
+/**
+ * Prévenance de fin de contrat (J-22, J-15, J-3) : prévient les responsables RH
+ * de la structure qu'un contrat arrive à échéance, pour renouveler ou notifier
+ * à temps.
+ *
+ * Les destinataires sont calculés en amont (`hrContractNotices.ts`) selon la
+ * structure du salarié : ils ne sont pas les mêmes d'une structure à l'autre.
+ */
+export const sendContractEndNoticeEmail = internalAction({
+  args: {
+    to: v.array(v.string()),
+    employeeName: v.string(),
+    structureLabel: v.string(),
+    contractType: v.string(),
+    numeroContrat: v.string(),
+    poste: v.string(),
+    dateDebut: v.string(),
+    dateFin: v.string(),
+    dateFinLabel: v.string(),
+    daysLeft: v.number(),
+    /** Palier de prévenance atteint : 22, 15 ou 3 jours. */
+    threshold: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    const when =
+      args.daysLeft === 0
+        ? "aujourd'hui"
+        : args.daysLeft === 1
+          ? "demain"
+          : `dans ${args.daysLeft} jours`;
+    const urgency = args.threshold <= 3 ? "#dc2626" : args.threshold <= 15 ? "#d97706" : "#166534";
+
+    const html = shell({
+      preheader: `Le contrat de ${args.employeeName} se termine ${when} (${args.dateFinLabel}).`,
+      heading: `Fin de contrat — ${args.employeeName}`,
+      intro: `Le contrat de <strong>${esc(args.employeeName)}</strong> (${esc(args.structureLabel)}) arrive à échéance <strong>${esc(when)}</strong>, le <strong>${esc(args.dateFinLabel)}</strong>. Pensez à préparer le renouvellement ou la notification de fin de contrat.`,
+      contentHtml: `
+        <p style="margin:0 0 18px;font-family:Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${urgency};">
+          Prévenance J-${args.threshold} ·
+          ${args.daysLeft === 0 ? "échéance aujourd'hui" : args.daysLeft === 1 ? "échéance demain" : `échéance dans ${args.daysLeft} jours`}
+        </p>
+        ${detailCard([
+          ["Salarié", args.employeeName],
+          ["Structure", args.structureLabel],
+          ["Type de contrat", args.contractType],
+          ["N° de contrat", args.numeroContrat || "—"],
+          ["Poste", args.poste || "—"],
+          ["Début", args.dateDebut || "—"],
+          ["Fin", args.dateFinLabel],
+        ])}
+        <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#6b7a72;">
+          Rappel : la prévenance est envoyée à J-22, J-15 et J-3 de l'échéance,
+          d'après le dernier contrat généré pour ce salarié dans Mes Outils → RH.
+        </p>
+      `,
+    });
+
+    await resendSend(
+      args.to,
+      `⏰ Fin de contrat J-${args.threshold} · ${args.employeeName} (${args.structureLabel}) — ${args.dateFinLabel}`,
+      html,
+      FROM,
+    );
+  },
+});
+
 /** Boîte de réception des nouveaux retours (équipe produit). */
 export const FEEDBACK_INBOX_EMAILS = ["s.lahmer@eco-solidaire.fr"];
 

@@ -10,6 +10,7 @@ import { AerogommageForm } from "./pages/public/AerogommageForm";
 import { CollecteForm } from "./pages/public/CollecteForm";
 import { VeloForm } from "./pages/public/VeloForm";
 import { LivraisonForm } from "./pages/public/LivraisonForm";
+import { DepotForm } from "./pages/public/DepotForm";
 import { Merci } from "./pages/public/Merci";
 import { Conditions } from "./pages/public/Conditions";
 import { Confidentialite } from "./pages/public/Confidentialite";
@@ -111,6 +112,17 @@ export default function App() {
               description="Après connexion ou inscription, vous serez renvoyé directement vers ce formulaire."
             >
               <LivraisonForm />
+            </RequirePublicAccount>
+          }
+        />
+        <Route
+          path="/depot"
+          element={
+            <RequirePublicAccount
+              title="Connectez-vous pour réserver un dépôt"
+              description="Après connexion ou inscription, vous serez renvoyé directement vers ce formulaire."
+            >
+              <DepotForm />
             </RequirePublicAccount>
           }
         />

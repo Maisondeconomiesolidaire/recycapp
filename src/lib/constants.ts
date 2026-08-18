@@ -5,7 +5,8 @@ export type RequestType =
   | "collecte"
   | "article"
   | "velo"
-  | "livraison";
+  | "livraison"
+  | "depot";
 export type RequestStage = "nouveau" | "validation" | "planifie";
 export type RequestOutcome = "open" | "gagnee" | "perdue";
 export type RequestOrigin = "internal" | "external";
@@ -16,6 +17,7 @@ export const TYPE_LABELS: Record<RequestType, string> = {
   article: "Boutique",
   velo: "Cycle en Bray",
   livraison: "Livraison",
+  depot: "Dépôt",
 };
 
 /** Couleur officielle (hex) de chaque type de demande — charte Cycle en Bray. */
@@ -25,6 +27,7 @@ export const TYPE_COLORS: Record<RequestType, string> = {
   article: "#a0315a",
   velo: "#196b24",
   livraison: "#16a34a",
+  depot: "#b45309",
 };
 
 export const REQUEST_TYPES: RequestType[] = [
@@ -33,7 +36,44 @@ export const REQUEST_TYPES: RequestType[] = [
   "article",
   "velo",
   "livraison",
+  "depot",
 ];
+
+// --- Dépôt en recyclerie ----------------------------------------------------
+
+export type DepotSite = "60" | "76";
+export type DepotVehicleType = "voiture" | "camionnette" | "remorque";
+
+/** Nom public de chaque recyclerie accueillant les dépôts. */
+export const DEPOT_SITES: { value: DepotSite; label: string; hint: string }[] = [
+  {
+    value: "60",
+    label: "Recyclerie du Pays de Bray 60",
+    hint: "Oise",
+  },
+  {
+    value: "76",
+    label: "Recyclerie de Gournay en Bray 76",
+    hint: "Seine-Maritime",
+  },
+];
+
+export const DEPOT_SITE_LABELS: Record<DepotSite, string> = {
+  "60": "Recyclerie du Pays de Bray 60",
+  "76": "Recyclerie de Gournay en Bray 76",
+};
+
+export const DEPOT_VEHICLES: { value: DepotVehicleType; label: string; hint: string }[] = [
+  { value: "voiture", label: "Voiture", hint: "Coffre et banquette arrière" },
+  { value: "camionnette", label: "Camionnette", hint: "Utilitaire type Kangoo, Jumpy…" },
+  { value: "remorque", label: "Remorque", hint: "Voiture avec remorque attelée" },
+];
+
+export const DEPOT_VEHICLE_LABELS: Record<DepotVehicleType, string> = {
+  voiture: "Voiture",
+  camionnette: "Camionnette",
+  remorque: "Remorque",
+};
 
 /** Styles inline pour un badge teinté à la couleur du type. */
 export function typeBadgeStyle(type: RequestType): CSSProperties {

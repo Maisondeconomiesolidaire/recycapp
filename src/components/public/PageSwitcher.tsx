@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bike, ChevronDown, SprayCan, Store, Truck } from "lucide-react";
+import { Bike, ChevronDown, PackagePlus, SprayCan, Store, Truck } from "lucide-react";
 
 const SWITCHER_PAGES = [
   { to: "/collecte", label: "Collecte", icon: Truck },
   { to: "/aerogommage", label: "Aérogommage", icon: SprayCan },
   { to: "/velo", label: "Cycle en Bray", icon: Bike },
+  { to: "/depot", label: "Dépôt", icon: PackagePlus },
 ];
 
 const BOUTIQUE_PAGE = { to: "/boutique", label: "Boutique", icon: Store };
@@ -89,5 +90,10 @@ export const PAGE_HEADERS: Record<string, { icon: typeof Store; title: string; s
     icon: Bike,
     title: "Cycle en Bray",
     subtitle: "Réparation et reconditionnement de vélos.",
+  },
+  "/depot": {
+    icon: PackagePlus,
+    title: "Dépôt en recyclerie",
+    subtitle: "Réservez votre créneau du lundi pour déposer vos objets.",
   },
 };

@@ -9,6 +9,8 @@ const REQUEST_TYPE = v.union(
   v.literal("collecte"),
   v.literal("article"),
   v.literal("velo"),
+  v.literal("livraison"),
+  v.literal("depot"),
 );
 
 /** Colonne Kanban déduite de l'avancement du process. */
@@ -33,7 +35,7 @@ export const stats = query({
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const byType = { aerogommage: 0, collecte: 0, article: 0, velo: 0, livraison: 0 };
+    const byType = { aerogommage: 0, collecte: 0, article: 0, velo: 0, livraison: 0, depot: 0 };
     const byStage = { nouveau: 0, validation: 0, planifie: 0 };
     let open = 0;
     let won = 0;
@@ -82,6 +84,99 @@ export const stats = query({
       byType,
       byStage,
       quoteTotals,
+    };
+  },
+});
+
+/** Un compte @eco-solidaire.fr = membre interne, sinon client. */
+function isInternalEmail(email: string) {
+  return email.trim().toLowerCase().endsWith("@eco-solidaire.fr");
+}
+
+/**
+ * Audience par application pour la page admin : d'où viennent les comptes
+ * utilisateurs, et combien de fiches « client » chaque app gère en propre.
+ *
+ * Les comptes sont partagés par les 7 apps (une seule instance Clerk) : ce qui
+ * distingue un « client Recyclerie » d'un « client Klyd », c'est l'app depuis
+ * laquelle il s'est inscrit (`signupApp`). Les comptes internes
+ * (@eco-solidaire.fr) sont comptés à part pour ne pas les mélanger aux clients.
+ *
+ * Le décompte du staff n'est pas ici : il se déduit des droits `crmPermissions`
+ * côté page admin, qui possède déjà le catalogue des pages par app.
+ */
+export const appAudience = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const [users, crmCustomers, cycleCustomers, klydeOrders, bpCompanies, ptClients, feedbackEntries] =
+      await Promise.all([
+        ctx.db.query("users").collect(),
+        ctx.db.query("crmCustomers").collect(),
+        ctx.db.query("cycleCustomers").collect(),
+        ctx.db.query("klydeOrders").collect(),
+        ctx.db.query("bpCompanies").collect(),
+        ctx.db.query("ptClients").collect(),
+        ctx.db.query("feedback").collect(),
+      ]);
+
+    // Comptes clients (externes) par app d'inscription ; sans `signupApp`, le
+    // compte est antérieur à la traçabilité de l'origine et n'est rattaché à
+    // aucune app. La liste nominative sert au détail affiché au clic.
+    const clientsByApp: Record<string, Array<{ email: string; name: string; createdAt: number }>> = {};
+    let internalAccounts = 0;
+    let clientAccounts = 0;
+    let unknownOrigin = 0;
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    let newClientsLast30Days = 0;
+
+    for (const user of users) {
+      if (isInternalEmail(user.email)) {
+        internalAccounts += 1;
+        continue;
+      }
+      clientAccounts += 1;
+      if (user.createdAt >= thirtyDaysAgo) newClientsLast30Days += 1;
+      if (!user.signupApp) {
+        unknownOrigin += 1;
+        continue;
+      }
+      const list = (clientsByApp[user.signupApp] ??= []);
+      list.push({
+        email: user.email,
+        name: [user.firstName, user.lastName].filter(Boolean).join(" ").trim(),
+        createdAt: user.createdAt,
+      });
+    }
+
+    for (const list of Object.values(clientsByApp)) {
+      // Les inscriptions les plus récentes d'abord dans le détail.
+      list.sort((a, b) => b.createdAt - a.createdAt);
+    }
+
+    const klydeBuyers = new Set(
+      klydeOrders.map((order) => order.clerkId).filter(Boolean),
+    ).size;
+
+    return {
+      accounts: {
+        total: users.length,
+        clients: clientAccounts,
+        internal: internalAccounts,
+        unknownOrigin,
+        newClientsLast30Days,
+      },
+      clientsByApp,
+      /** Fiches gérées en propre par chaque app (≠ comptes utilisateurs). */
+      records: {
+        recycapp: { label: "Fiches clients CRM", count: crmCustomers.length },
+        cycleenbray: { label: "Fiches clients", count: cycleCustomers.length },
+        klyde: { label: "Acheteurs distincts", count: klydeBuyers },
+        bennespro: { label: "Entreprises clientes", count: bpCompanies.length },
+        pointeuse: { label: "Clients chantiers", count: ptClients.length },
+        feedback: { label: "Retours reçus", count: feedbackEntries.length },
+      },
     };
   },
 });

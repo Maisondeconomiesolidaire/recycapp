@@ -1,4 +1,4 @@
-import { Wind, Truck, ShoppingBag, Bike, PackageCheck } from "lucide-react";
+import { Wind, Truck, ShoppingBag, Bike, PackageCheck, PackagePlus } from "lucide-react";
 import { cn } from "../../lib/cn";
 import {
   RequestType,
@@ -15,6 +15,7 @@ const ICONS = {
   article: ShoppingBag,
   velo: Bike,
   livraison: PackageCheck,
+  depot: PackagePlus,
 } as const;
 
 export function TypeBadge({

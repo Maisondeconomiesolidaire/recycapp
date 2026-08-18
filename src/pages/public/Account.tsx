@@ -39,6 +39,7 @@ const TYPE_LABELS: Record<string, string> = {
   collecte: "Collecte",
   velo: "Vélo",
   livraison: "Livraison",
+  depot: "Dépôt",
 };
 
 const STATUS_FLOW = [

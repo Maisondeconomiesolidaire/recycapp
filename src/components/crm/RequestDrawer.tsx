@@ -6,8 +6,10 @@ import { fr } from "date-fns/locale";
 import { useUpload } from "../../lib/useUpload";
 import { downloadImage } from "../../lib/downloadImage";
 import {
+  CalendarClock,
   CalendarDays,
   MapPin,
+  Truck,
   PackageOpen,
   Pencil,
   Plus,
@@ -58,6 +60,8 @@ import {
   WOOD_TYPES,
   STRIPPING_OPTIONS,
   COATING_OPTIONS,
+  DEPOT_SITE_LABELS,
+  DEPOT_VEHICLE_LABELS,
 } from "../../lib/constants";
 import { STEP } from "../../../convex/processes";
 import { formatDateTime, formatPrice } from "../../lib/format";
@@ -2448,6 +2452,50 @@ function RequestDetails({
         </section>
 
         <CollecteCategoryPhotos request={request} />
+      </>
+    );
+  }
+
+  if (request.type === "depot" && request.depot) {
+    const d = request.depot;
+    const slot = new Date(d.slotStart);
+    const dayLabel = new Intl.DateTimeFormat("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Europe/Paris",
+    }).format(slot);
+    const hourLabel = new Intl.DateTimeFormat("fr-FR", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Europe/Paris",
+    }).format(slot);
+    return (
+      <>
+        <section>
+          <SectionTitle>Rendez-vous de dépôt</SectionTitle>
+          <div className="space-y-1.5 text-sm text-zinc-300">
+            <p className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-zinc-500" />
+              {DEPOT_SITE_LABELS[d.site]}
+            </p>
+            <p className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-zinc-500" />
+              <span className="capitalize">{dayLabel}</span> à {hourLabel}
+            </p>
+            <p className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-zinc-500" />
+              {DEPOT_VEHICLE_LABELS[d.vehicleType]}
+            </p>
+          </div>
+        </section>
+        {d.description ? (
+          <section>
+            <SectionTitle>Ce que le client apporte</SectionTitle>
+            <p className="whitespace-pre-wrap text-sm text-zinc-300">{d.description}</p>
+          </section>
+        ) : null}
       </>
     );
   }

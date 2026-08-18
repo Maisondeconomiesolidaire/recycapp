@@ -14,6 +14,8 @@ const messages: Record<string, string> = {
     "Votre demande à l'atelier Cycle en Bray est bien reçue. Nous revenons vers vous rapidement.",
   livraison:
     "Votre demande de livraison a bien été enregistrée. Nous vous recontactons pour organiser l'acheminement.",
+  depot:
+    "Votre créneau de dépôt est réservé. Présentez-vous à la recyclerie le lundi choisi, à l'heure retenue.",
 };
 
 export function Merci() {

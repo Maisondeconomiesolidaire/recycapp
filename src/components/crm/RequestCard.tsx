@@ -4,6 +4,7 @@ import {
   ShoppingBag,
   Bike,
   PackageCheck,
+  PackagePlus,
   CalendarClock,
   User,
 } from "lucide-react";
@@ -12,6 +13,8 @@ import { formatDate, formatRelative, initials } from "../../lib/format";
 import {
   TYPE_COLORS,
   RequestType,
+  DEPOT_SITE_LABELS,
+  DEPOT_VEHICLE_LABELS,
   getDisplayedProcessStep,
   requestTypeDisplayLabel,
 } from "../../lib/constants";
@@ -23,7 +26,23 @@ const ICONS = {
   article: ShoppingBag,
   velo: Bike,
   livraison: PackageCheck,
+  depot: PackagePlus,
 } as const;
+
+/** « lun. 25 août, 9h » — le créneau tel qu'il est annoncé au client. */
+function formatDepotSlot(slotStart: number) {
+  const date = new Date(slotStart);
+  const day = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(date);
+  const hour = new Intl.DateTimeFormat("fr-FR", {
+    hour: "numeric",
+    timeZone: "Europe/Paris",
+  }).format(date);
+  return `${day}, ${hour}`;
+}
 
 export function RequestCard({
   request,
@@ -164,6 +183,17 @@ function summary(r: Doc<"requests">): string {
           .filter(Boolean)
           .join(" ") ||
         "Livraison article"
+      );
+    case "depot":
+      // L'essentiel d'un dépôt tient en une ligne : où, quand, avec quoi.
+      return (
+        [
+          r.depot ? DEPOT_SITE_LABELS[r.depot.site] : null,
+          r.depot ? formatDepotSlot(r.depot.slotStart) : null,
+          r.depot ? DEPOT_VEHICLE_LABELS[r.depot.vehicleType] : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || "Dépôt en recyclerie"
       );
     default:
       return "";
