@@ -59,13 +59,14 @@ const schema = z
       .refine((value) => value, "Vous devez accepter les conditions de collecte"),
     comment: z.string().optional(),
   })
-  .refine(
-    (d) => (d.objectCategories?.length ?? 0) > 0 || Boolean(d.grosObjetsAutre?.trim()),
-    {
-      message: "Sélectionnez au moins une catégorie d'objet à collecter",
-      path: ["objectCategories"],
-    },
-  );
+  // Une catégorie n'est retenue que si elle porte au moins une photo : exiger
+  // une catégorie revient donc à exiger des photos. Le champ « autre » seul ne
+  // suffit plus — c'est par là que passaient les demandes sans aucune photo.
+  .refine((d) => (d.objectCategories?.length ?? 0) > 0, {
+    message:
+      "Ajoutez au moins une photo des objets à collecter : touchez une catégorie pour y ajouter vos photos.",
+    path: ["objectCategories"],
+  });
 type FormData = z.infer<typeof schema>;
 
 export function CollecteForm() {
@@ -256,7 +257,11 @@ export function CollecteForm() {
         <FormSection title="Objets à collecter">
           <p className="-mt-1 mb-1 text-sm text-zinc-500">
             Touchez une catégorie pour ajouter des photos des objets concernés. Une catégorie
-            est prise en compte dès qu'elle contient au moins une photo.
+            est prise en compte dès qu'elle contient au moins une photo.{" "}
+            <strong className="text-zinc-700">
+              Les photos sont obligatoires : sans elles, nous ne pouvons pas
+              préparer la collecte.
+            </strong>
           </p>
 
           <CollecteCategoryPicker value={categoryPhotos} onChange={handleCategoryChange} />

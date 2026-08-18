@@ -43,7 +43,8 @@ const itemSchema = z.object({
   delivery: z.boolean().optional(),
   retrieval: z.boolean().optional(),
   comment: z.string().optional(),
-  photos: z.array(z.string()).optional(),
+  // Photos obligatoires : un devis d'aérogommage ne peut pas être fait à l'aveugle.
+  photos: z.array(z.string()).min(1, "Ajoutez au moins une photo de cet objet"),
 });
 
 const schema = z.object({
@@ -338,12 +339,19 @@ export function AerogommageForm() {
 
                 <div>
                   <p className="text-sm font-medium text-zinc-700 mb-1.5">
-                    Photos de l'objet
+                    Photos de l'objet <span className="text-red-500">*</span>
                   </p>
                   <PhotoUpload
                     value={(watch(`items.${index}.photos`) ?? []) as Id<"_storage">[]}
-                    onChange={(ids) => setValue(`items.${index}.photos`, ids)}
+                    onChange={(ids) =>
+                      setValue(`items.${index}.photos`, ids, { shouldValidate: true })
+                    }
                   />
+                  {errors.items?.[index]?.photos?.message && (
+                    <p className="mt-1.5 text-sm text-red-600">
+                      {errors.items[index]?.photos?.message}
+                    </p>
+                  )}
                 </div>
               </div>
             );
