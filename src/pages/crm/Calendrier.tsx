@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ListChecks,
+  PackagePlus,
   Pencil,
   Plus,
   Trash2,
@@ -33,16 +34,24 @@ import { Drawer } from "../../components/ui/Drawer";
 import { Field, Select } from "../../components/ui/Field";
 import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { FullSpinner } from "../../components/ui/Spinner";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { RequestDrawer } from "../../components/crm/RequestDrawer";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
-import { TYPE_COLORS, TYPE_LABELS } from "../../lib/constants";
+import {
+  DEPOT_SITE_LABELS,
+  DEPOT_VEHICLE_LABELS,
+  REQUEST_TYPES,
+  TYPE_COLORS,
+  TYPE_LABELS,
+} from "../../lib/constants";
 import { cn } from "../../lib/cn";
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-type CalView = "demandes" | "ressources";
+type CalView = "demandes" | "depots" | "ressources";
 type ActivityList = NonNullable<
   ReturnType<typeof useQuery<typeof api.polyvalents.listActivities>>
 >;
@@ -80,6 +89,7 @@ export function Calendrier() {
         <UnderlineTabs
           items={[
             { key: "demandes", label: "Demandes" },
+            { key: "depots", label: "Dépôts" },
             { key: "ressources", label: "Gestion ressources" },
           ]}
           value={view}
@@ -89,9 +99,109 @@ export function Calendrier() {
 
       {view === "demandes" ? (
         <RequestsCalendar month={month} />
+      ) : view === "depots" ? (
+        <DepotCalendar month={month} />
       ) : (
         <ResourceCalendar month={month} />
       )}
+    </div>
+  );
+}
+
+/* ─── Dépôts en recyclerie ───────────────────────────────────────────────── */
+
+/**
+ * Rendez-vous de dépôt du mois affiché, groupés par lundi.
+ *
+ * Vue à part : un dépôt n'est pas une demande à traiter, il n'apparaît donc ni
+ * sur le tableau des demandes ni dans le calendrier ci-dessus.
+ */
+function DepotCalendar({ month }: { month: Date }) {
+  const [openId, setOpenId] = useState<Id<"requests"> | null>(null);
+
+  const range = useMemo(
+    () => ({ from: startOfMonth(month).getTime(), to: endOfMonth(month).getTime() }),
+    [month],
+  );
+  const depots = useQuery(api.requests.scheduledDepots, range);
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, Doc<"requests">[]>();
+    for (const depot of depots ?? []) {
+      if (!depot.depot) continue;
+      const key = format(new Date(depot.depot.slotStart), "yyyy-MM-dd");
+      const list = map.get(key) ?? [];
+      list.push(depot);
+      map.set(key, list);
+    }
+    return map;
+  }, [depots]);
+
+  const days = useMemo(() => Array.from(byDay.keys()).sort(), [byDay]);
+
+  if (depots === undefined) return <FullSpinner label="Chargement des dépôts..." />;
+
+  return (
+    <div className="p-4 sm:p-6">
+      {days.length === 0 ? (
+        <EmptyState
+          icon={<PackagePlus className="h-10 w-10" />}
+          title="Aucun dépôt ce mois-ci"
+          description="Les créneaux réservés depuis le formulaire de dépôt apparaîtront ici."
+        />
+      ) : (
+        <div className="space-y-4">
+          {days.map((day) => {
+            const items = byDay.get(day) ?? [];
+            return (
+              <div
+                key={day}
+                className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]"
+              >
+                <div className="flex items-baseline justify-between gap-3 border-b border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-2.5">
+                  <p className="text-sm font-semibold capitalize text-zinc-100">
+                    {format(new Date(`${day}T12:00:00`), "EEEE d MMMM yyyy", { locale: fr })}
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    {items.length} dépôt{items.length > 1 ? "s" : ""}
+                  </p>
+                </div>
+                <ul className="divide-y divide-[var(--crm-border)]">
+                  {items.map((request) => {
+                    const detail = request.depot!;
+                    return (
+                      <li key={request._id}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(request._id)}
+                          className="grid w-full grid-cols-[64px_1fr_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-[var(--crm-surface-2)]"
+                        >
+                          <span className="text-sm font-bold tabular-nums text-zinc-100">
+                            {format(new Date(detail.slotStart), "HH'h'mm")}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-zinc-100">
+                              {request.customer.firstName} {request.customer.lastName}
+                            </span>
+                            <span className="block truncate text-xs text-zinc-400">
+                              {DEPOT_SITE_LABELS[detail.site]} · {DEPOT_VEHICLE_LABELS[detail.vehicleType]}
+                            </span>
+                          </span>
+                          <span className="text-xs text-zinc-500">
+                            {request.reference ? `#${request.reference}` : ""}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <RequestDrawer requestId={openId} onClose={() => setOpenId(null)} />
     </div>
   );
 }
@@ -142,7 +252,7 @@ function RequestsCalendar({ month }: { month: Date }) {
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap gap-3">
-        {(Object.keys(TYPE_COLORS) as (keyof typeof TYPE_COLORS)[]).map((t) => (
+        {REQUEST_TYPES.map((t) => (
           <span key={t} className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[t] }} />
             {TYPE_LABELS[t]}

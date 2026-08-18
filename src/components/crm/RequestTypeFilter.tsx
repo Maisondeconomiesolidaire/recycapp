@@ -1,7 +1,7 @@
 import { RequestType, TYPE_LABELS } from "../../lib/constants";
 import { cn } from "../../lib/cn";
 
-const TYPES: RequestType[] = ["aerogommage", "collecte", "article", "velo", "livraison", "depot"];
+const TYPES: RequestType[] = ["aerogommage", "collecte", "article", "velo", "livraison"];
 
 export type RequestTypeFilterValue = RequestType | "all";
 

@@ -30,13 +30,18 @@ export const TYPE_COLORS: Record<RequestType, string> = {
   depot: "#b45309",
 };
 
+/**
+ * Types proposés dans les filtres et le tableau de bord.
+ *
+ * `depot` en est volontairement absent : un dépôt est un rendez-vous, pas une
+ * demande à traiter — il se consulte dans l'onglet « Dépôts » du calendrier.
+ */
 export const REQUEST_TYPES: RequestType[] = [
   "aerogommage",
   "collecte",
   "article",
   "velo",
   "livraison",
-  "depot",
 ];
 
 // --- Dépôt en recyclerie ----------------------------------------------------
