@@ -430,6 +430,9 @@ export function AccountOrderDetail() {
     api.users.getMyRequest,
     id ? { requestId: id as Id<"requests"> } : "skip",
   );
+  const cancelDepot = useMutation(api.requests.cancelMyDepot);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
 
   if (request === undefined) {
     return (
@@ -452,6 +455,26 @@ export function AccountOrderDetail() {
   }
 
   const status = request.status as ClientStatus;
+  // Un dépôt se libère en un clic : c'est le lien « annuler votre créneau » du
+  // rappel de la veille, et la place repart aussitôt à la réservation.
+  const cancellableDepot =
+    request.type === "depot" && !status.cancelled && (request.depot?.slotStart ?? 0) > Date.now();
+
+  async function onCancelDepot() {
+    if (!id) return;
+    setCancelError("");
+    setCancelling(true);
+    try {
+      await cancelDepot({ id: id as Id<"requests"> });
+    } catch (error) {
+      setCancelError(
+        error instanceof Error ? error.message : "Annulation impossible pour le moment.",
+      );
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   const liveTrackable =
     request.tracking?.shareToken && request.tracking.tourneeStatus === "en_cours";
 
@@ -485,6 +508,23 @@ export function AccountOrderDetail() {
             {status.cancelled ? "Annulée" : status.label}
           </span>
         </div>
+
+        {cancellableDepot ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-zinc-50 p-4">
+            <p className="text-sm text-zinc-600">
+              Un empêchement ? Annulez votre créneau pour libérer la place.
+            </p>
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() => void onCancelDepot()}
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-white disabled:opacity-50"
+            >
+              {cancelling ? "Annulation…" : "Annuler mon créneau"}
+            </button>
+          </div>
+        ) : null}
+        {cancelError ? <p className="mt-3 text-sm text-red-500">{cancelError}</p> : null}
 
         {status.cancelled ? (
           <div className="mt-5 flex items-center gap-3 rounded-xl bg-zinc-100 p-4">
