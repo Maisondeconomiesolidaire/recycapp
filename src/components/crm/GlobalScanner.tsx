@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { api } from "../../../convex/_generated/api";
-import { Barcode } from "../ui/Barcode";
+import { QrCode } from "../ui/QrCode";
 import { formatPrice } from "../../lib/format";
 
 type PaymentKey = "especes" | "cb" | "cheque" | "cheque_cadeau" | "virement";
@@ -243,10 +243,10 @@ export function GlobalScanner() {
             <>
               <ArticleCard article={modal.article} />
 
-              {/* Barcode preview */}
+              {/* QR code preview */}
               {ref && (
                 <div className="flex justify-center rounded-xl bg-white px-4 py-3">
-                  <Barcode value={ref} height={32} displayValue className="text-black max-w-[200px]" />
+                  <QrCode value={ref} size={96} displayValue className="text-black" />
                 </div>
               )}
 
@@ -333,7 +333,7 @@ export function GlobalScanner() {
               )}
               {ref && (
                 <div className="flex justify-center rounded-xl bg-white px-4 py-2 w-full">
-                  <Barcode value={modal.receiptNumber} height={28} displayValue className="text-black max-w-[180px]" />
+                  <QrCode value={modal.receiptNumber} size={88} displayValue className="text-black" />
                 </div>
               )}
               <button type="button" onClick={close}

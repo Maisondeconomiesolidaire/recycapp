@@ -8,7 +8,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
-import { Barcode } from "../../components/ui/Barcode";
+import { QrCode } from "../../components/ui/QrCode";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { lazy, Suspense } from "react";
@@ -615,7 +615,7 @@ function ReceiptView({ receipt, onClose }: { receipt: { receiptNumber: string; t
         )}
 
         <div className="flex justify-center pt-2">
-          <Barcode value={receipt.receiptNumber} height={36} displayValue className="text-emerald-300 max-w-[180px]" />
+          <QrCode value={receipt.receiptNumber} size={104} displayValue className="text-emerald-300" />
         </div>
 
         <div className="flex gap-3 pt-2">

@@ -22,6 +22,9 @@ import {
   Check,
   Printer,
   ScanLine,
+  QrCode as QrCodeIcon,
+  Camera,
+  Play,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -45,7 +48,9 @@ import { Modal } from "../../components/ui/Modal";
 import { MultiSelectChips } from "../../components/ui/MultiSelectChips";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
-import { PrintLabels } from "../../components/crm/PrintLabels";
+import { PrintLabels, type PrintLabelsMode } from "../../components/crm/PrintLabels";
+import { PhotoQuickAdd } from "../../components/crm/PhotoQuickAdd";
+import { AiRunModal } from "../../components/crm/AiRunModal";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
 
@@ -203,8 +208,14 @@ export function Articles() {
   const [aiGroups, setAiGroups] = useState<AiLotGroup[] | null>(null);
   const [analyzingLots, setAnalyzingLots] = useState(false);
   const [lotAnalysisError, setLotAnalysisError] = useState("");
-  const [printArticles, setPrintArticles] = useState<ArticleDoc[] | null>(null);
+  const [printRequest, setPrintRequest] = useState<
+    { articles: ArticleDoc[]; mode: PrintLabelsMode } | null
+  >(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [runOpen, setRunOpen] = useState(false);
+  // Sélection multiple du stock : cible des impressions QR et des runs IA.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Note: barcode scanner (external device) is handled globally by GlobalScanner in CrmLayout
 
   const locationOptions = useMemo(() => {
@@ -260,6 +271,37 @@ export function Articles() {
       return textMatch || digitMatch;
     });
   }, [articles, searchText, selectedCategories, selectedLocation]);
+
+  const selectedArticles = useMemo(
+    () => (articles ?? []).filter((a) => selectedIds.has(a._id)),
+    [articles, selectedIds],
+  );
+
+  // Un run porte sur la sélection si elle existe, sinon sur les articles visibles.
+  const runArticles = useMemo(
+    () => (selectedArticles.length > 0 ? selectedArticles : filteredArticles ?? []),
+    [selectedArticles, filteredArticles],
+  );
+
+  const draftCount = useMemo(
+    () => (articles ?? []).filter((a) => a.draft).length,
+    [articles],
+  );
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function printQrCodes() {
+    const target = selectedArticles.length > 0 ? selectedArticles : filteredArticles ?? [];
+    if (target.length === 0) return;
+    setPrintRequest({ articles: target, mode: "qr" });
+  }
 
   function changeStockView(next: StockView) {
     setStockView(next);
@@ -323,12 +365,36 @@ export function Articles() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              onClick={() => filteredArticles && filteredArticles.length > 0 && setPrintArticles(filteredArticles)}
+              onClick={printQrCodes}
+              disabled={!canPrint || !filteredArticles?.length}
+              title={
+                selectedArticles.length > 0
+                  ? `Imprimer les QR codes des ${selectedArticles.length} articles sélectionnés`
+                  : "Imprimer les QR codes des articles visibles"
+              }
+            >
+              <QrCodeIcon className="h-4 w-4" />
+              QR codes
+              {selectedArticles.length > 0 ? ` (${selectedArticles.length})` : ""}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => filteredArticles?.length && setPrintRequest({ articles: filteredArticles, mode: "labels" })}
               disabled={!canPrint || !filteredArticles?.length}
               title="Imprimer les étiquettes des articles visibles"
             >
               <Printer className="h-4 w-4" />
               Étiquettes
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setRunOpen(true)}
+              disabled={!canAnalyze || !articles?.length}
+              title="Générer les annonces IA et détourer les photos d'une liste d'articles"
+            >
+              <Play className="h-4 w-4" />
+              Nouveau run
+              {draftCount > 0 ? ` (${draftCount})` : ""}
             </Button>
             <Button
               variant="outline"
@@ -346,6 +412,11 @@ export function Articles() {
               <ScanLine className="h-4 w-4" />
               Scanner
             </Button>
+            {canCreate && (
+              <Button variant="outline" onClick={() => setQuickAddOpen(true)}>
+                <Camera className="h-4 w-4" /> Ajouter par photo
+              </Button>
+            )}
             {canCreate && (
               <Button onClick={openNew}>
                 <Plus className="h-4 w-4" /> Nouvel article
@@ -478,6 +549,45 @@ export function Articles() {
               </div>
             </div>
 
+            {selectedIds.size > 0 ? (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-500/40 bg-brand-500/10 px-3 py-2 text-sm">
+                <span className="font-semibold text-zinc-100">
+                  {selectedIds.size} article{selectedIds.size > 1 ? "s" : ""} sélectionné
+                  {selectedIds.size > 1 ? "s" : ""}
+                </span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedIds(new Set((filteredArticles ?? []).map((a) => a._id)))
+                    }
+                    className="rounded-lg border border-[var(--crm-border)] px-2.5 py-1 text-xs text-zinc-300 hover:bg-[var(--crm-surface-2)]"
+                  >
+                    Tout sélectionner
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="rounded-lg border border-[var(--crm-border)] px-2.5 py-1 text-xs text-zinc-300 hover:bg-[var(--crm-surface-2)]"
+                  >
+                    Tout désélectionner
+                  </button>
+                  {canPrint && (
+                    <Button variant="outline" onClick={printQrCodes}>
+                      <QrCodeIcon className="h-4 w-4" />
+                      Imprimer les QR codes
+                    </Button>
+                  )}
+                  {canAnalyze && (
+                    <Button onClick={() => setRunOpen(true)}>
+                      <Play className="h-4 w-4" />
+                      Nouveau run
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
             {filteredArticles.length === 0 ? (
               <EmptyState
                 icon={<Package className="h-10 w-10" />}
@@ -510,12 +620,14 @@ export function Articles() {
                     <ArticleGridCard
                       key={a._id}
                       article={a}
+                      selected={selectedIds.has(a._id)}
+                      onToggleSelected={() => toggleSelected(a._id)}
                       canUpdate={canUpdate}
                       canDelete={canDelete}
                       canPrint={canPrint}
                       onEdit={() => openEdit(a)}
                       onDelete={() => setDeleting(a)}
-                      onPrint={() => setPrintArticles([a])}
+                      onPrint={() => setPrintRequest({ articles: [a], mode: "labels" })}
                       onToggleProductOfDay={() => toggleProductOfDay({ articleId: a._id })}
                     />
                   ))}
@@ -526,6 +638,24 @@ export function Articles() {
                 <table className="min-w-[760px] w-full text-sm">
                   <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
                     <tr>
+                      <th className="w-10 px-3 py-3 text-left font-medium">
+                        <input
+                          type="checkbox"
+                          aria-label="Tout sélectionner"
+                          checked={
+                            filteredArticles.length > 0 &&
+                            filteredArticles.every((a) => selectedIds.has(a._id))
+                          }
+                          onChange={(e) =>
+                            setSelectedIds(
+                              e.target.checked
+                                ? new Set(filteredArticles.map((a) => a._id))
+                                : new Set(),
+                            )
+                          }
+                          className="h-4 w-4 accent-brand-500"
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left font-medium">Article</th>
                       <th className="px-4 py-3 text-left font-medium">Références</th>
                       <th className="px-4 py-3 text-left font-medium">Catégorie</th>
@@ -538,6 +668,15 @@ export function Articles() {
                   <tbody className="divide-y divide-zinc-800">
                     {filteredArticles.map((a) => (
                       <tr key={a._id} className="bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-2)]">
+                        <td className="px-3 py-3">
+                          <input
+                            type="checkbox"
+                            aria-label={`Sélectionner ${a.title}`}
+                            checked={selectedIds.has(a._id)}
+                            onChange={() => toggleSelected(a._id)}
+                            className="h-4 w-4 accent-brand-500"
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--crm-surface-2)]">
@@ -556,6 +695,11 @@ export function Articles() {
                                 <p className="font-medium text-zinc-100 line-clamp-1">
                                   {a.title}
                                 </p>
+                                {a.draft && (
+                                  <span className="inline-flex shrink-0 items-center rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-300">
+                                    Brouillon
+                                  </span>
+                                )}
                                 {a.isLot && (
                                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-300">
                                     <Boxes className="h-3 w-3" />
@@ -618,7 +762,7 @@ export function Articles() {
                             )}
                             {canPrint && (
                               <button
-                                onClick={() => setPrintArticles([a])}
+                                onClick={() => setPrintRequest({ articles: [a], mode: "labels" })}
                                 className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
                                 title="Imprimer l'étiquette"
                               >
@@ -681,11 +825,31 @@ export function Articles() {
         confirmLabel="Supprimer"
       />
 
-      {/* Print labels modal */}
-      {printArticles && (
+      {/* Impression des étiquettes / planches de QR codes */}
+      {printRequest && (
         <PrintLabels
-          articles={printArticles}
-          onClose={() => setPrintArticles(null)}
+          articles={printRequest.articles}
+          mode={printRequest.mode}
+          onClose={() => setPrintRequest(null)}
+        />
+      )}
+
+      {/* Ajout rapide : photos seules → articles brouillons + QR codes */}
+      <PhotoQuickAdd
+        open={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        onPrintQr={(ids) => {
+          const created = (articles ?? []).filter((a) => ids.includes(a._id));
+          if (created.length > 0) setPrintRequest({ articles: created, mode: "qr" });
+        }}
+      />
+
+      {/* Run IA groupé : génération d'annonce + détourage */}
+      {runOpen && (
+        <AiRunModal
+          open={runOpen}
+          articles={runArticles}
+          onClose={() => setRunOpen(false)}
         />
       )}
 
@@ -747,6 +911,8 @@ export function Articles() {
  */
 function ArticleGridCard({
   article,
+  selected,
+  onToggleSelected,
   canUpdate,
   canDelete,
   canPrint,
@@ -756,6 +922,8 @@ function ArticleGridCard({
   onToggleProductOfDay,
 }: {
   article: ArticleDoc;
+  selected: boolean;
+  onToggleSelected: () => void;
   canUpdate: boolean;
   canDelete: boolean;
   canPrint: boolean;
@@ -795,8 +963,24 @@ function ArticleGridCard({
         onMouseEnter={() => hasMultiplePhotos && setPhotoIndex(1)}
         onMouseLeave={() => setPhotoIndex(0)}
       >
-        <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
+        <label
+          className="absolute left-3 top-3 z-20 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-[var(--crm-surface)]/85"
+          title="Sélectionner cet article"
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelected}
+            className="h-4 w-4 accent-brand-500"
+          />
+        </label>
+        <div className="absolute left-12 top-3 z-10 flex flex-wrap gap-1.5">
           <StatusDropdown id={article._id} status={article.status} disabled={!canUpdate} />
+          {article.draft && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-300">
+              Brouillon
+            </span>
+          )}
           {article.isLot && (
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-300">
               <Boxes className="h-3 w-3" />

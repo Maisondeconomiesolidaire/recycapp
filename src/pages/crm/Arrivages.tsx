@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { BarChart3, Check, PackageCheck, Plus, Printer, Trash2, Weight, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { Barcode } from "../../components/ui/Barcode";
+import { QrCode } from "../../components/ui/QrCode";
 import { WeightField } from "../../components/crm/WeightField";
 import {
   WizardShell,
@@ -847,7 +847,7 @@ function TicketBody({ ticket }: { ticket: Ticket }) {
       style={{ width: "62mm", padding: "2mm 3mm", boxSizing: "border-box" }}
     >
       <div className="flex justify-center">
-        <Barcode value={ticket.reference} height={32} width={1.4} className="max-w-full text-black" />
+        <QrCode value={ticket.reference} size={92} className="text-black" />
       </div>
       <p className="text-center font-mono text-[9pt] font-semibold leading-tight text-black">{ticket.reference}</p>
       <p className="mt-1 truncate text-center text-[8pt] font-bold leading-tight text-black">{ticket.designation}</p>

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer } from "lucide-react";
-import { Barcode } from "../ui/Barcode";
+import { QrCode } from "../ui/QrCode";
 import { formatPrice } from "../../lib/format";
 
 export interface LabelArticle {
@@ -14,13 +14,20 @@ export interface LabelArticle {
   condition?: string;
 }
 
+/** « labels » = étiquette complète (prix, catégorie…), « qr » = planche de QR codes. */
+export type PrintLabelsMode = "labels" | "qr";
+
 interface PrintLabelsProps {
   articles: LabelArticle[];
+  mode?: PrintLabelsMode;
   onClose: () => void;
 }
 
-export function PrintLabels({ articles, onClose }: PrintLabelsProps) {
-  // Inject print CSS so only the labels show when printing
+export function PrintLabels({ articles, mode = "labels", onClose }: PrintLabelsProps) {
+  const qrOnly = mode === "qr";
+  const columns = qrOnly ? 4 : 3;
+
+  // Injecte le CSS d'impression : seules les étiquettes sortent sur le papier.
   useEffect(() => {
     const style = document.createElement("style");
     style.id = "print-labels-css";
@@ -31,13 +38,14 @@ export function PrintLabels({ articles, onClose }: PrintLabelsProps) {
         #print-labels-root .print-only { display: block !important; }
         #print-labels-root .labels-grid {
           display: grid !important;
-          grid-template-columns: repeat(3, 1fr) !important;
+          grid-template-columns: repeat(${columns}, 1fr) !important;
           gap: 0 !important;
           padding: 0 !important;
           background: white !important;
         }
         #print-labels-root .label-card {
           page-break-inside: avoid !important;
+          break-inside: avoid !important;
           border: 0.5pt solid #ccc !important;
           padding: 4pt 6pt !important;
           background: white !important;
@@ -48,7 +56,7 @@ export function PrintLabels({ articles, onClose }: PrintLabelsProps) {
     `;
     document.head.appendChild(style);
     return () => document.getElementById("print-labels-css")?.remove();
-  }, []);
+  }, [columns]);
 
   function handlePrint() {
     window.print();
@@ -59,13 +67,18 @@ export function PrintLabels({ articles, onClose }: PrintLabelsProps) {
       id="print-labels-root"
       className="fixed inset-0 z-50 flex flex-col bg-[color:var(--crm-bg)]"
     >
-      {/* Toolbar — hidden on print */}
+      {/* Barre d'outils — masquée à l'impression */}
       <div className="print-hidden flex items-center justify-between border-b border-[var(--crm-border)] bg-[var(--crm-surface)] px-5 py-3">
         <div>
           <h2 className="text-sm font-bold text-zinc-100">
-            Impression des étiquettes — {articles.length} article{articles.length > 1 ? "s" : ""}
+            {qrOnly ? "Impression des QR codes" : "Impression des étiquettes"} —{" "}
+            {articles.length} article{articles.length > 1 ? "s" : ""}
           </h2>
-          <p className="text-xs text-zinc-400">3 étiquettes par ligne · Format 62 × 29 mm</p>
+          <p className="text-xs text-zinc-400">
+            {qrOnly
+              ? "4 QR codes par ligne · à coller sur chaque article"
+              : "3 étiquettes par ligne · Format 62 × 29 mm"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -86,21 +99,23 @@ export function PrintLabels({ articles, onClose }: PrintLabelsProps) {
         </div>
       </div>
 
-      {/* Labels preview */}
+      {/* Aperçu écran */}
       <div className="flex-1 overflow-auto p-6 print-hidden">
         <div className="mx-auto max-w-4xl">
-          <div className="labels-grid grid grid-cols-3 gap-3">
+          <div
+            className={`labels-grid grid gap-3 ${qrOnly ? "grid-cols-4" : "grid-cols-3"}`}
+          >
             {articles.map((article) => (
-              <LabelCard key={article._id} article={article} preview />
+              <LabelCard key={article._id} article={article} qrOnly={qrOnly} preview />
             ))}
           </div>
         </div>
       </div>
 
-      {/* Print-only version (no preview styling, raw labels) */}
+      {/* Version imprimée (sans habillage d'aperçu) */}
       <div className="print-only hidden labels-grid">
         {articles.map((article) => (
-          <LabelCard key={article._id} article={article} preview={false} />
+          <LabelCard key={article._id} article={article} qrOnly={qrOnly} preview={false} />
         ))}
       </div>
     </div>
@@ -112,9 +127,11 @@ export function PrintLabels({ articles, onClose }: PrintLabelsProps) {
 function LabelCard({
   article,
   preview,
+  qrOnly,
 }: {
   article: LabelArticle;
   preview: boolean;
+  qrOnly: boolean;
 }) {
   const ref = article.internalReference ?? article.gdrReference ?? article._id.slice(-8);
 
@@ -126,17 +143,16 @@ function LabelCard({
           : "border border-zinc-300 p-2 bg-white"
       }`}
     >
-      {/* Barcode */}
+      {/* QR code */}
       <div className="flex justify-center">
-        <Barcode
+        <QrCode
           value={ref}
-          height={preview ? 48 : 36}
-          width={preview ? 1.8 : 1.4}
-          className={`text-black ${preview ? "max-w-[180px]" : "max-w-full"}`}
+          size={preview ? (qrOnly ? 104 : 88) : qrOnly ? 90 : 76}
+          className="text-black"
         />
       </div>
 
-      {/* Reference */}
+      {/* Référence */}
       <p
         className={`text-center font-mono font-semibold text-black ${
           preview ? "mt-1 text-[11px]" : "mt-0.5 text-[8pt]"
@@ -145,10 +161,10 @@ function LabelCard({
         {ref}
       </p>
 
-      {/* Divider */}
+      {/* Séparateur */}
       <div className={`border-t border-zinc-200 ${preview ? "my-2" : "my-1"}`} />
 
-      {/* Name */}
+      {/* Nom */}
       <p
         className={`font-semibold leading-tight text-black line-clamp-2 ${
           preview ? "text-sm" : "text-[7.5pt]"
@@ -157,24 +173,28 @@ function LabelCard({
         {article.title}
       </p>
 
-      {/* Category + condition */}
-      <p
-        className={`text-zinc-500 truncate ${
-          preview ? "mt-0.5 text-[11px]" : "mt-0.5 text-[6.5pt]"
-        }`}
-      >
-        {article.category}
-        {article.condition ? ` · ${article.condition}` : ""}
-      </p>
+      {qrOnly ? null : (
+        <>
+          {/* Catégorie + état */}
+          <p
+            className={`text-zinc-500 truncate ${
+              preview ? "mt-0.5 text-[11px]" : "mt-0.5 text-[6.5pt]"
+            }`}
+          >
+            {article.category}
+            {article.condition ? ` · ${article.condition}` : ""}
+          </p>
 
-      {/* Price */}
-      <p
-        className={`font-extrabold text-black ${
-          preview ? "mt-2 text-xl" : "mt-1 text-[11pt]"
-        }`}
-      >
-        {formatPrice(article.price)}
-      </p>
+          {/* Prix */}
+          <p
+            className={`font-extrabold text-black ${
+              preview ? "mt-2 text-xl" : "mt-1 text-[11pt]"
+            }`}
+          >
+            {formatPrice(article.price)}
+          </p>
+        </>
+      )}
     </div>
   );
 }
