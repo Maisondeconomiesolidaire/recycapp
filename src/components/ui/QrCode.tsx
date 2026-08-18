@@ -3,8 +3,8 @@ import QRCode from "qrcode";
 
 interface QrCodeProps {
   value: string;
-  /** Taille du carré rendu, en pixels (défaut 96). */
-  size?: number;
+  /** Taille du carré rendu : nombre = pixels, chaîne = unité CSS (« 22mm »). */
+  size?: number | string;
   /** Affiche la valeur en clair sous le QR code. */
   displayValue?: boolean;
   /** Marge en nombre de modules autour du code (défaut 0). */
@@ -46,12 +46,13 @@ export function QrCode({
 
   if (!qr) return null;
 
+  const cssSize = typeof size === "number" ? `${size}px` : size;
+
   return (
     <span className={`inline-flex flex-col items-center ${className ?? ""}`}>
       <svg
         viewBox={`0 0 ${qr.extent} ${qr.extent}`}
-        width={size}
-        height={size}
+        style={{ width: cssSize, height: cssSize }}
         shapeRendering="crispEdges"
         role="img"
         aria-label={`QR code ${value}`}
