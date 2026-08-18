@@ -150,7 +150,7 @@ export function PhotoQuickAdd({
   }
 
   return (
-    <Modal open={open} onClose={closeAll} title="Ajouter des articles par photo" className="sm:max-w-2xl">
+    <Modal open={open} onClose={closeAll} title="Ajout rapide" className="sm:max-w-2xl">
       <div className="space-y-5 p-5">
         <p className="text-sm text-zinc-400">
           Une photo = un article. Les articles sont créés en brouillon avec leur

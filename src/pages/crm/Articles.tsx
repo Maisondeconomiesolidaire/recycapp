@@ -380,7 +380,8 @@ export function Articles() {
       ? [
           {
             key: "photo",
-            label: "Ajouter par photo",
+            label: "Ajout rapide",
+            title: "Ajouter des articles à partir de leurs photos",
             icon: <Camera className="h-4 w-4 shrink-0" />,
             onClick: () => setQuickAddOpen(true),
           },
@@ -406,16 +407,6 @@ export function Articles() {
           : "Imprimer les QR codes des articles visibles",
       icon: <QrCodeIcon className="h-4 w-4 shrink-0" />,
       onClick: printQrCodes,
-      disabled: !canPrint || !filteredArticles?.length,
-    },
-    {
-      key: "labels",
-      label: "Étiquettes",
-      title: "Imprimer les étiquettes des articles visibles",
-      icon: <Printer className="h-4 w-4 shrink-0" />,
-      onClick: () =>
-        filteredArticles?.length &&
-        setPrintRequest({ articles: filteredArticles, mode: "labels" }),
       disabled: !canPrint || !filteredArticles?.length,
     },
     {
