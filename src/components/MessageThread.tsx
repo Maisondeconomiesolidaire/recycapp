@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Mail, Send } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -103,9 +103,33 @@ export function MessageThread({
             <Loader2 className={`h-5 w-5 animate-spin ${dark ? "text-zinc-500" : "text-zinc-400"}`} />
           </div>
         ) : messages.length === 0 ? (
-          <p className={`py-10 text-center text-sm ${dark ? "text-zinc-500" : "text-zinc-400"}`}>
-            Aucun message pour le moment. Écrivez le premier message ci-dessous.
-          </p>
+          viewerRole === "staff" ? (
+            // Chaque message du staff déclenche un email au client : on le dit
+            // avant la première réponse, sinon la demande part en plusieurs
+            // messages et le client reçoit autant d'emails.
+            <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+              <Mail className={`h-6 w-6 ${dark ? "text-zinc-600" : "text-zinc-300"}`} />
+              <p className={`text-sm font-semibold ${dark ? "text-zinc-300" : "text-zinc-600"}`}>
+                Aucun message pour le moment.
+              </p>
+              <p
+                className={`max-w-sm text-sm leading-relaxed ${
+                  dark ? "text-zinc-500" : "text-zinc-400"
+                }`}
+              >
+                <strong className={dark ? "text-zinc-300" : "text-zinc-600"}>
+                  Chaque message envoyé ici part par email au client.
+                </strong>{" "}
+                Écrivez donc l'intégralité de votre réponse dans un seul message :
+                si vous la découpez en plusieurs envois, le client reçoit autant
+                d'emails.
+              </p>
+            </div>
+          ) : (
+            <p className={`py-10 text-center text-sm ${dark ? "text-zinc-500" : "text-zinc-400"}`}>
+              Aucun message pour le moment. Écrivez le premier message ci-dessous.
+            </p>
+          )
         ) : (
           messages.map((m) => {
             const mine = m.senderRole === viewerRole;
@@ -152,7 +176,27 @@ export function MessageThread({
         )}
       </div>
 
-      <div className={`flex items-end gap-2 border-t p-3 ${dark ? "border-[var(--crm-border)]" : "border-zinc-100"}`}>
+      {viewerRole === "staff" && (messages?.length ?? 0) > 0 ? (
+        <p
+          className={`flex items-center gap-1.5 border-t px-3 pt-2 text-[11px] ${
+            dark
+              ? "border-[var(--crm-border)] text-zinc-500"
+              : "border-zinc-100 text-zinc-400"
+          }`}
+        >
+          <Mail className="h-3.5 w-3.5 shrink-0" />
+          Chaque envoi déclenche un email au client : regroupez toute votre
+          réponse en un seul message.
+        </p>
+      ) : null}
+
+      <div
+        className={`flex items-end gap-2 p-3 ${
+          viewerRole === "staff" && (messages?.length ?? 0) > 0
+            ? ""
+            : `border-t ${dark ? "border-[var(--crm-border)]" : "border-zinc-100"}`
+        }`}
+      >
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
