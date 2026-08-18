@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   CircleDollarSign,
@@ -25,6 +25,7 @@ import {
   QrCode as QrCodeIcon,
   Camera,
   Play,
+  MoreHorizontal,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -53,9 +54,20 @@ import { PhotoQuickAdd } from "../../components/crm/PhotoQuickAdd";
 import { AiRunModal } from "../../components/crm/AiRunModal";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { useMediaQuery } from "../../lib/useMediaQuery";
 
 type ArticleDoc = Doc<"articles"> & { imageUrls: string[] };
 type Tab = "stock" | "lots" | "dashboard";
+
+/** Action de l'en-tête « Articles » : rendue en bouton ou dans le menu « Plus ». */
+type HeaderAction = {
+  key: string;
+  label: string;
+  title?: string;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+};
 
 type AiLotGroup = {
   title: string;
@@ -191,6 +203,9 @@ export function Articles() {
   const canDelete = canAccess(access, "articles", "delete");
   const canPrint = canAccess(access, "articles", "print");
   const canAnalyze = canAccess(access, "articles", "analyze");
+  // Au-delà de 1400 px, trois actions tiennent en clair à côté du bouton
+  // principal sans jamais faire passer l'en-tête sur deux lignes.
+  const wideHeader = useMediaQuery("(min-width: 1400px)");
   const [tab, setTab] = useState<Tab>("stock");
   const [stockView, setStockView] = useState<StockView>(readStoredStockView);
   const [searchText, setSearchText] = useState("");
@@ -357,92 +372,106 @@ export function Articles() {
     }
   }
 
+  // Les actions de l'en-tête sont décrites une seule fois : les plus utilisées
+  // restent des boutons sur grand écran, les autres passent dans le menu
+  // « Plus ». En dessous, tout va dans le menu — l'en-tête ne déborde jamais.
+  const stockActions: HeaderAction[] = [
+    ...(canCreate
+      ? [
+          {
+            key: "photo",
+            label: "Ajouter par photo",
+            icon: <Camera className="h-4 w-4 shrink-0" />,
+            onClick: () => setQuickAddOpen(true),
+          },
+        ]
+      : []),
+    {
+      key: "run",
+      label: draftCount > 0 ? `Nouveau run (${draftCount})` : "Nouveau run",
+      title: "Générer les annonces IA et détourer les photos d'une liste d'articles",
+      icon: <Play className="h-4 w-4 shrink-0" />,
+      onClick: () => setRunOpen(true),
+      disabled: !canAnalyze || !articles?.length,
+    },
+    {
+      key: "qr",
+      label:
+        selectedArticles.length > 0
+          ? `QR codes (${selectedArticles.length})`
+          : "QR codes",
+      title:
+        selectedArticles.length > 0
+          ? `Imprimer les QR codes des ${selectedArticles.length} articles sélectionnés`
+          : "Imprimer les QR codes des articles visibles",
+      icon: <QrCodeIcon className="h-4 w-4 shrink-0" />,
+      onClick: printQrCodes,
+      disabled: !canPrint || !filteredArticles?.length,
+    },
+    {
+      key: "labels",
+      label: "Étiquettes",
+      title: "Imprimer les étiquettes des articles visibles",
+      icon: <Printer className="h-4 w-4 shrink-0" />,
+      onClick: () =>
+        filteredArticles?.length &&
+        setPrintRequest({ articles: filteredArticles, mode: "labels" }),
+      disabled: !canPrint || !filteredArticles?.length,
+    },
+    {
+      key: "lots",
+      label: "Lots potentiels",
+      title: "Analyser les lots potentiels",
+      icon: analyzingLots ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+      ) : (
+        <Sparkles className="h-4 w-4 shrink-0" />
+      ),
+      onClick: handleAnalyzeLots,
+      disabled: !canAnalyze || analyzingLots || !articles?.length,
+    },
+    {
+      key: "scan",
+      label: "Scanner",
+      title: "Scanner un QR code",
+      icon: <ScanLine className="h-4 w-4 shrink-0" />,
+      onClick: () => setScanOpen(true),
+    },
+  ];
+
+  const inlineActionCount = wideHeader ? 3 : 0;
+  const inlineActions = stockActions.slice(0, inlineActionCount);
+  const menuActions = stockActions.slice(inlineActionCount);
+
   return (
     <div>
       <PageHeader
         title="Articles de la boutique"
         actions={
-          // Sept actions : sous `xl` on ne garde que les icônes (le libellé est
-          // repris dans `title`), sinon la barre déborde sur deux lignes.
-          <div className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 py-0.5 lg:flex-wrap lg:overflow-visible">
-            <Button
-              variant="outline"
-              className="shrink-0 max-xl:w-10 max-xl:px-0"
-              onClick={printQrCodes}
-              disabled={!canPrint || !filteredArticles?.length}
-              title={
-                selectedArticles.length > 0
-                  ? `Imprimer les QR codes des ${selectedArticles.length} articles sélectionnés`
-                  : "Imprimer les QR codes des articles visibles"
-              }
-            >
-              <QrCodeIcon className="h-4 w-4 shrink-0" />
-              <span className="hidden whitespace-nowrap xl:inline">
-                QR codes
-                {selectedArticles.length > 0 ? ` (${selectedArticles.length})` : ""}
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              className="shrink-0 max-xl:w-10 max-xl:px-0"
-              onClick={() => filteredArticles?.length && setPrintRequest({ articles: filteredArticles, mode: "labels" })}
-              disabled={!canPrint || !filteredArticles?.length}
-              title="Imprimer les étiquettes des articles visibles"
-            >
-              <Printer className="h-4 w-4 shrink-0" />
-              <span className="hidden whitespace-nowrap xl:inline">Étiquettes</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="shrink-0 max-xl:w-10 max-xl:px-0"
-              onClick={() => setRunOpen(true)}
-              disabled={!canAnalyze || !articles?.length}
-              title="Générer les annonces IA et détourer les photos d'une liste d'articles"
-            >
-              <Play className="h-4 w-4 shrink-0" />
-              <span className="hidden whitespace-nowrap xl:inline">
-                Nouveau run
-                {draftCount > 0 ? ` (${draftCount})` : ""}
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              className="shrink-0 max-xl:w-10 max-xl:px-0"
-              onClick={handleAnalyzeLots}
-              disabled={!canAnalyze || analyzingLots || !articles?.length}
-              title="Analyser les lots potentiels"
-            >
-              {analyzingLots ? (
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 shrink-0" />
-              )}
-              <span className="hidden whitespace-nowrap xl:inline">Lots potentiels</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="shrink-0 max-xl:w-10 max-xl:px-0"
-              onClick={() => setScanOpen(true)}
-              title="Scanner un QR code"
-            >
-              <ScanLine className="h-4 w-4 shrink-0" />
-              <span className="hidden whitespace-nowrap xl:inline">Scanner</span>
-            </Button>
-            {canCreate && (
+          <div className="flex flex-wrap items-center gap-2">
+            {inlineActions.map((action) => (
               <Button
+                key={action.key}
                 variant="outline"
-                className="shrink-0 max-xl:w-10 max-xl:px-0"
-                onClick={() => setQuickAddOpen(true)}
-                title="Ajouter des articles par photo"
+                className="shrink-0"
+                onClick={action.onClick}
+                disabled={action.disabled}
+                title={action.title ?? action.label}
               >
-                <Camera className="h-4 w-4 shrink-0" />
-                <span className="hidden whitespace-nowrap xl:inline">Ajouter par photo</span>
+                {action.icon}
+                <span className="whitespace-nowrap">{action.label}</span>
               </Button>
+            ))}
+
+            {menuActions.length > 0 && (
+              <ActionsMenu items={menuActions} />
             )}
+
             {canCreate && (
               <Button className="shrink-0" onClick={openNew} title="Nouvel article">
                 <Plus className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap">Nouvel article</span>
+                <span className="whitespace-nowrap sm:hidden">Article</span>
+                <span className="hidden whitespace-nowrap sm:inline">Nouvel article</span>
               </Button>
             )}
           </div>
@@ -932,6 +961,71 @@ export function Articles() {
  * S'y ajoute ce que la boutique n'a pas à porter : badge lot, statut
  * modifiable et actions CRM (produit du jour, étiquette, édition, suppression).
  */
+/** Menu « Plus » : reçoit les actions qui ne tiennent pas en clair dans l'en-tête. */
+function ActionsMenu({ items }: { items: HeaderAction[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <Button
+        variant="outline"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Plus d'actions"
+      >
+        <MoreHorizontal className="h-4 w-4 shrink-0" />
+        <span className="whitespace-nowrap">Actions</span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </Button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-40 mt-1 w-60 overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1 shadow-xl"
+        >
+          {items.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitem"
+              disabled={item.disabled}
+              title={item.title ?? item.label}
+              onClick={() => {
+                setOpen(false);
+                item.onClick();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-200 transition hover:bg-[var(--crm-surface-2)] disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              {item.icon}
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ArticleGridCard({
   article,
   selected,
@@ -1817,7 +1911,7 @@ function MetricCard({
   title: string;
   value: number | string;
   helper: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   valueClassName?: string;
 }) {
   return (
