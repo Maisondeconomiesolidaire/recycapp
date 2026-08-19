@@ -9,12 +9,13 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   ScanLine, Check, X, Banknote, CreditCard, FileText,
-  Loader2, Package, AlertCircle,
+  Loader2, Package, AlertCircle, Box,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { api } from "../../../convex/_generated/api";
 import { QrCode } from "../ui/QrCode";
 import { formatPrice } from "../../lib/format";
+import { articleLabelReference, isCaisseCode, normalizeScanCode } from "../../lib/labels";
 
 type PaymentKey = "especes" | "cb" | "cheque" | "cheque_cadeau" | "virement";
 
@@ -32,7 +33,10 @@ type ModalState =
   | { phase: "found"; article: FoundArticle }
   | { phase: "not_found"; code: string }
   | { phase: "already_sold"; article: FoundArticle }
-  | { phase: "success"; receiptNumber: string; total: number; change?: number };
+  | { phase: "success"; receiptNumber: string; total: number; change?: number }
+  /* Un code « CA-xxxx » désigne une caisse : on affiche son contenu au lieu
+     d'ouvrir une vente. */
+  | { phase: "caisse"; code: string };
 
 interface FoundArticle {
   _id: string;
@@ -59,6 +63,12 @@ export function GlobalScanner() {
   const foundArticle = useQuery(
     api.ventes.getArticleByReference,
     modal.phase === "lookup" ? { reference: modal.code } : "skip",
+  );
+
+  // Contenu de la caisse scannée.
+  const caisse = useQuery(
+    api.caisses.getByCode,
+    modal.phase === "caisse" ? { code: modal.code } : "skip",
   );
 
   // React to lookup result
@@ -104,7 +114,11 @@ export function GlobalScanner() {
         // Barcode scanners complete in < 100ms per character — full code in < 800ms
         if (elapsed < 800) {
           const code = buffer.trim();
-          setModal({ phase: "lookup", code });
+          setModal(
+            isCaisseCode(code)
+              ? { phase: "caisse", code: normalizeScanCode(code) }
+              : { phase: "lookup", code },
+          );
           setPayment("especes");
           setTendered("");
           setError(null);
@@ -190,7 +204,11 @@ export function GlobalScanner() {
           <div className="flex items-center gap-2">
             <ScanLine className="h-4 w-4 text-brand-400" />
             <span className="text-sm font-semibold text-zinc-200">
-              {modal.phase === "success" ? "Vente enregistrée" : "Article scanné"}
+              {modal.phase === "success"
+                ? "Vente enregistrée"
+                : modal.phase === "caisse"
+                  ? "Caisse scannée"
+                  : "Article scanné"}
             </span>
           </div>
           <button type="button" onClick={close} className="text-zinc-500 hover:text-zinc-200 transition">
@@ -206,6 +224,85 @@ export function GlobalScanner() {
               <p className="text-sm text-zinc-500">Recherche de l'article…</p>
               <p className="text-xs font-mono text-zinc-600">{modal.code}</p>
             </div>
+          )}
+
+          {/* Caisse scannée : liste de ce qu'elle contient. */}
+          {modal.phase === "caisse" && (
+            caisse === undefined ? (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <Loader2 className="h-7 w-7 animate-spin text-zinc-400" />
+                <p className="text-sm text-zinc-500">Ouverture de la caisse…</p>
+                <p className="text-xs font-mono text-zinc-600">{modal.code}</p>
+              </div>
+            ) : caisse === null ? (
+              <div className="flex flex-col items-center gap-3 py-6 text-center">
+                <AlertCircle className="h-8 w-8 text-red-400" />
+                <p className="text-sm font-semibold text-zinc-300">Caisse introuvable</p>
+                <p className="text-xs text-zinc-500">
+                  Aucune caisse ne porte le code{" "}
+                  <code className="font-mono text-zinc-400">{modal.code}</code>.
+                </p>
+                <button type="button" onClick={close}
+                  className="mt-2 rounded-xl border border-[var(--crm-border)] px-4 py-2 text-sm text-zinc-300 hover:bg-[var(--crm-surface-2)] transition">
+                  Fermer
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--crm-surface-3)]">
+                    <Box className="h-6 w-6 text-brand-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-sm font-bold text-zinc-100">
+                      {caisse.caisse.code}
+                    </p>
+                    <p className="truncate text-xs text-zinc-500">
+                      {caisse.caisse.label ?? "Sans nom"}
+                      {caisse.caisse.zone ? ` · ${caisse.caisse.zone}` : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[var(--crm-surface-3)] px-2.5 py-1 text-xs font-semibold text-zinc-300">
+                    {caisse.articles.length}
+                  </span>
+                </div>
+
+                {caisse.articles.length === 0 ? (
+                  <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-6 text-center text-sm text-zinc-400">
+                    Cette caisse est vide.
+                  </p>
+                ) : (
+                  <ul className="max-h-[50vh] space-y-1.5 overflow-y-auto">
+                    {caisse.articles.map((article) => (
+                      <li key={article._id}
+                        className="flex items-center gap-2.5 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-2">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--crm-surface-3)]">
+                          {article.imageUrls[0] ? (
+                            <img src={article.imageUrls[0]} alt={article.title}
+                              className="h-full w-full object-cover" />
+                          ) : (
+                            <Package className="h-4 w-4 text-zinc-600" />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="line-clamp-1 text-sm text-zinc-100">
+                            {article.title}
+                          </span>
+                          <span className="block font-mono text-[11px] text-zinc-500">
+                            {articleLabelReference(article)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <button type="button" onClick={close}
+                  className="w-full rounded-xl border border-[var(--crm-border)] py-2.5 text-sm text-zinc-400 hover:bg-[var(--crm-surface-2)] transition">
+                  Fermer
+                </button>
+              </>
+            )
           )}
 
           {/* Not found */}

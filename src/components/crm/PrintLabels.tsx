@@ -2,21 +2,20 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer } from "lucide-react";
 import { QrCode } from "../ui/QrCode";
-import { formatPrice } from "../../lib/format";
 import { escapeHtml, printIsolatedDocument, qrSvgMarkup } from "../../lib/printLabels";
 
-export interface LabelArticle {
-  _id: string;
-  title: string;
-  price: number;
-  internalReference?: string;
-  gdrReference?: string;
-  category: string;
-  condition?: string;
+/**
+ * Une étiquette = un QR code et la petite référence en dessous. Rien d'autre :
+ * ni titre, ni prix, ni catégorie. Les étiquettes d'articles et de caisses sont
+ * donc strictement identiques, et un changement de prix ne périme jamais une
+ * étiquette déjà collée.
+ */
+export interface LabelItem {
+  /** Clé React. */
+  id: string;
+  /** Valeur encodée dans le QR code ET imprimée en clair dessous. */
+  reference: string;
 }
-
-/** « labels » = étiquette complète (prix, catégorie…), « qr » = QR code seul. */
-export type PrintLabelsMode = "labels" | "qr";
 
 /**
  * « brother » = une étiquette 62 × 29 mm par page, prête pour une Brother
@@ -27,30 +26,25 @@ type Sheet = "brother" | "a4";
 const LABEL_WIDTH_MM = 62;
 const LABEL_HEIGHT_MM = 29;
 /** Taille du QR code sur une étiquette 62 × 29, en millimètres. */
-const QR_ONLY_SIZE_MM = 19;
-const QR_WITH_INFO_SIZE_MM = 20;
+const QR_SIZE_MM = 19;
+const A4_COLUMNS = 4;
 
 interface PrintLabelsProps {
-  articles: LabelArticle[];
-  mode?: PrintLabelsMode;
+  items: LabelItem[];
+  /** Titre affiché dans la barre d'outils et le document imprimé. */
+  title?: string;
   onClose: () => void;
 }
 
-function labelReference(article: LabelArticle) {
-  return article.internalReference ?? article.gdrReference ?? article._id.slice(-8);
-}
-
-export function PrintLabels({ articles, mode = "labels", onClose }: PrintLabelsProps) {
-  const qrOnly = mode === "qr";
-  // L'impression des QR codes vise la QL-700 : on part directement sur le
-  // format 62 × 29 mm, sans réglage à faire avant d'imprimer.
-  const [sheet, setSheet] = useState<Sheet>(qrOnly ? "brother" : "a4");
+export function PrintLabels({ items, title = "QR codes", onClose }: PrintLabelsProps) {
+  // L'impression vise la QL-700 : on part directement sur le format 62 × 29 mm,
+  // sans réglage à faire avant d'imprimer.
+  const [sheet, setSheet] = useState<Sheet>("brother");
   const brother = sheet === "brother";
-  const columns = qrOnly ? 4 : 3;
 
   function handlePrint() {
-    if (brother) printBrotherLabels(articles, qrOnly);
-    else printA4Sheet(articles, qrOnly, columns);
+    if (brother) printBrotherLabels(items, title);
+    else printA4Sheet(items, title);
   }
 
   const content = (
@@ -59,13 +53,13 @@ export function PrintLabels({ articles, mode = "labels", onClose }: PrintLabelsP
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3 sm:px-5">
         <div className="min-w-0">
           <h2 className="text-sm font-bold text-zinc-100">
-            {qrOnly ? "Impression des QR codes" : "Impression des étiquettes"} —{" "}
-            {articles.length} article{articles.length > 1 ? "s" : ""}
+            Impression des QR codes — {items.length} étiquette
+            {items.length > 1 ? "s" : ""}
           </h2>
           <p className="text-xs text-zinc-400">
             {brother
               ? `Brother QL-700 · ${LABEL_WIDTH_MM} × ${LABEL_HEIGHT_MM} mm · une étiquette par page`
-              : `Planche A4 · ${columns} étiquettes par ligne`}
+              : `Planche A4 · ${A4_COLUMNS} étiquettes par ligne`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -112,24 +106,20 @@ export function PrintLabels({ articles, mode = "labels", onClose }: PrintLabelsP
       <div className="flex-1 overflow-auto p-4 sm:p-6">
         {brother ? (
           <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-4">
-            {articles.map((article) => (
+            {items.map((item) => (
               <div
-                key={article._id}
+                key={item.id}
                 className="rounded-lg border border-[var(--crm-border)] bg-white shadow-sm"
               >
-                <BrotherLabelPreview article={article} qrOnly={qrOnly} />
+                <BrotherLabelPreview reference={item.reference} />
               </div>
             ))}
           </div>
         ) : (
           <div className="mx-auto max-w-4xl">
-            <div
-              className={`grid gap-3 grid-cols-2 sm:grid-cols-3 ${
-                qrOnly ? "lg:grid-cols-4" : "lg:grid-cols-3"
-              }`}
-            >
-              {articles.map((article) => (
-                <SheetLabelPreview key={article._id} article={article} qrOnly={qrOnly} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {items.map((item) => (
+                <SheetLabelPreview key={item.id} reference={item.reference} />
               ))}
             </div>
           </div>
@@ -144,35 +134,20 @@ export function PrintLabels({ articles, mode = "labels", onClose }: PrintLabelsP
 /* ─── Impression ─────────────────────────────────────────────────────────── */
 
 /** Une étiquette 62 × 29 mm par page, QR code centré. */
-function printBrotherLabels(articles: LabelArticle[], qrOnly: boolean) {
-  const pages = articles
-    .map((article) => {
-      const ref = escapeHtml(labelReference(article));
-      if (qrOnly) {
-        return `<section class="page qr-only">
-          <div class="stack">
-            ${qrSvgMarkup(labelReference(article), QR_ONLY_SIZE_MM)}
-            <span class="ref">${ref}</span>
-          </div>
-        </section>`;
-      }
-      const meta = [article.category, article.condition].filter(Boolean).join(" · ");
-      return `<section class="page with-info">
+function printBrotherLabels(items: LabelItem[], title: string) {
+  const pages = items
+    .map(
+      (item) => `<section class="page">
         <div class="stack">
-          ${qrSvgMarkup(labelReference(article), QR_WITH_INFO_SIZE_MM)}
-          <span class="ref">${ref}</span>
+          ${qrSvgMarkup(item.reference, QR_SIZE_MM)}
+          <span class="ref">${escapeHtml(item.reference)}</span>
         </div>
-        <div class="info">
-          <p class="title">${escapeHtml(article.title)}</p>
-          <p class="meta">${escapeHtml(meta)}</p>
-          <p class="price">${escapeHtml(formatPrice(article.price))}</p>
-        </div>
-      </section>`;
-    })
+      </section>`,
+    )
     .join("");
 
   printIsolatedDocument({
-    title: qrOnly ? "QR codes" : "Étiquettes",
+    title,
     pageCss: `@page { size: ${LABEL_WIDTH_MM}mm ${LABEL_HEIGHT_MM}mm; margin: 0; }`,
     bodyCss: `
       .page {
@@ -183,13 +158,11 @@ function printBrotherLabels(articles: LabelArticle[], qrOnly: boolean) {
         overflow: hidden;
         display: flex;
         align-items: center;
+        justify-content: center;
         page-break-after: always;
         break-after: page;
       }
       .page:last-child { page-break-after: auto; break-after: auto; }
-      /* QR seul : centré au milieu de l'étiquette. */
-      .page.qr-only { justify-content: center; }
-      .page.with-info { justify-content: flex-start; gap: 2mm; }
       .stack { display: flex; flex-direction: column; align-items: center; }
       .ref {
         margin-top: 0.6mm;
@@ -199,57 +172,27 @@ function printBrotherLabels(articles: LabelArticle[], qrOnly: boolean) {
         line-height: 1;
         letter-spacing: 0.02em;
       }
-      .info { flex: 1; min-width: 0; }
-      .title {
-        margin: 0;
-        font-size: 7.5pt;
-        font-weight: 700;
-        line-height: 1.15;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
-      .meta {
-        margin: 0.4mm 0 0;
-        font-size: 6pt;
-        color: #444;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .price { margin: 0.6mm 0 0; font-size: 11pt; font-weight: 800; line-height: 1; }
     `,
     bodyHtml: pages,
   });
 }
 
 /** Planche A4 : plusieurs étiquettes par ligne. */
-function printA4Sheet(articles: LabelArticle[], qrOnly: boolean, columns: number) {
-  const cards = articles
-    .map((article) => {
-      const ref = escapeHtml(labelReference(article));
-      const meta = [article.category, article.condition].filter(Boolean).join(" · ");
-      return `<div class="card">
-        <div class="qr">${qrSvgMarkup(labelReference(article), qrOnly ? 24 : 20)}</div>
-        <p class="ref">${ref}</p>
-        <hr />
-        <p class="title">${escapeHtml(article.title)}</p>
-        ${
-          qrOnly
-            ? ""
-            : `<p class="meta">${escapeHtml(meta)}</p>
-               <p class="price">${escapeHtml(formatPrice(article.price))}</p>`
-        }
-      </div>`;
-    })
+function printA4Sheet(items: LabelItem[], title: string) {
+  const cards = items
+    .map(
+      (item) => `<div class="card">
+        <div class="qr">${qrSvgMarkup(item.reference, 24)}</div>
+        <p class="ref">${escapeHtml(item.reference)}</p>
+      </div>`,
+    )
     .join("");
 
   printIsolatedDocument({
-    title: qrOnly ? "QR codes" : "Étiquettes",
+    title,
     pageCss: "@page { size: A4; margin: 8mm; }",
     bodyCss: `
-      .sheet { display: grid; grid-template-columns: repeat(${columns}, 1fr); }
+      .sheet { display: grid; grid-template-columns: repeat(${A4_COLUMNS}, 1fr); }
       .card {
         border: 0.5pt solid #ccc;
         padding: 4pt 6pt;
@@ -265,28 +208,6 @@ function printA4Sheet(articles: LabelArticle[], qrOnly: boolean, columns: number
         font-size: 8pt;
         font-weight: 600;
       }
-      hr { border: 0; border-top: 0.5pt solid #e4e4e7; margin: 3pt 0; }
-      .title {
-        margin: 0;
-        font-size: 7.5pt;
-        font-weight: 600;
-        line-height: 1.2;
-        text-align: left;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
-      .meta {
-        margin: 2pt 0 0;
-        font-size: 6.5pt;
-        color: #71717a;
-        text-align: left;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .price { margin: 3pt 0 0; font-size: 11pt; font-weight: 800; text-align: left; }
     `,
     bodyHtml: `<div class="sheet">${cards}</div>`,
   });
@@ -295,20 +216,10 @@ function printA4Sheet(articles: LabelArticle[], qrOnly: boolean, columns: number
 /* ─── Aperçu écran ───────────────────────────────────────────────────────── */
 
 /** Aperçu à taille réelle d'une étiquette 62 × 29 mm. */
-function BrotherLabelPreview({
-  article,
-  qrOnly,
-}: {
-  article: LabelArticle;
-  qrOnly: boolean;
-}) {
-  const ref = labelReference(article);
-
+function BrotherLabelPreview({ reference }: { reference: string }) {
   return (
     <div
-      className={`flex items-center bg-white text-black ${
-        qrOnly ? "justify-center" : "justify-start gap-[2mm]"
-      }`}
+      className="flex items-center justify-center bg-white text-black"
       style={{
         width: `${LABEL_WIDTH_MM}mm`,
         height: `${LABEL_HEIGHT_MM}mm`,
@@ -318,82 +229,28 @@ function BrotherLabelPreview({
       }}
     >
       <div className="flex shrink-0 flex-col items-center">
-        <QrCode
-          value={ref}
-          size={`${qrOnly ? QR_ONLY_SIZE_MM : QR_WITH_INFO_SIZE_MM}mm`}
-          className="text-black"
-        />
+        <QrCode value={reference} size={`${QR_SIZE_MM}mm`} className="text-black" />
         <span
           className="mt-[0.6mm] font-mono font-semibold leading-none text-black"
           style={{ fontSize: "7pt" }}
         >
-          {ref}
+          {reference}
         </span>
       </div>
-
-      {qrOnly ? null : (
-        <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <p
-            className="font-bold leading-tight text-black"
-            style={{
-              fontSize: "7.5pt",
-              display: "-webkit-box",
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {article.title}
-          </p>
-          <p className="truncate leading-tight text-zinc-600" style={{ fontSize: "6pt" }}>
-            {article.category}
-            {article.condition ? ` · ${article.condition}` : ""}
-          </p>
-          <p
-            className="mt-[0.6mm] font-extrabold leading-none text-black"
-            style={{ fontSize: "11pt" }}
-          >
-            {formatPrice(article.price)}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
 
 /** Aperçu d'une étiquette de planche A4. */
-function SheetLabelPreview({
-  article,
-  qrOnly,
-}: {
-  article: LabelArticle;
-  qrOnly: boolean;
-}) {
-  const ref = labelReference(article);
-
+function SheetLabelPreview({ reference }: { reference: string }) {
   return (
     <div className="rounded-xl border border-[var(--crm-border)] bg-white p-4">
       <div className="flex justify-center">
-        <QrCode value={ref} size={qrOnly ? 104 : 88} className="text-black" />
+        <QrCode value={reference} size={104} className="text-black" />
       </div>
       <p className="mt-1 text-center font-mono text-[11px] font-semibold text-black">
-        {ref}
+        {reference}
       </p>
-      <div className="my-2 border-t border-zinc-200" />
-      <p className="line-clamp-2 text-sm font-semibold leading-tight text-black">
-        {article.title}
-      </p>
-      {qrOnly ? null : (
-        <>
-          <p className="mt-0.5 truncate text-[11px] text-zinc-500">
-            {article.category}
-            {article.condition ? ` · ${article.condition}` : ""}
-          </p>
-          <p className="mt-2 text-xl font-extrabold text-black">
-            {formatPrice(article.price)}
-          </p>
-        </>
-      )}
     </div>
   );
 }

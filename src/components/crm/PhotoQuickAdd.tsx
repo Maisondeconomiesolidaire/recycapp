@@ -1,13 +1,27 @@
-import { useRef, useState } from "react";
-import { useMutation } from "convex/react";
-import { Camera, ImagePlus, Loader2, Plus, Printer, QrCode as QrCodeIcon, X } from "lucide-react";
+import { lazy, Suspense, useRef, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import {
+  Camera,
+  ImagePlus,
+  Loader2,
+  Plus,
+  Printer,
+  QrCode as QrCodeIcon,
+  ScanLine,
+  X,
+} from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
-import { Field, Input } from "../ui/Field";
+import { Field, Select } from "../ui/Field";
 import { QrCode } from "../ui/QrCode";
 import { useUpload } from "../../lib/useUpload";
+import { normalizeScanCode } from "../../lib/labels";
+
+const CameraScanner = lazy(() =>
+  import("../ui/CameraScanner").then((m) => ({ default: m.CameraScanner })),
+);
 
 type PendingPhoto = { file: File; previewUrl: string };
 type CreatedArticle = { id: Id<"articles">; internalReference: string };
@@ -28,12 +42,14 @@ export function PhotoQuickAdd({
   onPrintQr: (articleIds: Id<"articles">[]) => void;
 }) {
   const createDrafts = useMutation(api.articles.createDraftsFromPhotos);
+  const caisses = useQuery(api.caisses.list, {});
   const upload = useUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
-  const [location, setLocation] = useState("");
+  const [caisseId, setCaisseId] = useState<Id<"caisses"> | "">("");
+  const [scanOpen, setScanOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedArticle[] | null>(null);
@@ -62,7 +78,7 @@ export function PhotoQuickAdd({
   function closeAll() {
     photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
     setPhotos([]);
-    setLocation("");
+    setCaisseId("");
     setCreated(null);
     setError("");
     onClose();
@@ -71,10 +87,6 @@ export function PhotoQuickAdd({
   async function save() {
     if (photos.length === 0) {
       setError("Ajoutez au moins une photo.");
-      return;
-    }
-    if (location.trim() && !/^\d{4}$/.test(location.trim())) {
-      setError("L'emplacement doit contenir exactement 4 chiffres.");
       return;
     }
     setSaving(true);
@@ -86,7 +98,7 @@ export function PhotoQuickAdd({
       }
       const result = await createDrafts({
         storageIds,
-        location: location.trim() || undefined,
+        caisseId: caisseId || undefined,
       });
       photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
       setPhotos([]);
@@ -217,13 +229,33 @@ export function PhotoQuickAdd({
           </div>
         )}
 
-        <Field label="Emplacement" hint="Optionnel · 4 chiffres, appliqué à tous les articles créés">
-          <Input
-            value={location}
-            onChange={(e) => setLocation(e.target.value.replace(/\D/g, "").slice(0, 4))}
-            placeholder="9282"
-            inputMode="numeric"
-          />
+        <Field
+          label="Caisse"
+          hint="Optionnel · scannez le QR code de la caisse, appliqué à tous les articles créés"
+        >
+          <div className="flex gap-2">
+            <Select
+              value={caisseId}
+              onChange={(e) => setCaisseId(e.target.value as Id<"caisses"> | "")}
+              className="flex-1"
+            >
+              <option value="">— Aucune caisse —</option>
+              {(caisses ?? []).map((caisse) => (
+                <option key={caisse._id} value={caisse._id}>
+                  {caisse.code}
+                  {caisse.label ? ` — ${caisse.label}` : ""}
+                </option>
+              ))}
+            </Select>
+            <Button
+              variant="outline"
+              onClick={() => setScanOpen(true)}
+              title="Scanner le QR code de la caisse"
+            >
+              <ScanLine className="h-4 w-4" />
+              <span className="hidden sm:inline">Scanner</span>
+            </Button>
+          </div>
         </Field>
 
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
@@ -244,6 +276,34 @@ export function PhotoQuickAdd({
           </Button>
         </div>
       </div>
+
+      {/* Scan du QR code de la caisse de rangement. */}
+      {scanOpen && (
+        <div className="fixed inset-0 z-[300] bg-black">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+              </div>
+            }
+          >
+            <CameraScanner
+              onDetected={(code) => {
+                setScanOpen(false);
+                const normalized = normalizeScanCode(code);
+                const found = (caisses ?? []).find((c) => c.code === normalized);
+                if (found) {
+                  setCaisseId(found._id);
+                  setError("");
+                } else {
+                  setError(`Aucune caisse ne correspond au code « ${normalized} ».`);
+                }
+              }}
+              onClose={() => setScanOpen(false)}
+            />
+          </Suspense>
+        </div>
+      )}
     </Modal>
   );
 }

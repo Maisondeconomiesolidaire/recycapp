@@ -12,6 +12,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
 import { PrintLabels } from "../../components/crm/PrintLabels";
+import { articleLabelReference } from "../../lib/labels";
 
 const ATELIER_TYPES = [
   { key: "nettoyage", label: "Nettoyage" },
@@ -400,15 +401,12 @@ function EnCoursList() {
 
       {printArticle && (
         <PrintLabels
-          articles={[{
-            _id: printArticle._id,
-            title: printArticle.title,
-            price: printArticle.price,
-            internalReference: printArticle.internalReference,
-            gdrReference: printArticle.gdrReference,
-            category: printArticle.category,
-            condition: printArticle.condition,
-          }]}
+          items={[
+            {
+              id: printArticle._id,
+              reference: articleLabelReference(printArticle),
+            },
+          ]}
           onClose={() => setPrintArticle(null)}
         />
       )}

@@ -49,7 +49,9 @@ import { Modal } from "../../components/ui/Modal";
 import { MultiSelectChips } from "../../components/ui/MultiSelectChips";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
-import { PrintLabels, type PrintLabelsMode } from "../../components/crm/PrintLabels";
+import { PrintLabels } from "../../components/crm/PrintLabels";
+import { CaissesPanel } from "../../components/crm/CaissesPanel";
+import { articleLabelReference, isCaisseCode, normalizeScanCode } from "../../lib/labels";
 import { PhotoQuickAdd } from "../../components/crm/PhotoQuickAdd";
 import { AiRunModal } from "../../components/crm/AiRunModal";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
@@ -57,7 +59,7 @@ import { canAccess } from "../../lib/crmPermissions";
 import { useMediaQuery } from "../../lib/useMediaQuery";
 
 type ArticleDoc = Doc<"articles"> & { imageUrls: string[] };
-type Tab = "stock" | "lots" | "dashboard";
+type Tab = "stock" | "caisses" | "lots" | "dashboard";
 
 /** Action de l'en-tête « Articles » : rendue en bouton ou dans le menu « Plus ». */
 type HeaderAction = {
@@ -179,6 +181,7 @@ function readStoredStockView(): StockView {
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "stock", label: "Stock" },
+  { key: "caisses", label: "Caisses" },
   { key: "lots", label: "Lots potentiels" },
   { key: "dashboard", label: "Tableau de bord" },
 ];
@@ -189,10 +192,6 @@ function normalizeText(value: string) {
 
 function normalizeDigits(value: string) {
   return value.replace(/\D/g, "");
-}
-
-function normalizeLocation(value: string) {
-  return value.trim();
 }
 
 export function Articles() {
@@ -210,7 +209,7 @@ export function Articles() {
   const [stockView, setStockView] = useState<StockView>(readStoredStockView);
   const [searchText, setSearchText] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedCaisse, setSelectedCaisse] = useState("");
   const articles = useQuery(api.articles.listAll, {});
   const remove = useMutation(api.articles.remove);
   const publishLot = useMutation(api.articles.publishLot);
@@ -223,9 +222,9 @@ export function Articles() {
   const [aiGroups, setAiGroups] = useState<AiLotGroup[] | null>(null);
   const [analyzingLots, setAnalyzingLots] = useState(false);
   const [lotAnalysisError, setLotAnalysisError] = useState("");
-  const [printRequest, setPrintRequest] = useState<
-    { articles: ArticleDoc[]; mode: PrintLabelsMode } | null
-  >(null);
+  const [printRequest, setPrintRequest] = useState<ArticleDoc[] | null>(null);
+  // Caisse à ouvrir dans l'onglet « Caisses » à la suite d'un scan.
+  const [scannedCaisseCode, setScannedCaisseCode] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
@@ -233,16 +232,20 @@ export function Articles() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Note: barcode scanner (external device) is handled globally by GlobalScanner in CrmLayout
 
-  const locationOptions = useMemo(() => {
-    if (!articles) return [];
-    return Array.from(
-      new Set(
-        articles
-          .map((article) => normalizeLocation(article.location ?? ""))
-          .filter(Boolean),
-      ),
-    ).sort((a, b) => a.localeCompare(b, "fr", { numeric: true }));
-  }, [articles]);
+  // Les caisses ont remplacé le champ texte « emplacement » : le stock se
+  // filtre et s'affiche par caisse.
+  const caisses = useQuery(api.caisses.list, {});
+  const caisseById = useMemo(
+    () => new Map((caisses ?? []).map((caisse) => [caisse._id as string, caisse])),
+    [caisses],
+  );
+
+  function caisseLabel(article: ArticleDoc): string {
+    const caisse = article.caisseId ? caisseById.get(article.caisseId) : undefined;
+    if (caisse) return caisse.label ? `${caisse.code} — ${caisse.label}` : caisse.code;
+    // Repli sur l'ancien emplacement texte tant que le stock n'est pas rangé.
+    return article.location?.trim() || "—";
+  }
 
   const filteredArticles = useMemo(() => {
     if (!articles) return articles;
@@ -256,10 +259,7 @@ export function Articles() {
         return false;
       }
 
-      if (
-        selectedLocation &&
-        normalizeLocation(article.location ?? "") !== selectedLocation
-      ) {
+      if (selectedCaisse && (article.caisseId ?? "") !== selectedCaisse) {
         return false;
       }
 
@@ -285,7 +285,7 @@ export function Articles() {
 
       return textMatch || digitMatch;
     });
-  }, [articles, searchText, selectedCategories, selectedLocation]);
+  }, [articles, searchText, selectedCategories, selectedCaisse]);
 
   const selectedArticles = useMemo(
     () => (articles ?? []).filter((a) => selectedIds.has(a._id)),
@@ -312,10 +312,12 @@ export function Articles() {
     });
   }
 
+  const handleCaisseCodeHandled = useCallback(() => setScannedCaisseCode(null), []);
+
   function printQrCodes() {
     const target = selectedArticles.length > 0 ? selectedArticles : filteredArticles ?? [];
     if (target.length === 0) return;
-    setPrintRequest({ articles: target, mode: "qr" });
+    setPrintRequest(target);
   }
 
   function changeStockView(next: StockView) {
@@ -335,6 +337,12 @@ export function Articles() {
   function handleScannedCode(code: string) {
     setScanOpen(false);
     const ref = code.trim();
+    // Un code « CA-xxxx » désigne une caisse : on ouvre son contenu.
+    if (isCaisseCode(ref)) {
+      setScannedCaisseCode(normalizeScanCode(ref));
+      setTab("caisses");
+      return;
+    }
     const found = (articles ?? []).find(
       (a) => a.internalReference === ref || a.gdrReference === ref,
     );
@@ -478,6 +486,7 @@ export function Articles() {
             articles
               ? {
                   stock: articles.filter((article) => article.status !== "vendu").length,
+                  caisses: caisses?.length ?? 0,
                   lots: buildPotentialLots(articles).length,
                   dashboard: articles.filter((article) => article.status === "vendu").length,
                 }
@@ -489,6 +498,18 @@ export function Articles() {
           <div className="pt-6">
             <FullSpinner label="Chargement…" />
           </div>
+        ) : tab === "caisses" ? (
+          <CaissesPanel
+            canCreate={canCreate}
+            canDelete={canDelete}
+            canPrint={canPrint}
+            openCode={scannedCaisseCode}
+            onOpenCodeHandled={handleCaisseCodeHandled}
+            onOpenArticle={(articleId) => {
+              const found = (articles ?? []).find((a) => a._id === articleId);
+              if (found) openEdit(found);
+            }}
+          />
         ) : tab === "dashboard" ? (
           <ArticleDashboard articles={articles} />
         ) : tab === "lots" ? (
@@ -545,16 +566,17 @@ export function Articles() {
                   orientation="horizontal"
                 />
               </div>
-              <Field label="Filtrer par emplacement">
+              <Field label="Filtrer par caisse">
                 <select
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
+                  value={selectedCaisse}
+                  onChange={(e) => setSelectedCaisse(e.target.value)}
                   className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-sm text-zinc-100 outline-none transition focus:border-brand-500"
                 >
-                  <option value="">Tous les emplacements</option>
-                  {locationOptions.map((location) => (
-                    <option key={location} value={location}>
-                      {location}
+                  <option value="">Toutes les caisses</option>
+                  {(caisses ?? []).map((caisse) => (
+                    <option key={caisse._id} value={caisse._id}>
+                      {caisse.code}
+                      {caisse.label ? ` — ${caisse.label}` : ""}
                     </option>
                   ))}
                 </select>
@@ -635,12 +657,12 @@ export function Articles() {
               <EmptyState
                 icon={<Package className="h-10 w-10" />}
                 title={
-                  searchText.trim() || selectedCategories.length > 0 || selectedLocation
+                  searchText.trim() || selectedCategories.length > 0 || selectedCaisse
                     ? "Aucun résultat"
                     : "Aucun article"
                 }
                 description={
-                  searchText.trim() || selectedCategories.length > 0 || selectedLocation
+                  searchText.trim() || selectedCategories.length > 0 || selectedCaisse
                     ? "Aucun article ne correspond à votre recherche ou à vos filtres."
                     : "Ajoutez votre premier article pour qu'il apparaisse en boutique."
                 }
@@ -663,6 +685,7 @@ export function Articles() {
                     <ArticleGridCard
                       key={a._id}
                       article={a}
+                      caisseLabel={caisseLabel(a)}
                       selected={selectedIds.has(a._id)}
                       onToggleSelected={() => toggleSelected(a._id)}
                       canUpdate={canUpdate}
@@ -670,7 +693,7 @@ export function Articles() {
                       canPrint={canPrint}
                       onEdit={() => openEdit(a)}
                       onDelete={() => setDeleting(a)}
-                      onPrint={() => setPrintRequest({ articles: [a], mode: "labels" })}
+                      onPrint={() => setPrintRequest([a])}
                       onToggleProductOfDay={() => toggleProductOfDay({ articleId: a._id })}
                     />
                   ))}
@@ -702,7 +725,7 @@ export function Articles() {
                       <th className="px-4 py-3 text-left font-medium">Article</th>
                       <th className="px-4 py-3 text-left font-medium">Références</th>
                       <th className="px-4 py-3 text-left font-medium">Catégorie</th>
-                      <th className="px-4 py-3 text-left font-medium">Emplacement</th>
+                      <th className="px-4 py-3 text-left font-medium">Caisse</th>
                       <th className="px-4 py-3 text-left font-medium">Prix</th>
                       <th className="px-4 py-3 text-left font-medium">Statut</th>
                       <th className="px-4 py-3 text-left font-medium">Actions</th>
@@ -770,9 +793,7 @@ export function Articles() {
                             <p className="text-xs text-zinc-500">{a.subcategory ?? "—"}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-zinc-400">
-                          {a.location?.trim() ? a.location : "—"}
-                        </td>
+                        <td className="px-4 py-3 text-zinc-400">{caisseLabel(a)}</td>
                         <td className="px-4 py-3">
                           <div className="space-y-0.5">
                             <p className="font-semibold text-zinc-100">
@@ -805,9 +826,9 @@ export function Articles() {
                             )}
                             {canPrint && (
                               <button
-                                onClick={() => setPrintRequest({ articles: [a], mode: "labels" })}
+                                onClick={() => setPrintRequest([a])}
                                 className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
-                                title="Imprimer l'étiquette"
+                                title="Imprimer le QR code"
                               >
                                 <Printer className="h-4 w-4" />
                               </button>
@@ -846,7 +867,6 @@ export function Articles() {
           key={editing?._id ?? "new"}
           article={editing}
           open={formOpen}
-          locationOptions={locationOptions}
           onClose={() => setFormOpen(false)}
         />
       )}
@@ -868,11 +888,14 @@ export function Articles() {
         confirmLabel="Supprimer"
       />
 
-      {/* Impression des étiquettes / planches de QR codes */}
+      {/* Impression des QR codes : QR + référence, rien d'autre. */}
       {printRequest && (
         <PrintLabels
-          articles={printRequest.articles}
-          mode={printRequest.mode}
+          items={printRequest.map((article) => ({
+            id: article._id,
+            reference: articleLabelReference(article),
+          }))}
+          title="QR codes articles"
           onClose={() => setPrintRequest(null)}
         />
       )}
@@ -883,7 +906,7 @@ export function Articles() {
         onClose={() => setQuickAddOpen(false)}
         onPrintQr={(ids) => {
           const created = (articles ?? []).filter((a) => ids.includes(a._id));
-          if (created.length > 0) setPrintRequest({ articles: created, mode: "qr" });
+          if (created.length > 0) setPrintRequest(created);
         }}
       />
 
@@ -1022,6 +1045,7 @@ function ActionsMenu({ items }: { items: HeaderAction[] }) {
 
 function ArticleGridCard({
   article,
+  caisseLabel,
   selected,
   onToggleSelected,
   canUpdate,
@@ -1033,6 +1057,7 @@ function ArticleGridCard({
   onToggleProductOfDay,
 }: {
   article: ArticleDoc;
+  caisseLabel: string;
   selected: boolean;
   onToggleSelected: () => void;
   canUpdate: boolean;
@@ -1190,9 +1215,7 @@ function ArticleGridCard({
         <div className="mt-3 space-y-0.5 text-xs text-zinc-500">
           <p className="truncate">Interne : {article.internalReference ?? "—"}</p>
           <p className="truncate">Réf. ext. : {article.gdrReference ?? "—"}</p>
-          <p className="truncate">
-            Emplacement : {article.location?.trim() ? article.location : "—"}
-          </p>
+          <p className="truncate">Caisse : {caisseLabel}</p>
         </div>
         <div className="mt-2 flex items-center justify-end gap-1">
           {canPrint && (

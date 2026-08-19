@@ -1,6 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useAction } from "convex/react";
-import { Camera, ExternalLink, ImagePlus, Loader2, Sparkles, Star, X } from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useMutation, useAction, useQuery } from "convex/react";
+import {
+  Camera,
+  ExternalLink,
+  ImagePlus,
+  Loader2,
+  ScanLine,
+  Sparkles,
+  Star,
+  X,
+} from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
@@ -16,6 +25,11 @@ import {
 import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
 import { buildDetouredPhotoFile } from "../../lib/backgroundRemoval";
+import { normalizeScanCode } from "../../lib/labels";
+
+const CameraScanner = lazy(() =>
+  import("../ui/CameraScanner").then((m) => ({ default: m.CameraScanner })),
+);
 
 type ArticleDoc = Doc<"articles"> & { imageUrls: string[] };
 
@@ -114,19 +128,15 @@ type ArticlePhoto = {
   localPreview?: boolean;
 };
 
-const STOCK_BIN_OPTIONS = ["9282", "6220", "8764", "9369", "5525", "9281", "8797"] as const;
-const OTHER_BIN_VALUE = "__other__";
 
 export function ArticleForm({
   article,
   open,
   onClose,
-  locationOptions,
 }: {
   article: ArticleDoc | null;
   open: boolean;
   onClose: () => void;
-  locationOptions: string[];
 }) {
   const create = useMutation(api.articles.create);
   const update = useMutation(api.articles.update);
@@ -136,19 +146,7 @@ export function ArticleForm({
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<ArticlePhoto[]>([]);
-  const availableLocationOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          [...STOCK_BIN_OPTIONS, ...locationOptions]
-            .map((value) => value.trim())
-            .filter(Boolean),
-        ),
-      ),
-    [locationOptions],
-  );
-  const initialLocation = article?.location?.trim() ?? "";
-  const initialLocationIsPreset = availableLocationOptions.includes(initialLocation);
+  const caisses = useQuery(api.caisses.list, {});
 
   const [title, setTitle] = useState(article?.title ?? "");
   const [description, setDescription] = useState(article?.description ?? "");
@@ -156,18 +154,12 @@ export function ArticleForm({
   const [weightKg, setWeightKg] = useState(
     article?.weightKg !== undefined ? String(article.weightKg) : "",
   );
-  const [locationChoice, setLocationChoice] = useState(
-    initialLocation
-      ? initialLocationIsPreset
-        ? initialLocation
-        : OTHER_BIN_VALUE
-      : "",
+  // Rangement : l'article vit dans une caisse, identifiée par son QR code.
+  const [caisseId, setCaisseId] = useState<Id<"caisses"> | "">(
+    article?.caisseId ?? "",
   );
-  const [customLocation, setCustomLocation] = useState(
-    initialLocation && !initialLocationIsPreset
-      ? initialLocation.replace(/\D/g, "").slice(0, 4)
-      : "",
-  );
+  const [caisseScanOpen, setCaisseScanOpen] = useState(false);
+  const [caisseScanError, setCaisseScanError] = useState("");
   const [aiDetails, setAiDetails] = useState("");
   const [aiBrief, setAiBrief] = useState("");
   const [originalPrice, setOriginalPrice] = useState(
@@ -409,12 +401,6 @@ export function ArticleForm({
       );
     if (gdrReference.trim() !== "" && !/^\d{15}$/.test(gdrReference))
       return setError("La référence externe doit contenir exactement 15 chiffres.");
-    const resolvedLocation =
-      locationChoice === OTHER_BIN_VALUE ? customLocation.trim() : locationChoice.trim();
-    if (resolvedLocation && !/^\d{4}$/.test(resolvedLocation)) {
-      return setError("L'emplacement doit contenir exactement 4 chiffres.");
-    }
-
     setError("");
     setSaving(true);
     try {
@@ -426,7 +412,7 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          location: resolvedLocation || undefined,
+          caisseId: caisseId || undefined,
           originalPrice: originalPriceNum,
           internalReference,
           gdrReference: gdrReference.trim() || undefined,
@@ -447,7 +433,7 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          location: resolvedLocation || undefined,
+          caisseId: caisseId || undefined,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
           category,
@@ -863,33 +849,36 @@ export function ArticleForm({
             />
           </Field>
           <Field
-            label="Emplacement"
-            hint="Choisissez le bac de stockage, ou saisissez les 4 derniers chiffres."
+            label="Caisse"
+            hint="Scannez le QR code collé sur la caisse, ou choisissez-la dans la liste."
+            error={caisseScanError || undefined}
           >
-            <div className="space-y-2">
+            <div className="flex gap-2">
               <Select
-                value={locationChoice}
-                onChange={(e) => setLocationChoice(e.target.value)}
+                value={caisseId}
+                onChange={(e) => {
+                  setCaisseId(e.target.value as Id<"caisses"> | "");
+                  setCaisseScanError("");
+                }}
+                className="flex-1"
               >
-                <option value="">— Sélectionner un bac —</option>
-                {availableLocationOptions.map((bin) => (
-                  <option key={bin} value={bin}>
-                    {bin}
+                <option value="">— Aucune caisse —</option>
+                {(caisses ?? []).map((caisse) => (
+                  <option key={caisse._id} value={caisse._id}>
+                    {caisse.code}
+                    {caisse.label ? ` — ${caisse.label}` : ""}
                   </option>
                 ))}
-                <option value={OTHER_BIN_VALUE}>Autres, veuillez préciser</option>
               </Select>
-              {locationChoice === OTHER_BIN_VALUE && (
-                <Input
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={customLocation}
-                  onChange={(e) =>
-                    setCustomLocation(e.target.value.replace(/\D/g, "").slice(0, 4))
-                  }
-                  placeholder="4 chiffres"
-                />
-              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCaisseScanOpen(true)}
+                title="Scanner le QR code de la caisse"
+              >
+                <ScanLine className="h-4 w-4" />
+                <span className="hidden sm:inline">Scanner</span>
+              </Button>
             </div>
           </Field>
           <Field
@@ -1017,6 +1006,36 @@ export function ArticleForm({
           )}
         </div>
       </div>
+
+      {/* Scan du QR code de la caisse dans laquelle ranger l'article. */}
+      {caisseScanOpen && (
+        <div className="fixed inset-0 z-[300] bg-black">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+              </div>
+            }
+          >
+            <CameraScanner
+              onDetected={(code) => {
+                setCaisseScanOpen(false);
+                const normalized = normalizeScanCode(code);
+                const found = (caisses ?? []).find((c) => c.code === normalized);
+                if (found) {
+                  setCaisseId(found._id);
+                  setCaisseScanError("");
+                } else {
+                  setCaisseScanError(
+                    `Aucune caisse ne correspond au code « ${normalized} ».`,
+                  );
+                }
+              }}
+              onClose={() => setCaisseScanOpen(false)}
+            />
+          </Suspense>
+        </div>
+      )}
     </Modal>
   );
 }
