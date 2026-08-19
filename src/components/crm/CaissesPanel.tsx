@@ -23,7 +23,7 @@ import { QrCode } from "../ui/QrCode";
 import { FullSpinner } from "../ui/Spinner";
 import { PrintLabels } from "./PrintLabels";
 import { formatPrice } from "../../lib/format";
-import { articleLabelReference } from "../../lib/labels";
+import { articleLabelReference, caisseLabelCaption } from "../../lib/labels";
 
 const CameraScanner = lazy(() =>
   import("../ui/CameraScanner").then((m) => ({ default: m.CameraScanner })),
@@ -305,6 +305,7 @@ export function CaissesPanel({
           items={printItems.map((caisse) => ({
             id: caisse._id,
             reference: caisse.code,
+            caption: caisseLabelCaption(caisse.code),
           }))}
           title="QR codes caisses"
           onClose={() => setPrintItems(null)}

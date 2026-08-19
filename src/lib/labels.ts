@@ -30,3 +30,14 @@ export function articleLabelReference(article: {
 }): string {
   return article.internalReference ?? article.gdrReference ?? article._id.slice(-8);
 }
+
+/**
+ * Numéro imprimé en gros sur l'étiquette d'une caisse : les 2 derniers chiffres
+ * du code, sans le préfixe. `CA-0007` → « 07 ». C'est ce que l'équipe lit de
+ * loin pour repérer une caisse sans la scanner ; le code complet reste dans le
+ * QR code et à l'écran.
+ */
+export function caisseLabelCaption(code: string): string {
+  const digits = code.replace(/\D/g, "");
+  return digits.slice(-2) || code;
+}
