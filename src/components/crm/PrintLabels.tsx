@@ -43,25 +43,46 @@ type Sheet = "brother" | "a4";
 const LABEL_WIDTH_MM = 62;
 const LABEL_HEIGHT_MM = 29;
 /**
- * Taille d'un QR code sur une étiquette 62 × 29, en millimètres, et nombre de
- * répétitions sur la largeur. 3 × 16 mm + gouttières tiennent dans les 58 mm
- * utiles, et 16 mm reste très au-dessus du minimum lisible pour une référence
- * courte imprimée à 300 dpi.
+ * Marge de sécurité : le rouleau DK 62 mm a une bande non imprimable de l'ordre
+ * du millimètre sur chaque bord. On garde 1,5 mm pour qu'aucun code ne soit
+ * rogné, et on remplit tout le reste.
  */
-const QR_SIZE_MM = 17;
-const QR_REPEATS = 3;
+const LABEL_PADDING_MM = 1.5;
 const QR_GAP_MM = 2;
 
-/** Étiquette de caisse : un seul QR code, plus grand, et le numéro à côté. */
-const CAPTION_QR_SIZE_MM = 22;
-/** Taille du numéro de caisse, en points. */
-const CAPTION_FONT_PT = 40;
+const USABLE_WIDTH_MM = LABEL_WIDTH_MM - LABEL_PADDING_MM * 2;
+const USABLE_HEIGHT_MM = LABEL_HEIGHT_MM - LABEL_PADDING_MM * 2;
+
+/**
+ * Étiquette d'article : 3 codes occupant toute la largeur utile —
+ * 3 × 18,3 mm + 2 gouttières de 2 mm = les 59 mm disponibles.
+ */
+const QR_REPEATS = 3;
+const QR_SIZE_MM =
+  (USABLE_WIDTH_MM - QR_GAP_MM * (QR_REPEATS - 1)) / QR_REPEATS;
+
+/** Étiquette de caisse : le QR code occupe toute la hauteur utile. */
+const CAPTION_QR_SIZE_MM = USABLE_HEIGHT_MM;
 
 const A4_COLUMNS = 4;
-/** Même principe sur la planche A4, sur des cartes d'environ 44 mm utiles. */
-const A4_QR_SIZE_MM = 13;
-const A4_CAPTION_QR_SIZE_MM = 18;
-const A4_CAPTION_FONT_PT = 26;
+/** Largeur utile approximative d'une carte de planche A4 (marges 8 mm, 4 colonnes). */
+const A4_CARD_WIDTH_MM = (210 - 16) / A4_COLUMNS - 4;
+const A4_QR_SIZE_MM =
+  (A4_CARD_WIDTH_MM - QR_GAP_MM * (QR_REPEATS - 1)) / QR_REPEATS;
+const A4_CAPTION_QR_SIZE_MM = 22;
+
+/**
+ * Corps du numéro de caisse, en points, pour qu'il remplisse exactement la
+ * place laissée par le QR code.
+ *
+ * Dans une graisse extra-bold, un chiffre avance d'environ 0,60 em et sa
+ * hauteur de capitale vaut environ 0,72 em (les chiffres n'ont ni jambage ni
+ * ascendante). On prend donc la plus contraignante des deux dimensions.
+ */
+function captionFontPt(widthMm: number, heightMm: number, chars: number): number {
+  const emMm = Math.min(widthMm / (0.6 * Math.max(chars, 1)), heightMm / 0.72);
+  return Math.floor((emMm / 25.4) * 72);
+}
 
 interface PrintLabelsProps {
   items: LabelItem[];
@@ -188,7 +209,11 @@ function printBrotherLabels(items: LabelItem[], title: string) {
       item.caption
         ? `<section class="page caption">
              ${qrSvgMarkup(item.reference, CAPTION_QR_SIZE_MM)}
-             <span class="number">${escapeHtml(item.caption)}</span>
+             <span class="number" style="font-size:${captionFontPt(
+               USABLE_WIDTH_MM - CAPTION_QR_SIZE_MM - QR_GAP_MM,
+               USABLE_HEIGHT_MM,
+               item.caption.length,
+             )}pt">${escapeHtml(item.caption)}</span>
            </section>`
         : `<section class="page">${repeatQr(item.reference, QR_SIZE_MM)}</section>`,
     )
@@ -202,7 +227,7 @@ function printBrotherLabels(items: LabelItem[], title: string) {
         width: ${LABEL_WIDTH_MM}mm;
         height: ${LABEL_HEIGHT_MM}mm;
         box-sizing: border-box;
-        padding: 1.5mm 2mm;
+        padding: ${LABEL_PADDING_MM}mm;
         overflow: hidden;
         display: flex;
         align-items: center;
@@ -213,12 +238,12 @@ function printBrotherLabels(items: LabelItem[], title: string) {
       }
       .page:last-child { page-break-after: auto; break-after: auto; }
       /* Étiquette de caisse : QR à gauche, numéro en très gros à droite. */
-      .page.caption { gap: 3mm; }
+      .page.caption { gap: ${QR_GAP_MM}mm; }
       .number {
-        font-size: ${CAPTION_FONT_PT}pt;
         font-weight: 800;
-        line-height: 0.85;
-        letter-spacing: -0.03em;
+        line-height: 0.8;
+        letter-spacing: -0.04em;
+        white-space: nowrap;
       }
     `,
     bodyHtml: pages,
@@ -232,7 +257,11 @@ function printA4Sheet(items: LabelItem[], title: string) {
       item.caption
         ? `<div class="card">
              ${qrSvgMarkup(item.reference, A4_CAPTION_QR_SIZE_MM)}
-             <span class="number">${escapeHtml(item.caption)}</span>
+             <span class="number" style="font-size:${captionFontPt(
+               A4_CARD_WIDTH_MM - A4_CAPTION_QR_SIZE_MM - QR_GAP_MM,
+               A4_CAPTION_QR_SIZE_MM,
+               item.caption.length,
+             )}pt">${escapeHtml(item.caption)}</span>
            </div>`
         : `<div class="card">${repeatQr(item.reference, A4_QR_SIZE_MM)}</div>`,
     )
@@ -255,10 +284,10 @@ function printA4Sheet(items: LabelItem[], title: string) {
         gap: ${QR_GAP_MM}mm;
       }
       .number {
-        font-size: ${A4_CAPTION_FONT_PT}pt;
         font-weight: 800;
-        line-height: 0.85;
-        letter-spacing: -0.03em;
+        line-height: 0.8;
+        letter-spacing: -0.04em;
+        white-space: nowrap;
       }
     `,
     bodyHtml: `<div class="sheet">${cards}</div>`,
@@ -298,8 +327,8 @@ function BrotherLabelPreview({
       style={{
         width: `${LABEL_WIDTH_MM}mm`,
         height: `${LABEL_HEIGHT_MM}mm`,
-        padding: "1.5mm 2mm",
-        gap: caption ? "3mm" : `${QR_GAP_MM}mm`,
+        padding: `${LABEL_PADDING_MM}mm`,
+        gap: `${QR_GAP_MM}mm`,
         boxSizing: "border-box",
         overflow: "hidden",
       }}
@@ -313,8 +342,16 @@ function BrotherLabelPreview({
             className="text-black"
           />
           <span
-            className="font-extrabold tracking-tighter text-black"
-            style={{ fontSize: `${CAPTION_FONT_PT}pt`, lineHeight: 0.85 }}
+            className="font-extrabold text-black"
+            style={{
+              fontSize: `${captionFontPt(
+                USABLE_WIDTH_MM - CAPTION_QR_SIZE_MM - QR_GAP_MM,
+                USABLE_HEIGHT_MM,
+                caption.length,
+              )}pt`,
+              lineHeight: 0.8,
+              letterSpacing: "-0.04em",
+            }}
           >
             {caption}
           </span>
@@ -348,8 +385,16 @@ function SheetLabelPreview({
             className="text-black"
           />
           <span
-            className="font-extrabold tracking-tighter text-black"
-            style={{ fontSize: `${A4_CAPTION_FONT_PT}pt`, lineHeight: 0.85 }}
+            className="font-extrabold text-black"
+            style={{
+              fontSize: `${captionFontPt(
+                A4_CARD_WIDTH_MM - A4_CAPTION_QR_SIZE_MM - QR_GAP_MM,
+                A4_CAPTION_QR_SIZE_MM,
+                caption.length,
+              )}pt`,
+              lineHeight: 0.8,
+              letterSpacing: "-0.04em",
+            }}
           >
             {caption}
           </span>
