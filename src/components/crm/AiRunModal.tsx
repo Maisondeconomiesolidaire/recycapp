@@ -3,6 +3,7 @@ import { useAction, useMutation } from "convex/react";
 import {
   AlertTriangle,
   Check,
+  Eye,
   Loader2,
   Package,
   Play,
@@ -22,6 +23,16 @@ type RunState = {
   status: "queued" | "running" | "done" | "error";
   step?: string;
   error?: string;
+  /** Ce que le run a produit — affiché à la fin pour vérification. */
+  result?: {
+    title: string;
+    price: number;
+    category: string;
+    subcategory?: string;
+    condition: string;
+    detoured: boolean;
+    priceRationale?: string;
+  };
 };
 
 /**
@@ -34,10 +45,13 @@ export function AiRunModal({
   open,
   articles,
   onClose,
+  onOpenArticle,
 }: {
   open: boolean;
   articles: ArticleDoc[];
   onClose: () => void;
+  /** Ouvre la fiche d'un article traité, depuis le récapitulatif de fin de run. */
+  onOpenArticle?: (articleId: string) => void;
 }) {
   const analyzeImage = useAction(api.ai.analyzeArticleImage);
   const applyAiListing = useMutation(api.articles.applyAiListing);
@@ -91,7 +105,7 @@ export function AiRunModal({
     setStates((prev) => ({ ...prev, [id]: state }));
   }
 
-  async function runOne(article: ArticleDoc) {
+  async function runOne(article: ArticleDoc): Promise<RunState["result"]> {
     const id = article._id as string;
 
     let images: Id<"_storage">[] | undefined;
@@ -129,6 +143,15 @@ export function AiRunModal({
         images,
         status: result.recommendedSaleMode === "bundle" ? "attente" : "disponible",
       });
+      return {
+        title: result.title,
+        price: result.price,
+        category: result.category,
+        subcategory: result.subcategory ?? undefined,
+        condition: result.condition,
+        detoured: images !== undefined,
+        priceRationale: result.priceRationale,
+      };
     } else if (images) {
       setState(id, { status: "running", step: "Enregistrement…" });
       await applyAiListing({
@@ -145,6 +168,14 @@ export function AiRunModal({
         themeKey: article.themeKey,
         images,
       });
+      return {
+        title: article.title,
+        price: article.price,
+        category: article.category,
+        subcategory: article.subcategory,
+        condition: article.condition,
+        detoured: true,
+      };
     }
   }
 
@@ -168,8 +199,8 @@ export function AiRunModal({
     for (const article of queue) {
       const id = article._id as string;
       try {
-        await runOne(article);
-        setState(id, { status: "done" });
+        const result = await runOne(article);
+        setState(id, { status: "done", result });
       } catch (err) {
         setState(id, {
           status: "error",
@@ -181,6 +212,11 @@ export function AiRunModal({
     setRunning(false);
     setFinished(true);
   }
+
+  const processed = useMemo(
+    () => articles.filter((a) => states[a._id as string] !== undefined),
+    [articles, states],
+  );
 
   const doneCount = Object.values(states).filter((s) => s.status === "done").length;
   const errorCount = Object.values(states).filter((s) => s.status === "error").length;
@@ -223,7 +259,7 @@ export function AiRunModal({
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className={`flex flex-wrap items-center gap-2 text-xs ${finished ? "hidden" : ""}`}>
           <span className="text-zinc-400">
             {selectedCount} article{selectedCount > 1 ? "s" : ""} sélectionné
             {selectedCount > 1 ? "s" : ""}
@@ -254,6 +290,27 @@ export function AiRunModal({
           </button>
         </div>
 
+        {finished ? (
+          <div className="max-h-[45vh] space-y-1.5 overflow-y-auto rounded-xl border border-[var(--crm-border)] p-2">
+            {processed.map((article) => (
+              <RunResultRow
+                key={article._id}
+                article={article}
+                state={states[article._id as string]}
+                onOpen={
+                  onOpenArticle
+                    ? () => {
+                        // La fiche article est elle-même une modale : on ferme
+                        // le run avant de l'ouvrir.
+                        onClose();
+                        onOpenArticle(article._id as string);
+                      }
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        ) : (
         <div className="max-h-[45vh] space-y-1.5 overflow-y-auto rounded-xl border border-[var(--crm-border)] p-2">
           {eligible.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-zinc-500">
@@ -310,6 +367,7 @@ export function AiRunModal({
             })
           )}
         </div>
+        )}
 
         {running ? (
           <p className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
@@ -319,10 +377,40 @@ export function AiRunModal({
         ) : null}
 
         {finished ? (
-          <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-300">
-            Run terminé : {doneCount} réussi{doneCount > 1 ? "s" : ""}
-            {errorCount > 0 ? `, ${errorCount} en erreur` : ""}.
-          </p>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2.5 text-sm">
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <Check className="h-4 w-4" />
+              {doneCount} réussi{doneCount > 1 ? "s" : ""}
+            </span>
+            {errorCount > 0 && (
+              <span className="flex items-center gap-1.5 text-red-400">
+                <AlertTriangle className="h-4 w-4" />
+                {errorCount} en erreur
+              </span>
+            )}
+            <span className="text-zinc-400">
+              Vérifiez ci-dessus ce que l'IA a produit avant publication.
+            </span>
+            {onOpenArticle && doneCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+                onClick={() => {
+                  const first = processed.find(
+                    (a) => states[a._id as string]?.status === "done",
+                  );
+                  if (first) {
+                    onClose();
+                    onOpenArticle(first._id as string);
+                  }
+                }}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Ouvrir le premier
+              </Button>
+            )}
+          </div>
         ) : null}
 
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
@@ -348,6 +436,86 @@ export function AiRunModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Une ligne du récapitulatif de fin de run : ce que l'IA a produit pour cet
+ * article (titre, prix, catégorie, état) ou l'erreur rencontrée, avec un accès
+ * direct à la fiche pour corriger.
+ */
+function RunResultRow({
+  article,
+  state,
+  onOpen,
+}: {
+  article: ArticleDoc;
+  state?: RunState;
+  onOpen?: () => void;
+}) {
+  const failed = state?.status === "error";
+  const result = state?.result;
+
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-lg border px-2.5 py-2.5 ${
+        failed
+          ? "border-red-500/30 bg-red-500/5"
+          : "border-[var(--crm-border)] bg-[var(--crm-surface-2)]"
+      }`}
+    >
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--crm-surface-3)]">
+        {article.imageUrls[0] ? (
+          <img
+            src={article.imageUrls[0]}
+            alt={article.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <Package className="h-4 w-4 text-zinc-500" />
+        )}
+      </span>
+
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="flex items-center gap-1.5 text-sm">
+          {failed ? (
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-400" />
+          ) : (
+            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          )}
+          <span className="line-clamp-1 text-zinc-100">
+            {result?.title ?? article.title}
+          </span>
+        </p>
+
+        {failed ? (
+          <p className="text-xs text-red-400">{state?.error ?? "Erreur inconnue."}</p>
+        ) : result ? (
+          <>
+            <p className="text-xs text-zinc-400">
+              {formatPrice(result.price)} · {result.category}
+              {result.subcategory ? ` · ${result.subcategory}` : ""} ·{" "}
+              {result.condition}
+              {result.detoured ? " · photos détourées" : ""}
+            </p>
+            {result.priceRationale && (
+              <p className="text-xs text-zinc-500">{result.priceRationale}</p>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-zinc-500">
+            {article.internalReference ?? "—"} · aucune modification.
+          </p>
+        )}
+      </div>
+
+      {onOpen && (
+        <Button variant="outline" size="sm" className="shrink-0" onClick={onOpen}>
+          <Eye className="h-3.5 w-3.5" />
+          Détails
+        </Button>
+      )}
+    </div>
   );
 }
 

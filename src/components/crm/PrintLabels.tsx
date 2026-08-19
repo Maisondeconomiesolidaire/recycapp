@@ -2,13 +2,18 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer } from "lucide-react";
 import { QrCode } from "../ui/QrCode";
-import { escapeHtml, printIsolatedDocument, qrSvgMarkup } from "../../lib/printLabels";
+import { printIsolatedDocument, qrSvgMarkup } from "../../lib/printLabels";
 
 /**
- * Une étiquette = un QR code et la petite référence en dessous. Rien d'autre :
- * ni titre, ni prix, ni catégorie. Les étiquettes d'articles et de caisses sont
- * donc strictement identiques, et un changement de prix ne périme jamais une
- * étiquette déjà collée.
+ * Une étiquette ne porte QUE des QR codes — ni titre, ni prix, ni référence en
+ * clair. Les étiquettes d'articles et de caisses sont donc strictement
+ * identiques, et un changement de prix ne périme jamais une étiquette collée.
+ *
+ * Le même code est répété plusieurs fois sur la largeur : collée autour d'un
+ * objet fin (un stylo, un manche, un pied de chaise), une étiquette s'enroule et
+ * masque une partie d'elle-même. Avec un code unique et centré, plus rien n'est
+ * scannable ; répété, il reste toujours un exemplaire entier sur la face
+ * visible.
  */
 export interface LabelItem {
   /** Clé React. */
@@ -25,9 +30,19 @@ type Sheet = "brother" | "a4";
 
 const LABEL_WIDTH_MM = 62;
 const LABEL_HEIGHT_MM = 29;
-/** Taille du QR code sur une étiquette 62 × 29, en millimètres. */
-const QR_SIZE_MM = 19;
+/**
+ * Taille d'un QR code sur une étiquette 62 × 29, en millimètres, et nombre de
+ * répétitions sur la largeur. 3 × 16 mm + gouttières tiennent dans les 58 mm
+ * utiles, et 16 mm reste très au-dessus du minimum lisible pour une référence
+ * courte imprimée à 300 dpi.
+ */
+const QR_SIZE_MM = 16;
+const QR_REPEATS = 3;
+const QR_GAP_MM = 2;
+
 const A4_COLUMNS = 4;
+/** Même principe sur la planche A4, sur des cartes d'environ 44 mm utiles. */
+const A4_QR_SIZE_MM = 12;
 
 interface PrintLabelsProps {
   items: LabelItem[];
@@ -48,7 +63,7 @@ export function PrintLabels({ items, title = "QR codes", onClose }: PrintLabelsP
   }
 
   const content = (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[color:var(--crm-bg)]">
+    <div className="fixed inset-0 z-[400] flex flex-col bg-[color:var(--crm-bg)]">
       {/* Barre d'outils */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3 sm:px-5">
         <div className="min-w-0">
@@ -60,6 +75,8 @@ export function PrintLabels({ items, title = "QR codes", onClose }: PrintLabelsP
             {brother
               ? `Brother QL-700 · ${LABEL_WIDTH_MM} × ${LABEL_HEIGHT_MM} mm · une étiquette par page`
               : `Planche A4 · ${A4_COLUMNS} étiquettes par ligne`}
+            {" · "}
+            code répété {QR_REPEATS}× pour rester scannable une fois enroulé
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -133,16 +150,18 @@ export function PrintLabels({ items, title = "QR codes", onClose }: PrintLabelsP
 
 /* ─── Impression ─────────────────────────────────────────────────────────── */
 
-/** Une étiquette 62 × 29 mm par page, QR code centré. */
+/** Le même QR code, répété `QR_REPEATS` fois côte à côte. */
+function repeatQr(reference: string, sizeMm: number): string {
+  return Array.from({ length: QR_REPEATS }, () => qrSvgMarkup(reference, sizeMm)).join(
+    "",
+  );
+}
+
+/** Une étiquette 62 × 29 mm par page, QR code répété et centré. */
 function printBrotherLabels(items: LabelItem[], title: string) {
   const pages = items
     .map(
-      (item) => `<section class="page">
-        <div class="stack">
-          ${qrSvgMarkup(item.reference, QR_SIZE_MM)}
-          <span class="ref">${escapeHtml(item.reference)}</span>
-        </div>
-      </section>`,
+      (item) => `<section class="page">${repeatQr(item.reference, QR_SIZE_MM)}</section>`,
     )
     .join("");
 
@@ -159,19 +178,11 @@ function printBrotherLabels(items: LabelItem[], title: string) {
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: ${QR_GAP_MM}mm;
         page-break-after: always;
         break-after: page;
       }
       .page:last-child { page-break-after: auto; break-after: auto; }
-      .stack { display: flex; flex-direction: column; align-items: center; }
-      .ref {
-        margin-top: 0.6mm;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 7pt;
-        font-weight: 600;
-        line-height: 1;
-        letter-spacing: 0.02em;
-      }
     `,
     bodyHtml: pages,
   });
@@ -181,10 +192,7 @@ function printBrotherLabels(items: LabelItem[], title: string) {
 function printA4Sheet(items: LabelItem[], title: string) {
   const cards = items
     .map(
-      (item) => `<div class="card">
-        <div class="qr">${qrSvgMarkup(item.reference, 24)}</div>
-        <p class="ref">${escapeHtml(item.reference)}</p>
-      </div>`,
+      (item) => `<div class="card">${repeatQr(item.reference, A4_QR_SIZE_MM)}</div>`,
     )
     .join("");
 
@@ -195,18 +203,14 @@ function printA4Sheet(items: LabelItem[], title: string) {
       .sheet { display: grid; grid-template-columns: repeat(${A4_COLUMNS}, 1fr); }
       .card {
         border: 0.5pt solid #ccc;
-        padding: 4pt 6pt;
+        padding: 4pt;
         box-sizing: border-box;
         page-break-inside: avoid;
         break-inside: avoid;
-        text-align: center;
-      }
-      .qr { display: flex; justify-content: center; }
-      .ref {
-        margin: 2pt 0 0;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 8pt;
-        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: ${QR_GAP_MM}mm;
       }
     `,
     bodyHtml: `<div class="sheet">${cards}</div>`,
@@ -214,6 +218,17 @@ function printA4Sheet(items: LabelItem[], title: string) {
 }
 
 /* ─── Aperçu écran ───────────────────────────────────────────────────────── */
+
+/** Les mêmes QR codes répétés, pour l'aperçu écran. */
+function RepeatedQr({ reference, size }: { reference: string; size: number | string }) {
+  return (
+    <>
+      {Array.from({ length: QR_REPEATS }, (_, index) => (
+        <QrCode key={index} value={reference} size={size} className="text-black" />
+      ))}
+    </>
+  );
+}
 
 /** Aperçu à taille réelle d'une étiquette 62 × 29 mm. */
 function BrotherLabelPreview({ reference }: { reference: string }) {
@@ -224,19 +239,12 @@ function BrotherLabelPreview({ reference }: { reference: string }) {
         width: `${LABEL_WIDTH_MM}mm`,
         height: `${LABEL_HEIGHT_MM}mm`,
         padding: "1.5mm 2mm",
+        gap: `${QR_GAP_MM}mm`,
         boxSizing: "border-box",
         overflow: "hidden",
       }}
     >
-      <div className="flex shrink-0 flex-col items-center">
-        <QrCode value={reference} size={`${QR_SIZE_MM}mm`} className="text-black" />
-        <span
-          className="mt-[0.6mm] font-mono font-semibold leading-none text-black"
-          style={{ fontSize: "7pt" }}
-        >
-          {reference}
-        </span>
-      </div>
+      <RepeatedQr reference={reference} size={`${QR_SIZE_MM}mm`} />
     </div>
   );
 }
@@ -244,13 +252,11 @@ function BrotherLabelPreview({ reference }: { reference: string }) {
 /** Aperçu d'une étiquette de planche A4. */
 function SheetLabelPreview({ reference }: { reference: string }) {
   return (
-    <div className="rounded-xl border border-[var(--crm-border)] bg-white p-4">
-      <div className="flex justify-center">
-        <QrCode value={reference} size={104} className="text-black" />
-      </div>
-      <p className="mt-1 text-center font-mono text-[11px] font-semibold text-black">
-        {reference}
-      </p>
+    <div
+      className="flex items-center justify-center rounded-xl border border-[var(--crm-border)] bg-white p-3"
+      style={{ gap: `${QR_GAP_MM}mm` }}
+    >
+      <RepeatedQr reference={reference} size={`${A4_QR_SIZE_MM}mm`} />
     </div>
   );
 }

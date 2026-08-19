@@ -916,6 +916,10 @@ export function Articles() {
           open={runOpen}
           articles={runArticles}
           onClose={() => setRunOpen(false)}
+          onOpenArticle={(articleId) => {
+            const found = (articles ?? []).find((a) => a._id === articleId);
+            if (found) openEdit(found);
+          }}
         />
       )}
 
