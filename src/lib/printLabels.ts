@@ -18,20 +18,35 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** QR code en SVG inline, dimensionné en millimètres. */
+/**
+ * Marge blanche autour du code, en nombre de modules. La norme QR impose 4 :
+ * sans elle le code touche le bord de l'étiquette, paraît « découpé » et les
+ * lecteurs peinent à en trouver les repères.
+ */
+export const QR_QUIET_ZONE_MODULES = 4;
+
+/**
+ * QR code en SVG inline, dimensionné en millimètres — zone de silence incluse,
+ * donc `sizeMm` est bien l'encombrement total sur l'étiquette.
+ */
 export function qrSvgMarkup(value: string, sizeMm: number): string {
   const { modules } = QRCode.create(value, { errorCorrectionLevel: "M" });
   const count = modules.size;
   const data = modules.data;
+  const margin = QR_QUIET_ZONE_MODULES;
+  const extent = count + margin * 2;
   let path = "";
   for (let row = 0; row < count; row += 1) {
     for (let col = 0; col < count; col += 1) {
-      if (data[row * count + col]) path += `M${col} ${row}h1v1h-1z`;
+      if (data[row * count + col]) {
+        path += `M${col + margin} ${row + margin}h1v1h-1z`;
+      }
     }
   }
   return (
-    `<svg viewBox="0 0 ${count} ${count}" width="${sizeMm}mm" height="${sizeMm}mm" ` +
+    `<svg viewBox="0 0 ${extent} ${extent}" width="${sizeMm}mm" height="${sizeMm}mm" ` +
     `shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">` +
+    `<rect width="${extent}" height="${extent}" fill="#fff"/>` +
     `<path d="${path}" fill="#000"/></svg>`
   );
 }

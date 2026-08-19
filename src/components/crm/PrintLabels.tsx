@@ -2,7 +2,12 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer } from "lucide-react";
 import { QrCode } from "../ui/QrCode";
-import { escapeHtml, printIsolatedDocument, qrSvgMarkup } from "../../lib/printLabels";
+import {
+  escapeHtml,
+  printIsolatedDocument,
+  QR_QUIET_ZONE_MODULES,
+  qrSvgMarkup,
+} from "../../lib/printLabels";
 
 /**
  * Une étiquette d'ARTICLE ne porte que des QR codes — ni titre, ni prix, ni
@@ -43,17 +48,20 @@ const LABEL_HEIGHT_MM = 29;
  * utiles, et 16 mm reste très au-dessus du minimum lisible pour une référence
  * courte imprimée à 300 dpi.
  */
-const QR_SIZE_MM = 16;
+const QR_SIZE_MM = 17;
 const QR_REPEATS = 3;
 const QR_GAP_MM = 2;
 
 /** Étiquette de caisse : un seul QR code, plus grand, et le numéro à côté. */
-const CAPTION_QR_SIZE_MM = 24;
+const CAPTION_QR_SIZE_MM = 22;
+/** Taille du numéro de caisse, en points. */
+const CAPTION_FONT_PT = 40;
 
 const A4_COLUMNS = 4;
 /** Même principe sur la planche A4, sur des cartes d'environ 44 mm utiles. */
-const A4_QR_SIZE_MM = 12;
-const A4_CAPTION_QR_SIZE_MM = 20;
+const A4_QR_SIZE_MM = 13;
+const A4_CAPTION_QR_SIZE_MM = 18;
+const A4_CAPTION_FONT_PT = 26;
 
 interface PrintLabelsProps {
   items: LabelItem[];
@@ -207,7 +215,7 @@ function printBrotherLabels(items: LabelItem[], title: string) {
       /* Étiquette de caisse : QR à gauche, numéro en très gros à droite. */
       .page.caption { gap: 3mm; }
       .number {
-        font-size: 60pt;
+        font-size: ${CAPTION_FONT_PT}pt;
         font-weight: 800;
         line-height: 0.85;
         letter-spacing: -0.03em;
@@ -247,7 +255,7 @@ function printA4Sheet(items: LabelItem[], title: string) {
         gap: ${QR_GAP_MM}mm;
       }
       .number {
-        font-size: 40pt;
+        font-size: ${A4_CAPTION_FONT_PT}pt;
         font-weight: 800;
         line-height: 0.85;
         letter-spacing: -0.03em;
@@ -264,7 +272,13 @@ function RepeatedQr({ reference, size }: { reference: string; size: number | str
   return (
     <>
       {Array.from({ length: QR_REPEATS }, (_, index) => (
-        <QrCode key={index} value={reference} size={size} className="text-black" />
+        <QrCode
+          key={index}
+          value={reference}
+          size={size}
+          margin={QR_QUIET_ZONE_MODULES}
+          className="text-black"
+        />
       ))}
     </>
   );
@@ -295,11 +309,12 @@ function BrotherLabelPreview({
           <QrCode
             value={reference}
             size={`${CAPTION_QR_SIZE_MM}mm`}
+            margin={QR_QUIET_ZONE_MODULES}
             className="text-black"
           />
           <span
             className="font-extrabold tracking-tighter text-black"
-            style={{ fontSize: "60pt", lineHeight: 0.85 }}
+            style={{ fontSize: `${CAPTION_FONT_PT}pt`, lineHeight: 0.85 }}
           >
             {caption}
           </span>
@@ -329,11 +344,12 @@ function SheetLabelPreview({
           <QrCode
             value={reference}
             size={`${A4_CAPTION_QR_SIZE_MM}mm`}
+            margin={QR_QUIET_ZONE_MODULES}
             className="text-black"
           />
           <span
             className="font-extrabold tracking-tighter text-black"
-            style={{ fontSize: "40pt", lineHeight: 0.85 }}
+            style={{ fontSize: `${A4_CAPTION_FONT_PT}pt`, lineHeight: 0.85 }}
           >
             {caption}
           </span>
