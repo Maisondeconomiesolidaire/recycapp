@@ -65,6 +65,9 @@ export function CaissesPanel({
   const removeCaisse = useMutation(api.caisses.remove);
 
   const [search, setSearch] = useState("");
+  // Par défaut on ne montre que les caisses qui contiennent encore des
+  // objets : ce sont les seules à aller chercher en réserve.
+  const [onlyFilled, setOnlyFilled] = useState(true);
   const [openId, setOpenId] = useState<Id<"caisses"> | null>(null);
   const [creating, setCreating] = useState(false);
   const [newLabel, setNewLabel] = useState("");
@@ -90,16 +93,24 @@ export function CaissesPanel({
     onOpenCodeHandled?.();
   }, [openCode, caisses, onOpenCodeHandled]);
 
+  // Un article vendu a quitté la caisse : c'est `remaining` qui dit si elle
+  // contient encore quelque chose.
+  const filledCount = useMemo(
+    () => (caisses ?? []).filter((caisse) => caisse.counts.remaining > 0).length,
+    [caisses],
+  );
+
   const filtered = useMemo(() => {
     if (!caisses) return [];
     const needle = search.trim().toLowerCase();
-    if (!needle) return caisses;
-    return caisses.filter((caisse) =>
-      [caisse.code, caisse.label, caisse.zone]
+    return caisses.filter((caisse) => {
+      if (onlyFilled && caisse.counts.remaining === 0) return false;
+      if (!needle) return true;
+      return [caisse.code, caisse.label, caisse.zone]
         .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLowerCase().includes(needle)),
-    );
-  }, [caisses, search]);
+        .some((value) => value.toLowerCase().includes(needle));
+    });
+  }, [caisses, search, onlyFilled]);
 
   async function handleCreate() {
     setSaving(true);
@@ -112,6 +123,8 @@ export function CaissesPanel({
       setCreating(false);
       setNewLabel("");
       setNewZone("");
+      // Une caisse neuve est vide : sans ça elle disparaîtrait du filtre.
+      setOnlyFilled(false);
       // On enchaîne directement sur le contenu de la caisse : son QR code y est
       // affiché, prêt à imprimer et à coller.
       setOpenId(id);
@@ -154,6 +167,27 @@ export function CaissesPanel({
             className="pl-9 dark:bg-[var(--crm-surface)]"
           />
         </div>
+        <div className="inline-flex shrink-0 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1">
+          {(
+            [
+              { value: true, label: "Avec objets", count: filledCount },
+              { value: false, label: "Toutes", count: caisses?.length ?? 0 },
+            ] as const
+          ).map((option) => (
+            <button
+              key={String(option.value)}
+              type="button"
+              onClick={() => setOnlyFilled(option.value)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
+                onlyFilled === option.value
+                  ? "bg-brand-500 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              {option.label} ({option.count})
+            </button>
+          ))}
+        </div>
         <Button variant="outline" onClick={() => setScanOpen(true)}>
           <ScanLine className="h-4 w-4 shrink-0" />
           <span className="whitespace-nowrap">Scanner une caisse</span>
@@ -184,11 +218,19 @@ export function CaissesPanel({
       {filtered.length === 0 ? (
         <EmptyState
           icon={<Box className="h-10 w-10" />}
-          title={caisses.length === 0 ? "Aucune caisse" : "Aucun résultat"}
+          title={
+            caisses.length === 0
+              ? "Aucune caisse"
+              : onlyFilled && filledCount === 0
+                ? "Aucune caisse remplie"
+                : "Aucun résultat"
+          }
           description={
             caisses.length === 0
               ? "Créez une première caisse : son QR code sera généré et prêt à imprimer."
-              : "Aucune caisse ne correspond à cette recherche."
+              : onlyFilled && filledCount === 0
+                ? "Aucune caisse ne contient d'objet pour le moment. Affichez « Toutes » pour voir les caisses vides."
+                : "Aucune caisse ne correspond à cette recherche."
           }
           action={
             canCreate && caisses.length === 0 ? (
