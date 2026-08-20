@@ -11,6 +11,7 @@ import type { Appearance } from "@stripe/stripe-js";
 import {
   ArrowLeft,
   BadgeCheck,
+  Clock,
   CreditCard,
   Loader2,
   Lock,
@@ -25,6 +26,9 @@ import { getStripe } from "../../lib/stripe";
 import { useCart } from "../../lib/useCart";
 
 const BRAND = "#f1104f";
+
+/** Délai laissé au client pour venir chercher son article (aligné sur l'email). */
+const PICKUP_DEADLINE_DAYS = 5;
 
 /** Panier transmis par la page précédente, pour afficher le récapitulatif. */
 export type CheckoutHandoff = {
@@ -271,6 +275,18 @@ function CheckoutLayout({ handoff }: { handoff: CheckoutHandoff }) {
           <form onSubmit={handleSubmit} className="space-y-6">
             <PaymentElement options={{ layout: "tabs" }} />
 
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <p className="text-sm leading-6 text-amber-900">
+                <strong>
+                  Vous avez {PICKUP_DEADLINE_DAYS} jours pour venir retirer votre
+                  article en boutique.
+                </strong>{" "}
+                Passé ce délai, votre commande est remboursée et l'article remis
+                en vente. Prévenez-nous si vous ne pouvez pas venir à temps.
+              </p>
+            </div>
+
             {error && (
               <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
@@ -300,7 +316,7 @@ function CheckoutLayout({ handoff }: { handoff: CheckoutHandoff }) {
               {[
                 { icon: ShieldCheck, text: "Paiement chiffré par Stripe" },
                 { icon: BadgeCheck, text: "Aucune donnée bancaire stockée" },
-                { icon: PackageOpen, text: "Retrait en boutique" },
+                { icon: PackageOpen, text: `Retrait sous ${PICKUP_DEADLINE_DAYS} jours` },
                 { icon: Lock, text: "3-D Secure pris en charge" },
               ].map(({ icon: Icon, text }) => (
                 <div key={text} className="flex items-center gap-2 text-xs text-zinc-500">

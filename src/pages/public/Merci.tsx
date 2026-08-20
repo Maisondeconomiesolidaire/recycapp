@@ -9,7 +9,7 @@ const messages: Record<string, string> = {
   article:
     "Votre réservation est enregistrée ! Nous vous contactons pour organiser le retrait.",
   achat:
-    "Votre paiement est validé et votre commande enregistrée. Un reçu vous a été envoyé par email ; nous vous contactons pour organiser le retrait.",
+    "Votre paiement est validé et votre commande enregistrée. Un email de confirmation vient de vous être envoyé. Vous avez 5 jours pour venir retirer votre article en boutique : passé ce délai, la commande est remboursée et l'article remis en vente.",
   article_payment:
     "Votre paiement a bien été validé. La commande a été enregistrée côté boutique.",
   velo:
