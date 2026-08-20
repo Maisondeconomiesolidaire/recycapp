@@ -31,6 +31,7 @@ import {
 import { lazy, Suspense } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
+import { errorMessage } from "../../lib/convexError";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 
@@ -351,9 +352,7 @@ export function Articles() {
         `Lien de paiement copié (${articleIds.length} article${articleIds.length > 1 ? "s" : ""}).`,
       );
     } catch (err) {
-      setPaymentLinkNotice(
-        err instanceof Error ? err.message : "Lien de paiement impossible.",
-      );
+      setPaymentLinkNotice(errorMessage(err, "Lien de paiement impossible."));
     }
     window.setTimeout(() => setPaymentLinkNotice(""), 4000);
   }

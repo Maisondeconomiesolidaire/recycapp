@@ -23,6 +23,7 @@ import { Field, Input } from "../../components/ui/Field";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { formatPrice } from "../../lib/format";
 import { getStripe, stripeEnabled } from "../../lib/stripe";
+import { errorMessage } from "../../lib/convexError";
 import { checkoutAppearance, BRAND, PICKUP_DEADLINE_DAYS } from "./checkoutTheme";
 
 type Contact = { firstName: string; lastName: string; email: string; phone: string };
@@ -122,7 +123,7 @@ function PaymentLinkForm({
         await confirmLink({ token, paymentIntentId: resumedPaymentIntent });
         navigate("/merci?type=achat", { replace: true });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Confirmation impossible.");
+        setError(errorMessage(err, "Confirmation du paiement impossible."));
         setResuming(false);
       }
     })();
@@ -149,7 +150,7 @@ function PaymentLinkForm({
       });
       setClientSecret(intent.clientSecret);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Paiement indisponible.");
+      setError(errorMessage(err, "Paiement indisponible."));
     } finally {
       setStarting(false);
     }
@@ -321,7 +322,7 @@ function LinkPaymentForm({
       });
       navigate("/merci?type=achat", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Une erreur est survenue.");
+      setError(errorMessage(err, "Une erreur est survenue pendant le paiement."));
     } finally {
       setSubmitting(false);
     }

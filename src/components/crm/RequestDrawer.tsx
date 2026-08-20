@@ -26,6 +26,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { errorMessage } from "../../lib/convexError";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Drawer } from "../ui/Drawer";
 import { Button } from "../ui/Button";
@@ -2704,7 +2705,7 @@ function ArticlePaymentSection({ request }: { request: RequestDoc }) {
       const result = await sendPaymentLink({ requestId: request._id });
       setLinkFeedback(`Lien de paiement envoyé à ${result.email}.`);
     } catch (err) {
-      setLinkError(err instanceof Error ? err.message : "Envoi impossible.");
+      setLinkError(errorMessage(err, "Envoi du lien impossible."));
     } finally {
       setSending(false);
     }

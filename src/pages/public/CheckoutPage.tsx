@@ -23,6 +23,7 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { formatPrice } from "../../lib/format";
 import { getStripe } from "../../lib/stripe";
 import { useCart } from "../../lib/useCart";
+import { errorMessage } from "../../lib/convexError";
 import { checkoutAppearance, BRAND, PICKUP_DEADLINE_DAYS } from "./checkoutTheme";
 
 /** Panier transmis par la page précédente, pour afficher le récapitulatif. */
@@ -87,9 +88,7 @@ function RedirectReturn({
         navigate("/merci?type=achat", { replace: true });
       } catch (err) {
         if (cancelled) return;
-        setError(
-          err instanceof Error ? err.message : "Confirmation du paiement impossible.",
-        );
+        setError(errorMessage(err, "Confirmation du paiement impossible."));
       }
     })();
     return () => {
@@ -189,11 +188,7 @@ function CheckoutLayout({ handoff }: { handoff: CheckoutHandoff }) {
       cart.clear();
       navigate("/merci?type=achat", { replace: true });
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Une erreur est survenue pendant le paiement.",
-      );
+      setError(errorMessage(err, "Une erreur est survenue pendant le paiement."));
     } finally {
       setSubmitting(false);
       setSettling(false);
