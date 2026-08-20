@@ -4,6 +4,7 @@ import { RequirePublicAccount } from "./components/public/RequirePublicAccount";
 import { Boutique } from "./pages/public/Boutique";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
+import { CheckoutPage } from "./pages/public/CheckoutPage";
 import { Favoris } from "./pages/public/Favoris";
 import { TourneeTracking } from "./pages/public/TourneeTracking";
 import { AerogommageForm } from "./pages/public/AerogommageForm";
@@ -65,6 +66,17 @@ export default function App() {
               description="Votre compte permet de suivre votre demande boutique, d'échanger avec notre équipe et de retrouver vos informations."
             >
               <CartPage />
+            </RequirePublicAccount>
+          }
+        />
+        <Route
+          path="/boutique/paiement"
+          element={
+            <RequirePublicAccount
+              title="Connectez-vous pour payer"
+              description="Votre compte permet de suivre votre commande et de retrouver vos justificatifs."
+            >
+              <CheckoutPage />
             </RequirePublicAccount>
           }
         />

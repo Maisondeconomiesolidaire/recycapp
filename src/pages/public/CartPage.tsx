@@ -1,12 +1,14 @@
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   ArrowLeft,
   ArrowRight,
+  CreditCard,
+  Loader2,
   Lock,
   PackageOpen,
   ShoppingBag,
@@ -22,6 +24,8 @@ import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import { CustomerSummary } from "../../components/public/CustomerSummary";
+import { stripeEnabled } from "../../lib/stripe";
+import type { CheckoutHandoff } from "./CheckoutPage";
 
 const BRAND = "#f1104f";
 
@@ -44,6 +48,10 @@ export function CartPage() {
   const cart = useCart();
   const [submitted, setSubmitted] = useState(false);
   const reserve = useMutation(api.requests.submitArticleCartReservation);
+  const createPaymentIntent = useAction(api.stripe.createPublicCartPaymentIntent);
+  const navigate = useNavigate();
+  const [payError, setPayError] = useState("");
+  const [preparingPayment, setPreparingPayment] = useState(false);
   const updateMyProfile = useMutation(api.users.updateMyProfile);
   const articles = useQuery(api.articles.getManyPublic, {
     ids: cart.ids as Id<"articles">[],
@@ -124,6 +132,44 @@ export function CartPage() {
     });
     cart.clear();
     setSubmitted(true);
+  }
+
+  /**
+   * Paiement en ligne : le montant est recalculé côté serveur à la création du
+   * PaymentIntent — le panier du navigateur ne sert qu'à désigner les articles.
+   */
+  async function onPayOnline(data: FormData) {
+    if (availableArticles.length === 0 || preparingPayment) return;
+    setPayError("");
+    setPreparingPayment(true);
+    try {
+      await persistProfile(data);
+      const intent = await createPaymentIntent({
+        articleIds: availableArticles.map((a) => a._id),
+        customer: data.customer,
+        comment: data.comment || undefined,
+      });
+      const handoff: CheckoutHandoff = {
+        draftId: intent.draftId,
+        clientSecret: intent.clientSecret,
+        total: intent.total,
+        items: availableArticles.map((article) => ({
+          id: article._id,
+          title: article.title,
+          price: article.price,
+          imageUrl: article.imageUrls[0],
+        })),
+      };
+      navigate("/boutique/paiement", { state: handoff });
+    } catch (err) {
+      setPayError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de démarrer le paiement en ligne.",
+      );
+    } finally {
+      setPreparingPayment(false);
+    }
   }
 
   return (
@@ -303,14 +349,54 @@ export function CartPage() {
               ))}
             </div>
 
+            {payError && (
+              <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {payError}
+              </p>
+            )}
+
             <div className="space-y-3">
+              {stripeEnabled && (
+                <button
+                  type="button"
+                  onClick={handleSubmit(onPayOnline)}
+                  disabled={
+                    preparingPayment ||
+                    isSubmitting ||
+                    availableArticles.length === 0 ||
+                    !customerProfileLoaded
+                  }
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-[0_8px_28px_rgba(241,16,79,0.32)] transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
+                  style={{ backgroundColor: BRAND }}
+                >
+                  {preparingPayment ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Préparation du paiement…
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4" />
+                      Payer en ligne {formatPrice(total)}
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 type="submit"
-                disabled={isSubmitting || availableArticles.length === 0 || !customerProfileLoaded}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-[0_8px_28px_rgba(241,16,79,0.32)] transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
-                style={{ backgroundColor: BRAND }}
+                disabled={isSubmitting || preparingPayment || availableArticles.length === 0 || !customerProfileLoaded}
+                className={
+                  stripeEnabled
+                    ? "flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white py-4 text-sm font-bold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-60"
+                    : "flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-[0_8px_28px_rgba(241,16,79,0.32)] transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
+                }
+                style={stripeEnabled ? undefined : { backgroundColor: BRAND }}
               >
-                {isSubmitting ? "Envoi en cours…" : "Réserver mes articles"}
+                {isSubmitting
+                  ? "Envoi en cours…"
+                  : stripeEnabled
+                    ? "Réserver et payer en boutique"
+                    : "Réserver mes articles"}
                 {!isSubmitting && <ArrowRight className="h-4 w-4" />}
               </button>
             </div>

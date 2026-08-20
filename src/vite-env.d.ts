@@ -4,6 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_CONVEX_URL: string;
   readonly VITE_CLERK_PUBLISHABLE_KEY: string;
   readonly VITE_MAPBOX_ACCESS_TOKEN?: string;
+  readonly VITE_STRIPE_PUBLISHABLE_KEY?: string;
 }
 
 interface ImportMeta {
