@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Loader2, Mail, Send } from "lucide-react";
 import { api } from "../../convex/_generated/api";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 import type { Id } from "../../convex/_generated/dataModel";
 
 type ViewerRole = "client" | "staff";
@@ -32,6 +33,7 @@ export function MessageThread({
   const markRead = useMutation(api.messages.markRead);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Conversation pour laquelle on s'est déjà calé en bas : sert à distinguer
   // la première ouverture (saut instantané) d'un nouveau message (défilement
@@ -71,9 +73,10 @@ export function MessageThread({
     pinnedFor.current = requestId;
   }, [messages?.length, requestId]);
 
-  async function handleSend() {
+  async function sendNow() {
     const trimmed = body.trim();
     if (!trimmed || sending) return;
+    setConfirmOpen(false);
     setSending(true);
     setBody("");
     try {
@@ -83,6 +86,21 @@ export function MessageThread({
     } finally {
       setSending(false);
     }
+  }
+
+  /**
+   * Côté CRM, chaque message part en email au client : on demande confirmation
+   * avec l'aperçu du texte plutôt que de l'envoyer au premier clic. Côté
+   * portail client, l'envoi reste direct (il ne déclenche pas d'email).
+   */
+  function handleSend() {
+    const trimmed = body.trim();
+    if (!trimmed || sending) return;
+    if (viewerRole === "staff") {
+      setConfirmOpen(true);
+      return;
+    }
+    void sendNow();
   }
 
   const surface = dark
@@ -201,13 +219,19 @@ export function MessageThread({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            // Côté CRM, « Entrée » passe à la ligne : un envoi accidentel
+            // expédierait un email au client.
+            if (viewerRole !== "staff" && e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              void handleSend();
+              handleSend();
             }
           }}
           rows={1}
-          placeholder="Écrivez votre message…"
+          placeholder={
+            viewerRole === "staff"
+              ? "Écrivez votre message… (Entrée pour aller à la ligne)"
+              : "Écrivez votre message…"
+          }
           className={`max-h-32 min-h-[44px] flex-1 resize-none rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 ${
             dark
               ? "border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-zinc-100 placeholder-zinc-500"
@@ -224,6 +248,31 @@ export function MessageThread({
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => void sendNow()}
+        title="Envoyer ce message au client ?"
+        tone="primary"
+        confirmLabel="Oui, envoyer"
+        cancelLabel="Non"
+        description={
+          <div className="space-y-3">
+            <p className="flex items-start gap-2 text-zinc-300">
+              <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Ce message sera envoyé par email au client. Vérifiez qu'il est
+                complet : chaque envoi déclenche un email séparé.
+              </span>
+            </p>
+            <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2.5 text-sm text-zinc-100">
+              {body.trim()}
+            </div>
+            <p className="text-zinc-400">Êtes-vous sûr(e) de vouloir l'envoyer ?</p>
+          </div>
+        }
+      />
     </div>
   );
 }
