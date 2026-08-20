@@ -5,6 +5,7 @@ import { Boutique } from "./pages/public/Boutique";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
 import { CheckoutPage } from "./pages/public/CheckoutPage";
+import { PaymentLinkPage } from "./pages/public/PaymentLinkPage";
 import { Favoris } from "./pages/public/Favoris";
 import { TourneeTracking } from "./pages/public/TourneeTracking";
 import { AerogommageForm } from "./pages/public/AerogommageForm";
@@ -80,6 +81,8 @@ export default function App() {
             </RequirePublicAccount>
           }
         />
+        {/* Lien de paiement envoyé par le CRM : accessible sans compte. */}
+        <Route path="/paiement/:token" element={<PaymentLinkPage />} />
         <Route path="/favoris" element={<Favoris />} />
         <Route path="/suivi/:token" element={<TourneeTracking />} />
         <Route path="/boutique/categorie/:slug" element={<Boutique />} />

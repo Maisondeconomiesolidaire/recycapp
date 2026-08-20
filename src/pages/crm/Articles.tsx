@@ -26,6 +26,7 @@ import {
   Camera,
   Play,
   MoreHorizontal,
+  Link as LinkIcon,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -213,6 +214,8 @@ export function Articles() {
   const [selectedCaisse, setSelectedCaisse] = useState("");
   const articles = useQuery(api.articles.listAll, {});
   const remove = useMutation(api.articles.remove);
+  const createPaymentLink = useMutation(api.paymentLinks.create);
+  const [paymentLinkNotice, setPaymentLinkNotice] = useState("");
   const publishLot = useMutation(api.articles.publishLot);
   const toggleProductOfDay = useMutation(api.articles.toggleProductOfDay);
   const analyzePotentialLots = useAction(api.ai.analyzePotentialLots);
@@ -332,6 +335,27 @@ export function Articles() {
     const target = selectedArticles.length > 0 ? selectedArticles : filteredArticles ?? [];
     if (target.length === 0) return;
     setPrintRequest(target);
+  }
+
+  /**
+   * Génère un lien de paiement pour les articles donnés et le copie dans le
+   * presse-papier : le lien s'envoie ensuite par SMS, WhatsApp ou email.
+   */
+  async function copyPaymentLink(articleIds: Id<"articles">[]) {
+    if (articleIds.length === 0) return;
+    try {
+      const { token } = await createPaymentLink({ articleIds });
+      const url = `${window.location.origin}/paiement/${token}`;
+      await navigator.clipboard.writeText(url);
+      setPaymentLinkNotice(
+        `Lien de paiement copié (${articleIds.length} article${articleIds.length > 1 ? "s" : ""}).`,
+      );
+    } catch (err) {
+      setPaymentLinkNotice(
+        err instanceof Error ? err.message : "Lien de paiement impossible.",
+      );
+    }
+    window.setTimeout(() => setPaymentLinkNotice(""), 4000);
   }
 
   function changeStockView(next: StockView) {
@@ -672,6 +696,15 @@ export function Articles() {
                       Imprimer les QR codes
                     </Button>
                   )}
+                  {canUpdate && (
+                    <Button
+                      variant="outline"
+                      onClick={() => copyPaymentLink([...selectedIds] as Id<"articles">[])}
+                    >
+                      <LinkIcon className="h-4 w-4" />
+                      Lien de paiement
+                    </Button>
+                  )}
                   {canAnalyze && (
                     <Button onClick={() => setRunOpen(true)}>
                       <Play className="h-4 w-4" />
@@ -723,6 +756,7 @@ export function Articles() {
                       onEdit={() => openEdit(a)}
                       onDelete={() => setDeleting(a)}
                       onPrint={() => setPrintRequest([a])}
+                      onPaymentLink={() => void copyPaymentLink([a._id])}
                       onToggleProductOfDay={() => toggleProductOfDay({ articleId: a._id })}
                     />
                   ))}
@@ -909,6 +943,12 @@ export function Articles() {
       />
 
       {/* Impression des QR codes : QR + référence, rien d'autre. */}
+      {paymentLinkNotice && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-2.5 text-sm text-zinc-100 shadow-xl">
+          {paymentLinkNotice}
+        </div>
+      )}
+
       {printRequest && (
         <PrintLabels
           items={printRequest.map((article) => ({
@@ -1085,6 +1125,7 @@ function ArticleGridCard({
   onEdit,
   onDelete,
   onPrint,
+  onPaymentLink,
   onToggleProductOfDay,
 }: {
   article: ArticleDoc;
@@ -1097,6 +1138,7 @@ function ArticleGridCard({
   onEdit: () => void;
   onDelete: () => void;
   onPrint: () => void;
+  onPaymentLink: () => void;
   onToggleProductOfDay: () => void;
 }) {
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -1256,6 +1298,15 @@ function ArticleGridCard({
               title="Imprimer l'étiquette"
             >
               <Printer className="h-4 w-4" />
+            </button>
+          )}
+          {canUpdate && article.status !== "vendu" && (
+            <button
+              onClick={onPaymentLink}
+              className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
+              title="Copier un lien de paiement pour cet article"
+            >
+              <LinkIcon className="h-4 w-4" />
             </button>
           )}
           {canUpdate && (

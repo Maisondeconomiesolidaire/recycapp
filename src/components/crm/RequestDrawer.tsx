@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/clerk-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -22,6 +22,8 @@ import {
   Trash2,
   Eye,
   Download,
+  Send,
+  Link as LinkIcon,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -2684,6 +2686,40 @@ function RequestDetails({
 
 function ArticlePaymentSection({ request }: { request: RequestDoc }) {
   const payment = request.payment;
+  const sendPaymentLink = useAction(api.paymentLinks.sendByEmail);
+  const links = useQuery(api.paymentLinks.listForRequest, { requestId: request._id });
+  const [sending, setSending] = useState(false);
+  const [linkFeedback, setLinkFeedback] = useState("");
+  const [linkError, setLinkError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const pendingLink = (links ?? []).find((link) => link.status === "pending");
+  const alreadyPaid = payment?.status === "paid";
+
+  async function handleSend() {
+    setSending(true);
+    setLinkError("");
+    setLinkFeedback("");
+    try {
+      const result = await sendPaymentLink({ requestId: request._id });
+      setLinkFeedback(`Lien de paiement envoyé à ${result.email}.`);
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : "Envoi impossible.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleCopy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setLinkError("Copie impossible : sélectionnez le lien manuellement.");
+    }
+  }
+
   if (!payment) return null;
 
   const methodLabel =
@@ -2723,6 +2759,46 @@ function ArticlePaymentSection({ request }: { request: RequestDoc }) {
             </>
           )}
         </div>
+
+        {/* Lien de paiement : le client règle en ligne depuis une page dédiée. */}
+        {!alreadyPaid && (
+          <div className="mt-4 border-t border-[var(--crm-border)] pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={handleSend} disabled={sending}>
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                Envoyer le lien de paiement
+              </Button>
+              {pendingLink && (
+                <Button variant="ghost" onClick={() => handleCopy(pendingLink.url)}>
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <LinkIcon className="h-4 w-4" />
+                  )}
+                  {copied ? "Lien copié" : "Copier le lien"}
+                </Button>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              Le client reçoit un email avec un lien vers une page de paiement
+              sécurisée. Une fois réglé, la demande passe automatiquement en
+              « payée » et les articles en « vendu ».
+            </p>
+            {pendingLink?.sentAt && (
+              <p className="mt-1 text-xs text-zinc-500">
+                Dernier envoi : {formatDateTime(pendingLink.sentAt)}
+              </p>
+            )}
+            {linkFeedback && (
+              <p className="mt-2 text-xs text-emerald-400">{linkFeedback}</p>
+            )}
+            {linkError && <p className="mt-2 text-xs text-red-400">{linkError}</p>}
+          </div>
+        )}
       </div>
     </section>
   );
