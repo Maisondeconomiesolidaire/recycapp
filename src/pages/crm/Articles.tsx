@@ -242,6 +242,18 @@ export function Articles() {
     [caisses],
   );
 
+  // Le filtre ne propose que les caisses qui contiennent encore des objets (les
+  // articles vendus ont quitté la caisse), avec leur nombre. La caisse
+  // sélectionnée reste listée même si elle vient de se vider, sinon le filtre
+  // resterait actif sur une entrée invisible.
+  const filledCaisses = useMemo(
+    () =>
+      (caisses ?? []).filter(
+        (caisse) => caisse.counts.remaining > 0 || caisse._id === selectedCaisse,
+      ),
+    [caisses, selectedCaisse],
+  );
+
   function caisseLabel(article: ArticleDoc): string {
     const caisse = article.caisseId ? caisseById.get(article.caisseId) : undefined;
     if (caisse) return caisse.label ? `${caisse.code} — ${caisse.label}` : caisse.code;
@@ -590,10 +602,10 @@ export function Articles() {
                   className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-sm text-zinc-100 outline-none transition focus:border-brand-500"
                 >
                   <option value="">Toutes les caisses</option>
-                  {(caisses ?? []).map((caisse) => (
+                  {filledCaisses.map((caisse) => (
                     <option key={caisse._id} value={caisse._id}>
                       {caisse.code}
-                      {caisse.label ? ` — ${caisse.label}` : ""}
+                      {caisse.label ? ` — ${caisse.label}` : ""} ({caisse.counts.remaining})
                     </option>
                   ))}
                 </select>
