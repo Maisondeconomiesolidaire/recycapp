@@ -30,6 +30,7 @@ import { Dashboard } from "./pages/crm/Dashboard";
 import { Demandes } from "./pages/crm/Demandes";
 import { Calendrier } from "./pages/crm/Calendrier";
 import { Articles } from "./pages/crm/Articles";
+import { ArticleFiche } from "./pages/crm/ArticleFiche";
 import { Clients } from "./pages/crm/Clients";
 import { Equipe } from "./pages/crm/Equipe";
 import { AgentsPolyvalents } from "./pages/crm/AgentsPolyvalents";
@@ -151,6 +152,7 @@ export default function App() {
         <Route path="calendrier" element={<RequireCrmPermission page="calendrier"><Calendrier /></RequireCrmPermission>} />
         <Route path="clients" element={<RequireCrmPermission page="clients"><Clients /></RequireCrmPermission>} />
         <Route path="articles" element={<RequireCrmPermission page="articles"><Articles /></RequireCrmPermission>} />
+        <Route path="articles/:id" element={<RequireCrmPermission page="articles"><ArticleFiche /></RequireCrmPermission>} />
         <Route path="arrivages" element={<RequireCrmPermission page="arrivages"><Arrivages /></RequireCrmPermission>} />
         <Route path="caisse" element={<RequireCrmPermission page="caisse"><Caisse /></RequireCrmPermission>} />
         <Route path="ateliers" element={<RequireCrmPermission page="ateliers"><Ateliers /></RequireCrmPermission>} />

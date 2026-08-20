@@ -28,7 +28,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
@@ -40,7 +40,6 @@ import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { ArticleForm } from "../../components/crm/ArticleForm";
 import { formatPrice } from "../../lib/format";
 import { ARTICLE_CATEGORIES, ARTICLE_STATUS_LABELS } from "../../lib/constants";
 import { useEffect, useRef } from "react";
@@ -51,6 +50,7 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { PrintLabels } from "../../components/crm/PrintLabels";
 import { CaissesPanel } from "../../components/crm/CaissesPanel";
+import { QrCodePoolModal } from "../../components/crm/QrCodePoolModal";
 import { articleLabelReference, isCaisseCode, normalizeScanCode } from "../../lib/labels";
 import { PhotoQuickAdd } from "../../components/crm/PhotoQuickAdd";
 import { AiRunModal } from "../../components/crm/AiRunModal";
@@ -196,6 +196,7 @@ function normalizeDigits(value: string) {
 
 export function Articles() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const access = useCrmAccess();
   const canCreate = canAccess(access, "articles", "create");
   const canUpdate = canAccess(access, "articles", "update");
@@ -216,8 +217,7 @@ export function Articles() {
   const toggleProductOfDay = useMutation(api.articles.toggleProductOfDay);
   const analyzePotentialLots = useAction(api.ai.analyzePotentialLots);
   const generateLotDescription = useAction(api.ai.generateLotDescription);
-  const [editing, setEditing] = useState<ArticleDoc | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
+
   const [deleting, setDeleting] = useState<ArticleDoc | null>(null);
   const [aiGroups, setAiGroups] = useState<AiLotGroup[] | null>(null);
   const [analyzingLots, setAnalyzingLots] = useState(false);
@@ -228,6 +228,8 @@ export function Articles() {
   const [scanOpen, setScanOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
+  const [qrPoolOpen, setQrPoolOpen] = useState(false);
+  const freeQrCount = useQuery(api.articleQrCodes.freeCount, {});
   // Sélection multiple du stock : cible des impressions QR et des runs IA.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Note: barcode scanner (external device) is handled globally by GlobalScanner in CrmLayout
@@ -325,13 +327,13 @@ export function Articles() {
     window.localStorage.setItem(STOCK_VIEW_STORAGE_KEY, next);
   }
 
+  // La fiche article est une page à part entière (/crm/articles/:id) : elle est
+  // trop longue pour une popup et l'URL devient partageable.
   function openNew() {
-    setEditing(null);
-    setFormOpen(true);
+    navigate("/crm/articles/nouveau");
   }
   function openEdit(a: ArticleDoc) {
-    setEditing(a);
-    setFormOpen(true);
+    navigate(`/crm/articles/${a._id}`);
   }
 
   function handleScannedCode(code: string) {
@@ -392,6 +394,21 @@ export function Articles() {
             title: "Ajouter des articles à partir de leurs photos",
             icon: <Camera className="h-4 w-4 shrink-0" />,
             onClick: () => setQuickAddOpen(true),
+          },
+        ]
+      : []),
+    ...(canCreate
+      ? [
+          {
+            key: "qrpool",
+            label:
+              freeQrCount !== undefined && freeQrCount > 0
+                ? `Nouveau QR code (${freeQrCount})`
+                : "Nouveau QR code",
+            title:
+              "Générer des QR codes vierges à imprimer et à coller avant de créer les fiches",
+            icon: <QrCodeIcon className="h-4 w-4 shrink-0" />,
+            onClick: () => setQrPoolOpen(true),
           },
         ]
       : []),
@@ -862,15 +879,6 @@ export function Articles() {
         )}
       </div>
 
-      {formOpen && (
-        <ArticleForm
-          key={editing?._id ?? "new"}
-          article={editing}
-          open={formOpen}
-          onClose={() => setFormOpen(false)}
-        />
-      )}
-
       <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
@@ -908,6 +916,13 @@ export function Articles() {
           const created = (articles ?? []).filter((a) => ids.includes(a._id));
           if (created.length > 0) setPrintRequest(created);
         }}
+      />
+
+      {/* Réserve de QR codes vierges, imprimés avant la création des fiches */}
+      <QrCodePoolModal
+        open={qrPoolOpen}
+        onClose={() => setQrPoolOpen(false)}
+        canPrint={canPrint}
       />
 
       {/* Run IA groupé : génération d'annonce + détourage */}

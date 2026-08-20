@@ -14,7 +14,8 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
-import { Field, Select } from "../ui/Field";
+import { Field } from "../ui/Field";
+import { SearchableSelect } from "../ui/SearchableSelect";
 import { QrCode } from "../ui/QrCode";
 import { useUpload } from "../../lib/useUpload";
 import { normalizeScanCode } from "../../lib/labels";
@@ -23,14 +24,24 @@ const CameraScanner = lazy(() =>
   import("../ui/CameraScanner").then((m) => ({ default: m.CameraScanner })),
 );
 
-type PendingPhoto = { file: File; previewUrl: string };
+type PendingPhoto = {
+  file: File;
+  previewUrl: string;
+  /** QR code déjà collé sur l'objet ; vide = référence tirée à la création. */
+  qrReference?: string;
+};
 type CreatedArticle = { id: Id<"articles">; internalReference: string };
 
 /**
- * Ajout rapide au stock : on ne saisit QUE des photos, une par article. Chaque
- * photo crée un article brouillon avec sa référence interne, donc son QR code,
- * imprimable immédiatement. L'annonce et le détourage arrivent ensuite via un
- * « run » IA groupé depuis la liste des articles.
+ * Ajout rapide au stock : on ne saisit QUE des photos, une par article.
+ *
+ * Deux façons de travailler cohabitent :
+ *   - on scanne le QR code DÉJÀ collé sur l'objet (étiquettes imprimées à
+ *     l'avance depuis « Nouveau QR code ») — l'objet est étiqueté avant même
+ *     d'exister en base ;
+ *   - ou on laisse une référence se générer, et on imprime l'étiquette après.
+ *
+ * L'annonce et le détourage arrivent ensuite via un « run » IA groupé.
  */
 export function PhotoQuickAdd({
   open,
@@ -50,6 +61,8 @@ export function PhotoQuickAdd({
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [caisseId, setCaisseId] = useState<Id<"caisses"> | "">("");
   const [scanOpen, setScanOpen] = useState(false);
+  /** Index de la photo dont on scanne le QR code, `null` si aucun scan en cours. */
+  const [qrScanIndex, setQrScanIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedArticle[] | null>(null);
@@ -66,6 +79,12 @@ export function PhotoQuickAdd({
     ]);
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
+  }
+
+  function setPhotoQr(index: number, reference: string | undefined) {
+    setPhotos((prev) =>
+      prev.map((photo, i) => (i === index ? { ...photo, qrReference: reference } : photo)),
+    );
   }
 
   function removePhoto(index: number) {
@@ -99,6 +118,7 @@ export function PhotoQuickAdd({
       const result = await createDrafts({
         storageIds,
         caisseId: caisseId || undefined,
+        qrReferences: photos.map((photo) => photo.qrReference ?? ""),
       });
       photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
       setPhotos([]);
@@ -165,9 +185,9 @@ export function PhotoQuickAdd({
     <Modal open={open} onClose={closeAll} title="Ajout rapide" className="sm:max-w-2xl">
       <div className="space-y-5 p-5">
         <p className="text-sm text-zinc-400">
-          Une photo = un article. Les articles sont créés en brouillon avec leur
-          référence et leur QR code ; le titre, le prix et la description seront
-          générés plus tard par un run IA.
+          Une photo = un article. Scannez le QR code déjà collé sur l'objet, ou
+          laissez vide pour qu'une référence soit générée. Le titre, le prix et
+          la description arrivent plus tard, via un run IA.
         </p>
 
         <input
@@ -200,25 +220,47 @@ export function PhotoQuickAdd({
         </div>
 
         {photos.length > 0 ? (
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {photos.map((photo, index) => (
               <div
                 key={photo.previewUrl}
-                className="group relative aspect-square overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]"
+                className="group overflow-hidden rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]"
               >
-                <img
-                  src={photo.previewUrl}
-                  alt={`Photo ${index + 1}`}
-                  className="h-full w-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => removePhoto(index)}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 transition group-hover:opacity-100"
-                  aria-label="Retirer la photo"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <div className="relative aspect-square">
+                  <img
+                    src={photo.previewUrl}
+                    alt={`Photo ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(index)}
+                    className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 transition group-hover:opacity-100"
+                    aria-label="Retirer la photo"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {photo.qrReference ? (
+                  <button
+                    type="button"
+                    onClick={() => setPhotoQr(index, undefined)}
+                    title="Retirer ce QR code"
+                    className="flex w-full items-center justify-center gap-1.5 px-2 py-2 font-mono text-xs font-semibold text-emerald-300 transition hover:bg-[var(--crm-surface-3)]"
+                  >
+                    <QrCodeIcon className="h-3.5 w-3.5 shrink-0" />
+                    {photo.qrReference}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setQrScanIndex(index)}
+                    className="flex w-full items-center justify-center gap-1.5 px-2 py-2 text-xs text-zinc-400 transition hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
+                  >
+                    <ScanLine className="h-3.5 w-3.5 shrink-0" />
+                    Scanner le QR code
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -231,22 +273,22 @@ export function PhotoQuickAdd({
 
         <Field
           label="Caisse"
-          hint="Optionnel · scannez le QR code de la caisse, appliqué à tous les articles créés"
+          hint="Optionnel · tapez le numéro ou scannez le QR code, appliqué à tous les articles créés"
         >
           <div className="flex gap-2">
-            <Select
-              value={caisseId}
-              onChange={(e) => setCaisseId(e.target.value as Id<"caisses"> | "")}
+            <SearchableSelect
               className="flex-1"
-            >
-              <option value="">— Aucune caisse —</option>
-              {(caisses ?? []).map((caisse) => (
-                <option key={caisse._id} value={caisse._id}>
-                  {caisse.code}
-                  {caisse.label ? ` — ${caisse.label}` : ""}
-                </option>
-              ))}
-            </Select>
+              value={caisseId}
+              onChange={(next) => setCaisseId(next as Id<"caisses"> | "")}
+              options={(caisses ?? []).map((caisse) => ({
+                value: caisse._id,
+                label: caisse.label ? `${caisse.code} — ${caisse.label}` : caisse.code,
+                hint: caisse.zone,
+              }))}
+              placeholder="— Aucune caisse —"
+              searchPlaceholder="Numéro ou nom de caisse…"
+              emptyLabel="Aucune caisse ne correspond."
+            />
             <Button
               variant="outline"
               onClick={() => setScanOpen(true)}
@@ -276,6 +318,34 @@ export function PhotoQuickAdd({
           </Button>
         </div>
       </div>
+
+      {/* Scan du QR code déjà collé sur l'objet, pour une photo donnée. */}
+      {qrScanIndex !== null && (
+        <div className="fixed inset-0 z-[300] bg-black">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+              </div>
+            }
+          >
+            <CameraScanner
+              onDetected={(code) => {
+                const index = qrScanIndex;
+                setQrScanIndex(null);
+                const digits = code.replace(/\D/g, "").slice(0, 6);
+                if (digits.length === 6) {
+                  setPhotoQr(index, digits);
+                  setError("");
+                } else {
+                  setError(`« ${code} » n'est pas un QR code d'article.`);
+                }
+              }}
+              onClose={() => setQrScanIndex(null)}
+            />
+          </Suspense>
+        </div>
+      )}
 
       {/* Scan du QR code de la caisse de rangement. */}
       {scanOpen && (
