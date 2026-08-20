@@ -63,6 +63,7 @@ import {
   DEPOT_SITE_LABELS,
   DEPOT_VEHICLE_LABELS,
 } from "../../lib/constants";
+import { collecteCategoryLabel } from "../public/CollecteCategoryPicker";
 import { STEP } from "../../../convex/processes";
 import { formatDateTime, formatPrice } from "../../lib/format";
 import { cn } from "../../lib/cn";
@@ -1216,7 +1217,7 @@ function CollecteCategoryPhotos({ request }: { request: RequestDoc }) {
                     <img src={cat.image} alt="" className="h-6 w-6 object-contain" />
                   )}
                   <span className="text-xs font-medium text-zinc-400">
-                    {cat?.label ?? entry.category}
+                    {collecteCategoryLabel(entry.category)}
                   </span>
                 </div>
                 <PhotoGrid
@@ -2426,12 +2427,13 @@ function RequestDetails({
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
                 {c.objectCategories!.map((key) => {
                   const cat = COLLECTE_CATEGORY_BY_KEY[key];
+                  const label = collecteCategoryLabel(key);
                   return cat?.image ? (
                     <img
                       key={key}
                       src={cat.image}
-                      alt={cat?.label ?? key}
-                      title={cat?.label ?? key}
+                      alt={label}
+                      title={label}
                       className="aspect-square w-full rounded-2xl object-cover"
                     />
                   ) : (
@@ -2439,7 +2441,7 @@ function RequestDetails({
                       key={key}
                       className="flex aspect-square items-center justify-center rounded-2xl bg-[var(--crm-surface-2)] p-2 text-center text-[11px] leading-tight text-zinc-300"
                     >
-                      {cat?.label ?? key}
+                      {label}
                     </div>
                   );
                 })}

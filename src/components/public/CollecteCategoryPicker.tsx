@@ -1,9 +1,29 @@
 import { useRef, useState } from "react";
-import { Check, ImagePlus, Loader2, X } from "lucide-react";
+import { Check, ImagePlus, Loader2, Plus, X } from "lucide-react";
 import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
-import { COLLECTE_CATEGORIES } from "../../lib/constants";
+import { COLLECTE_CATEGORIES, COLLECTE_CATEGORY_BY_KEY } from "../../lib/constants";
 import type { Id } from "../../../convex/_generated/dataModel";
+
+/**
+ * Catégorie fourre-tout : elle n'a pas de pictogramme et ne fait pas partie du
+ * référentiel `COLLECTE_CATEGORIES` (utilisé ailleurs pour les arrivages), mais
+ * elle permet de photographier un objet qui n'entre dans aucune case.
+ */
+export const OTHER_CATEGORY_KEY = "autre";
+
+type PickerCategory = { key: string; label: string; image: string | null };
+
+const PICKER_CATEGORIES: PickerCategory[] = [
+  ...COLLECTE_CATEGORIES,
+  { key: OTHER_CATEGORY_KEY, label: "Autre", image: null },
+];
+
+/** Libellé lisible d'une catégorie de collecte, « Autre » comprise. */
+export function collecteCategoryLabel(key: string) {
+  if (key === OTHER_CATEGORY_KEY) return "Autre";
+  return COLLECTE_CATEGORY_BY_KEY[key]?.label ?? key;
+}
 
 export type CategoryPhoto = { storageId: Id<"_storage">; previewUrl: string };
 export type CategoryPhotoMap = Record<string, CategoryPhoto[]>;
@@ -69,7 +89,7 @@ export function CollecteCategoryPicker({
         onChange={(e) => handleFiles(e.target.files)}
       />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {COLLECTE_CATEGORIES.map((cat) => {
+        {PICKER_CATEGORIES.map((cat) => {
           const photos = value[cat.key] ?? [];
           const checked = photos.length > 0;
           const uploading = uploadingCategory === cat.key;
@@ -87,17 +107,34 @@ export function CollecteCategoryPicker({
                     <Check className="h-3.5 w-3.5" strokeWidth={3} />
                   </span>
                 )}
-                <img
-                  src={cat.image}
-                  alt={cat.label}
-                  loading="lazy"
-                  className={cn(
-                    "aspect-square w-full rounded-2xl object-cover transition",
-                    checked
-                      ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-transparent"
-                      : "hover:opacity-90",
-                  )}
-                />
+                {cat.image ? (
+                  <img
+                    src={cat.image}
+                    alt={cat.label}
+                    loading="lazy"
+                    className={cn(
+                      "aspect-square w-full rounded-2xl object-cover transition",
+                      checked
+                        ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-transparent"
+                        : "hover:opacity-90",
+                    )}
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed transition",
+                      checked
+                        ? "border-brand-500 ring-2 ring-brand-500 ring-offset-2 ring-offset-transparent"
+                        : dark
+                          ? "border-[var(--crm-border-strong)] hover:border-brand-400"
+                          : "border-zinc-300 hover:border-brand-400",
+                      dark ? "text-zinc-300" : "text-zinc-500",
+                    )}
+                  >
+                    <Plus className="h-7 w-7" />
+                    <span className="text-sm font-semibold">{cat.label}</span>
+                  </div>
+                )}
               </button>
 
               {(photos.length > 0 || uploading) && (
@@ -144,7 +181,7 @@ export function CollecteCategoryPicker({
 
 /** Construit le tableau `categoryPhotos` (pour la mutation) à partir de la map. */
 export function buildCategoryPhotosPayload(value: CategoryPhotoMap) {
-  return COLLECTE_CATEGORIES.map((c) => c.key)
+  return PICKER_CATEGORIES.map((c) => c.key)
     .filter((key) => (value[key]?.length ?? 0) > 0)
     .map((key) => ({
       category: key,
@@ -154,5 +191,5 @@ export function buildCategoryPhotosPayload(value: CategoryPhotoMap) {
 
 /** Clés des catégories ayant au moins une photo. */
 export function selectedCategoryKeys(value: CategoryPhotoMap) {
-  return COLLECTE_CATEGORIES.map((c) => c.key).filter((key) => (value[key]?.length ?? 0) > 0);
+  return PICKER_CATEGORIES.map((c) => c.key).filter((key) => (value[key]?.length ?? 0) > 0);
 }

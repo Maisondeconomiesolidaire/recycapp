@@ -13,6 +13,7 @@ import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { useProfileAutofill } from "../../components/public/useProfileAutofill";
 import {
   CollecteCategoryPicker,
+  OTHER_CATEGORY_KEY,
   buildCategoryPhotosPayload,
   selectedCategoryKeys,
   type CategoryPhotoMap,
@@ -66,7 +67,19 @@ const schema = z
     message:
       "Ajoutez au moins une photo des objets à collecter : touchez une catégorie pour y ajouter vos photos.",
     path: ["objectCategories"],
-  });
+  })
+  // Décrire un objet « autre » sans le montrer ne nous dit rien de ce qu'il y a
+  // à charger : la photo est exigée sur la catégorie « Autre » elle-même.
+  .refine(
+    (d) =>
+      !d.grosObjetsAutre?.trim() ||
+      (d.objectCategories ?? []).includes(OTHER_CATEGORY_KEY),
+    {
+      message:
+        "Ajoutez au moins une photo de cet objet en touchant la catégorie « Autre » ci-dessus.",
+      path: ["grosObjetsAutre"],
+    },
+  );
 type FormData = z.infer<typeof schema>;
 
 export function CollecteForm() {
@@ -266,7 +279,11 @@ export function CollecteForm() {
 
           <CollecteCategoryPicker value={categoryPhotos} onChange={handleCategoryChange} />
 
-          <Field label="Autre catégorie (précisez)">
+          <Field
+            label="Autre catégorie (précisez)"
+            error={errors.grosObjetsAutre?.message}
+            hint="Si vous remplissez ce champ, ajoutez aussi au moins une photo via la tuile « Autre » ci-dessus."
+          >
             <Input
               {...register("grosObjetsAutre")}
               placeholder="Ex : instruments de musique, matériel médical…"
