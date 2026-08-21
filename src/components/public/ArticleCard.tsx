@@ -10,7 +10,16 @@ const BRAND = "#f1104f";
 const ORANGE = "#f97316";
 const ORANGE_DARK = "#ea6a0c";
 
-/** Message affiché en vitrine, où l'on n'achète pas soi-même. */
+/**
+ * Messages de la vitrine, où l'on n'achète pas soi-même.
+ *
+ * Deux formulations : en haut du catalogue aucun article n'est désigné, donc
+ * « un produit » ; sur une fiche, l'article est sous les yeux du client, donc
+ * « ce produit ».
+ */
+export const KIOSK_CALL_MESSAGE_GENERAL =
+  "Intéressé par un produit ? Appelez un membre de l'équipe pour effectuer votre achat.";
+
 export const KIOSK_CALL_MESSAGE =
   "Intéressé par ce produit ? Appelez un membre de l'équipe pour effectuer votre achat.";
 

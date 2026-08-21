@@ -4,9 +4,10 @@ import { PackageOpen, Search, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { ARTICLE_SITES } from "../../lib/constants";
-import type { Site } from "../../lib/constants";
-import { ArticleCard, KIOSK_CALL_MESSAGE } from "../../components/public/ArticleCard";
+import {
+  ArticleCard,
+  KIOSK_CALL_MESSAGE_GENERAL,
+} from "../../components/public/ArticleCard";
 
 const BRAND = "#f1104f";
 
@@ -22,12 +23,9 @@ const BRAND = "#f1104f";
  * vitrines ne divergent jamais.
  */
 export function Kiosk() {
-  const [site, setSite] = useState<Site | "all">("all");
   const [search, setSearch] = useState("");
 
-  const articles = useQuery(api.articles.listPublic, {
-    site: site === "all" ? undefined : site,
-  });
+  const articles = useQuery(api.articles.listPublic, {});
 
   const filteredArticles = useMemo(() => {
     if (!articles) return articles;
@@ -63,7 +61,7 @@ export function Kiosk() {
           className="rounded-[28px] px-6 py-5 text-center text-base font-bold text-white shadow-[0_18px_45px_rgba(241,16,79,0.24)] sm:text-lg"
           style={{ backgroundColor: BRAND }}
         >
-          {KIOSK_CALL_MESSAGE}
+          {KIOSK_CALL_MESSAGE_GENERAL}
         </p>
       </section>
 
@@ -82,7 +80,6 @@ export function Kiosk() {
                 {(filteredArticles?.length ?? 0) > 1 ? "s" : ""}
               </p>
             </div>
-            <SiteFilter value={site} onChange={setSite} />
           </div>
 
           <div className="relative mb-5">
@@ -124,46 +121,6 @@ export function Kiosk() {
           )}
         </div>
       </section>
-    </div>
-  );
-}
-
-/** Filtre « recyclerie », identique à celui de la boutique. */
-function SiteFilter({
-  value,
-  onChange,
-}: {
-  value: Site | "all";
-  onChange: (next: Site | "all") => void;
-}) {
-  const options: { value: Site | "all"; label: string }[] = [
-    { value: "all", label: "Toutes" },
-    ...ARTICLE_SITES,
-  ];
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-        Recyclerie
-      </span>
-      <div className="inline-flex rounded-full border border-white/40 bg-white/60 p-1 shadow-[0_10px_24px_rgba(24,24,27,0.08)] backdrop-blur">
-        {options.map((option) => {
-          const active = option.value === value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                active ? "text-white" : "text-zinc-600 hover:text-zinc-900"
-              }`}
-              style={active ? { backgroundColor: BRAND } : undefined}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
