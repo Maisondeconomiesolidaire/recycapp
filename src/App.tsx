@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { PublicLayout } from "./components/public/PublicLayout";
 import { RequirePublicAccount } from "./components/public/RequirePublicAccount";
 import { Boutique } from "./pages/public/Boutique";
+import { Kiosk } from "./pages/public/Kiosk";
+import { KioskCheckout } from "./pages/public/KioskCheckout";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
 import { CheckoutPage } from "./pages/public/CheckoutPage";
@@ -55,6 +57,10 @@ export default function App() {
     <>
     <UpdateAvailableBanner appName="Recycapp" />
     <Routes>
+      {/* Vitrine physique : plein écran, sans en-tête ni compte. */}
+      <Route path="/kiosk" element={<Kiosk />} />
+      <Route path="/kiosk/achat/:id" element={<KioskCheckout />} />
+
       {/* Public (light mode) */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Navigate to="/boutique" replace />} />
