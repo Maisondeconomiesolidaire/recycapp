@@ -141,9 +141,20 @@ export const SITE_LABELS: Record<Site, string> = {
   "76": "Recyclerie 76",
 };
 
+/** Recycleries proposées à la création d'un article et dans la boutique. */
+export const ARTICLE_SITES: { value: Site; label: string }[] = [
+  { value: "60", label: "Recyclerie 60" },
+  { value: "76", label: "Recyclerie 76" },
+];
+
 // --- Process & sous-types de collecte ---------------------------------------
 
 export const STEP_PRESTATION_PLANIFIEE = "Prestation planifiée";
+/**
+ * Une commande boutique n'a pas de « prestation » à planifier : son équivalent
+ * est l'encaissement, après quoi il ne reste qu'à constater le retrait.
+ */
+export const STEP_PAIEMENT_VALIDE = "Paiement validé";
 
 export type CollecteType = "indefini" | "C1" | "C2" | "C3";
 
@@ -167,7 +178,11 @@ export function deriveStage(r: {
 }): RequestStage {
   if (r.completedSteps === 0) return "nouveau";
   const done = r.processSteps.slice(0, r.completedSteps);
-  if (done.includes(STEP_PRESTATION_PLANIFIEE)) return "planifie";
+  if (
+    done.includes(STEP_PRESTATION_PLANIFIEE) ||
+    done.includes(STEP_PAIEMENT_VALIDE)
+  )
+    return "planifie";
   return "validation";
 }
 

@@ -22,8 +22,10 @@ import {
   ARTICLE_CATEGORIES,
   ARTICLE_SUBCATEGORIES,
   ARTICLE_CONDITIONS,
+  ARTICLE_SITES,
   ARTICLE_STATUS_LABELS,
 } from "../../lib/constants";
+import type { Site } from "../../lib/constants";
 import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
 import { buildDetouredPhotoFile } from "../../lib/backgroundRemoval";
@@ -168,6 +170,7 @@ export function ArticleForm({
   const [caisseId, setCaisseId] = useState<Id<"caisses"> | "">(
     article?.caisseId ?? "",
   );
+  const [site, setSite] = useState<Site | "">(article?.site ?? "");
   const [caisseScanOpen, setCaisseScanOpen] = useState(false);
   const [caisseScanError, setCaisseScanError] = useState("");
   /**
@@ -435,6 +438,7 @@ export function ArticleForm({
           price: priceNum,
           weightKg: weightNum,
           caisseId: caisseId || undefined,
+          site: site || undefined,
           originalPrice: originalPriceNum,
           internalReference,
           gdrReference: gdrReference.trim() || undefined,
@@ -456,6 +460,7 @@ export function ArticleForm({
           price: priceNum,
           weightKg: weightNum,
           caisseId: caisseId || undefined,
+          site: site || undefined,
           qrReference: qrReference || undefined,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
@@ -867,6 +872,19 @@ export function ArticleForm({
               onChange={(e) => setOriginalPrice(e.target.value)}
               placeholder="39"
             />
+          </Field>
+          <Field
+            label="Site"
+            hint="Recyclerie qui détient l'objet : c'est le site de retrait annoncé au client."
+          >
+            <Select value={site} onChange={(e) => setSite(e.target.value as Site | "")}>
+              <option value="">— Non renseigné —</option>
+              {ARTICLE_SITES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field
             label="Caisse"

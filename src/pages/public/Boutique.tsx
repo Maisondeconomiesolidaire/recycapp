@@ -10,13 +10,55 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { HScroll } from "../../components/ui/HScroll";
 import {
+  ARTICLE_SITES,
   ARTICLE_SLUG_TO_CATEGORY,
 } from "../../lib/constants";
+import type { Site } from "../../lib/constants";
 import { useCart } from "../../lib/useCart";
 
 const BRAND = "#f1104f";
 const ORANGE = "#f97316";
 const ORANGE_DARK = "#ea6a0c";
+
+/** Filtre « recyclerie » de la boutique : 60, 76, ou les deux. */
+function SiteFilter({
+  value,
+  onChange,
+}: {
+  value: Site | "all";
+  onChange: (next: Site | "all") => void;
+}) {
+  const options: { value: Site | "all"; label: string }[] = [
+    { value: "all", label: "Toutes" },
+    ...ARTICLE_SITES,
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        Recyclerie
+      </span>
+      <div className="inline-flex rounded-full border border-white/40 bg-white/60 p-1 shadow-[0_10px_24px_rgba(24,24,27,0.08)] backdrop-blur">
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                active ? "text-white" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+              style={active ? { backgroundColor: BRAND } : undefined}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function truncateDescription(value: string, max = 88) {
   const trimmed = value.trim();
@@ -49,8 +91,12 @@ export function Boutique() {
   const search = searchParams.get("q") ?? "";
   const activeCategory = slug ? ARTICLE_SLUG_TO_CATEGORY[slug] : undefined;
 
+  // Le client vient chercher son achat sur place : il doit pouvoir ne voir que
+  // les articles de la recyclerie qui lui convient.
+  const [site, setSite] = useState<Site | "all">("all");
   const articles = useQuery(api.articles.listPublic, {
     categories: activeCategory ? [activeCategory] : undefined,
+    site: site === "all" ? undefined : site,
   });
   const productOfDay = useQuery(api.articles.getProductOfDay, {});
   const { isSignedIn } = useUser();
@@ -119,6 +165,7 @@ export function Boutique() {
                   {(filteredArticles?.length ?? 0) > 1 ? "s" : ""}
                 </p>
               </div>
+              <SiteFilter value={site} onChange={setSite} />
             </div>
 
             {articles === undefined ? (

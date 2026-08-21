@@ -35,6 +35,7 @@ import { Spinner } from "../ui/Spinner";
 import { Select, Input, Textarea, Field } from "../ui/Field";
 import { Checkbox } from "../ui/Field";
 import { Lightbox } from "../ui/Lightbox";
+import { QrCode } from "../ui/QrCode";
 import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { UnderlineTabs } from "../ui/UnderlineTabs";
 import { MessageThread } from "../MessageThread";
@@ -1436,6 +1437,13 @@ function GestionTab({
       : "skip",
   );
 
+  /**
+   * Une commande boutique ne se pilote pas comme une prestation : pas de devis
+   * à chiffrer, personne à qui l'attribuer, aucune date à programmer. Il n'y a
+   * qu'à encaisser puis constater le retrait.
+   */
+  const isBoutique = request.type === "article";
+
   const stepBlockers: Record<string, string> = {};
   const isFullProcess =
     request.type === "aerogommage" ||
@@ -1587,7 +1595,7 @@ function GestionTab({
       {/* Affectation */}
       <section className="grid grid-cols-2 gap-4">
         <div>
-          <SectionTitle>Site de traitement</SectionTitle>
+          <SectionTitle>Site de retrait</SectionTitle>
           <Select
             value={request.site ?? ""}
             onChange={(e) =>
@@ -1605,6 +1613,7 @@ function GestionTab({
           </Select>
           <FieldMeta edit={request.fieldEdits?.site} />
         </div>
+        {!isBoutique && (
         <div>
           <SectionTitle>Attribuée à</SectionTitle>
           <Select
@@ -1628,6 +1637,7 @@ function GestionTab({
           </Select>
           <FieldMeta edit={request.fieldEdits?.assignedTo} />
         </div>
+        )}
       </section>
 
       {usesVehicle && (
@@ -1680,6 +1690,7 @@ function GestionTab({
       )}
 
       {/* Planification & temps */}
+      {!isBoutique && (
       <section>
         <SectionTitle>Date programmée</SectionTitle>
         <div className="flex items-center gap-2">
@@ -1725,6 +1736,7 @@ function GestionTab({
           }}
         />
       </section>
+      )}
 
       <section className="grid grid-cols-2 gap-4">
         <div>
@@ -1758,6 +1770,7 @@ function GestionTab({
       </section>
 
       {/* Devis */}
+      {!isBoutique && (
       <section>
         <SectionTitle>Devis</SectionTitle>
         <div className="grid grid-cols-2 gap-3">
@@ -1795,6 +1808,7 @@ function GestionTab({
           </div>
         </div>
       </section>
+      )}
     </fieldset>
   );
 }
@@ -2688,14 +2702,39 @@ function RequestDetails({
 function ArticlePaymentSection({ request }: { request: RequestDoc }) {
   const payment = request.payment;
   const sendPaymentLink = useAction(api.paymentLinks.sendByEmail);
+  const refund = useAction(api.stripe.refundBoutiqueRequest);
   const links = useQuery(api.paymentLinks.listForRequest, { requestId: request._id });
   const [sending, setSending] = useState(false);
   const [linkFeedback, setLinkFeedback] = useState("");
   const [linkError, setLinkError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState("");
 
   const pendingLink = (links ?? []).find((link) => link.status === "pending");
   const alreadyPaid = payment?.status === "paid";
+  const alreadyRefunded = Boolean(payment?.stripeRefundId);
+  // On ne rembourse que ce que Stripe a réellement encaissé : un paiement en
+  // espèces se rend en caisse, pas depuis le CRM.
+  const canRefund =
+    alreadyPaid &&
+    !alreadyRefunded &&
+    payment?.provider === "stripe" &&
+    Boolean(payment?.stripePaymentIntentId);
+
+  async function handleRefund() {
+    setRefunding(true);
+    setRefundError("");
+    try {
+      await refund({ requestId: request._id });
+      setRefundOpen(false);
+    } catch (err) {
+      setRefundError(errorMessage(err, "Remboursement impossible."));
+    } finally {
+      setRefunding(false);
+    }
+  }
 
   async function handleSend() {
     setSending(true);
@@ -2759,7 +2798,50 @@ function ArticlePaymentSection({ request }: { request: RequestDoc }) {
               />
             </>
           )}
+          {alreadyRefunded && (
+            <>
+              <Row
+                label="Remboursé le"
+                value={
+                  payment.refundedAt ? formatDateTime(payment.refundedAt) : undefined
+                }
+              />
+              <Row
+                label="Montant remboursé"
+                value={
+                  payment.refundedAmount !== undefined
+                    ? formatPrice(payment.refundedAmount)
+                    : undefined
+                }
+              />
+              <Row label="Remboursé par" value={payment.refundedBy} />
+              <Row label="Remboursement Stripe" value={payment.stripeRefundId} mono />
+            </>
+          )}
         </div>
+
+        {canRefund && (
+          <div className="mt-4 border-t border-[var(--crm-border)] pt-4">
+            <Button
+              variant="outline"
+              className="text-red-400 hover:text-red-300"
+              onClick={() => {
+                setRefundError("");
+                setRefundOpen(true);
+              }}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Effectuer un remboursement
+            </Button>
+            <p className="mt-2 text-xs text-zinc-500">
+              Le montant encaissé est intégralement rendu au client sur sa carte.
+              La demande passe en « perdue » et les articles repartent en vente.
+            </p>
+            {refundError && !refundOpen && (
+              <p className="mt-2 text-xs text-red-400">{refundError}</p>
+            )}
+          </div>
+        )}
 
         {/* Lien de paiement : le client règle en ligne depuis une page dédiée. */}
         {!alreadyPaid && (
@@ -2801,6 +2883,44 @@ function ArticlePaymentSection({ request }: { request: RequestDoc }) {
           </div>
         )}
       </div>
+
+      <Modal
+        open={refundOpen}
+        onClose={() => {
+          if (!refunding) setRefundOpen(false);
+        }}
+        title="Effectuer un remboursement"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-300">
+            Rembourser intégralement le paiement de cette commande&nbsp;? Le
+            client sera recrédité sur sa carte via Stripe. Cette opération est
+            définitive.
+          </p>
+          {refundError && <p className="text-sm text-red-400">{refundError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setRefundOpen(false)}
+              disabled={refunding}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleRefund}
+              disabled={refunding}
+            >
+              {refunding ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+              Rembourser
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }
@@ -2856,6 +2976,73 @@ function ArticleRequestTabs({
   );
 }
 
+/**
+ * Où est physiquement l'article, et comment ouvrir sa fiche.
+ *
+ * Depuis une demande, l'équipe n'a aucune idée de l'endroit où l'objet est
+ * rangé : on affiche donc la caisse qui le contient et la recyclerie où elle
+ * se trouve. Le QR code reprend la référence interne — celle imprimée sur
+ * l'étiquette de l'objet : le scanner (bouton scan du CRM) ouvre la fiche
+ * article, exactement comme en scannant l'étiquette elle-même.
+ */
+function ArticleLocationBlock({
+  reference,
+  location,
+}: {
+  reference?: string;
+  location:
+    | {
+        internalReference: string | null;
+        site: Site | null;
+        location: string | null;
+        caisse: { code: string; label: string | null; zone: string | null } | null;
+      }
+    | null
+    | undefined;
+}) {
+  const qrValue = location?.internalReference ?? reference ?? "";
+
+  return (
+    <div className="mt-4 flex items-start gap-4 border-t border-[var(--crm-border)] pt-4">
+      {qrValue ? (
+        <div className="shrink-0 rounded-xl bg-white p-2 text-black">
+          <QrCode value={qrValue} size={88} displayValue />
+        </div>
+      ) : null}
+      <div className="min-w-0 flex-1 space-y-1.5 text-sm">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500">Caisse</p>
+          <p className="font-semibold text-zinc-100">
+            {location === undefined
+              ? "…"
+              : location?.caisse
+                ? location.caisse.label
+                  ? `${location.caisse.code} — ${location.caisse.label}`
+                  : location.caisse.code
+                : (location?.location ?? "Aucune caisse renseignée")}
+          </p>
+          {location?.caisse?.zone && (
+            <p className="text-xs text-zinc-500">Zone : {location.caisse.zone}</p>
+          )}
+        </div>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+            Site de retrait
+          </p>
+          <p className="font-semibold text-zinc-100">
+            {location?.site ? SITE_LABELS[location.site] : "Non renseigné"}
+          </p>
+        </div>
+        {qrValue && (
+          <p className="text-xs text-zinc-500">
+            Scannez ce code pour ouvrir la fiche article.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ArticleRequestPreview({
   articleId,
   fallbackTitle,
@@ -2864,6 +3051,8 @@ function ArticleRequestPreview({
   fallbackTitle?: string;
 }) {
   const article = useQuery(api.articles.getPublic, { id: articleId });
+  // Emplacement physique : depuis une demande, personne ne sait où est l'objet.
+  const location = useQuery(api.articles.locationForCrm, { id: articleId });
   const [lb, setLb] = useState<number | null>(null);
 
   if (article === undefined) {
@@ -2950,6 +3139,11 @@ function ArticleRequestPreview({
           )}
         </div>
         <p className="mt-1.5 text-xs text-zinc-500">{article.category}</p>
+
+        <ArticleLocationBlock
+          reference={article.internalReference}
+          location={location}
+        />
       </div>
 
       {lb !== null && (
