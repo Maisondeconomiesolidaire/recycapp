@@ -27,6 +27,7 @@ import {
   Play,
   MoreHorizontal,
   Link as LinkIcon,
+  Ticket,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -53,6 +54,7 @@ import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { PrintLabels } from "../../components/crm/PrintLabels";
 import { CaissesPanel } from "../../components/crm/CaissesPanel";
 import { QrCodePoolModal } from "../../components/crm/QrCodePoolModal";
+import { DiscountCodesModal } from "../../components/crm/DiscountCodesModal";
 import { articleLabelReference, isCaisseCode, normalizeScanCode } from "../../lib/labels";
 import { PhotoQuickAdd } from "../../components/crm/PhotoQuickAdd";
 import { AiRunModal } from "../../components/crm/AiRunModal";
@@ -233,6 +235,7 @@ export function Articles() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
   const [qrPoolOpen, setQrPoolOpen] = useState(false);
+  const [discountsOpen, setDiscountsOpen] = useState(false);
   const freeQrCount = useQuery(api.articleQrCodes.freeCount, {});
   // Sélection multiple du stock : cible des impressions QR et des runs IA.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -443,6 +446,18 @@ export function Articles() {
               "Générer des QR codes vierges à imprimer et à coller avant de créer les fiches",
             icon: <QrCodeIcon className="h-4 w-4 shrink-0" />,
             onClick: () => setQrPoolOpen(true),
+          },
+        ]
+      : []),
+    ...(canCreate
+      ? [
+          {
+            key: "discounts",
+            label: "Bons de réduction",
+            title:
+              "Générer un bon de réduction pour la boutique en ligne (5 % à 80 %)",
+            icon: <Ticket className="h-4 w-4 shrink-0" />,
+            onClick: () => setDiscountsOpen(true),
           },
         ]
       : []),
@@ -968,6 +983,11 @@ export function Articles() {
       />
 
       {/* Réserve de QR codes vierges, imprimés avant la création des fiches */}
+      <DiscountCodesModal
+        open={discountsOpen}
+        onClose={() => setDiscountsOpen(false)}
+      />
+
       <QrCodePoolModal
         open={qrPoolOpen}
         onClose={() => setQrPoolOpen(false)}

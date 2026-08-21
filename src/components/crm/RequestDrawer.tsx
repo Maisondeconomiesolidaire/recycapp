@@ -2724,6 +2724,31 @@ function ArticlePaymentSection({ request }: { request: RequestDoc }) {
               />
             </>
           )}
+          {payment.discountCode && (
+            <>
+              <Row label="Code promo" value={payment.discountCode} mono />
+              <Row
+                label="Remise"
+                value={
+                  payment.discountPercent !== undefined
+                    ? `${payment.discountPercent} %${
+                        payment.discountAmount !== undefined
+                          ? ` · −${formatPrice(payment.discountAmount)}`
+                          : ""
+                      }`
+                    : undefined
+                }
+              />
+              <Row
+                label="Total avant remise"
+                value={
+                  payment.subtotal !== undefined
+                    ? formatPrice(payment.subtotal)
+                    : undefined
+                }
+              />
+            </>
+          )}
           {alreadyRefunded && (
             <>
               <Row

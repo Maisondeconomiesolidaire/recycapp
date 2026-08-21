@@ -1,6 +1,6 @@
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +19,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { Field, Input, Textarea } from "../../components/ui/Field";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { formatPrice } from "../../lib/format";
+import { errorMessage } from "../../lib/convexError";
 import { useCart } from "../../lib/useCart";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
@@ -52,6 +53,14 @@ export function CartPage() {
   const navigate = useNavigate();
   const [payError, setPayError] = useState("");
   const [preparingPayment, setPreparingPayment] = useState(false);
+  // Code promo : saisi ici, mais c'est le serveur qui recalcule la remise au
+  // moment de créer le paiement — l'écran n'est qu'un aperçu.
+  const [promoInput, setPromoInput] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoError, setPromoError] = useState("");
+  const convex = useConvex();
+  const [checkingPromo, setCheckingPromo] = useState(false);
+  const [promoPercent, setPromoPercent] = useState<number | null>(null);
   const updateMyProfile = useMutation(api.users.updateMyProfile);
   const articles = useQuery(api.articles.getManyPublic, {
     ids: cart.ids as Id<"articles">[],
@@ -103,7 +112,10 @@ export function CartPage() {
 
   const availableArticles = articles.filter((a) => a.status === "disponible");
   const unavailableArticles = articles.filter((a) => a.status !== "disponible");
-  const total = availableArticles.reduce((sum, a) => sum + a.price, 0);
+  const subtotal = availableArticles.reduce((sum, a) => sum + a.price, 0);
+  const discountAmount =
+    promoPercent !== null ? Math.round(subtotal * promoPercent) / 100 : 0;
+  const total = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
   const addressValue = String(watch("customer.address") ?? "");
 
   // Mémorise les coordonnées saisies sur le profil du client connecté.
@@ -134,6 +146,26 @@ export function CartPage() {
     setSubmitted(true);
   }
 
+  /** Vérifie le code saisi et affiche la remise avant de lancer le paiement. */
+  async function handleApplyPromo() {
+    const code = promoInput.trim().toUpperCase();
+    if (!code || checkingPromo) return;
+    setCheckingPromo(true);
+    setPromoError("");
+    try {
+      const result = await convex.query(api.discountCodes.check, { code });
+      setPromoCode(result.code);
+      setPromoPercent(result.percent);
+      setPromoInput(result.code);
+    } catch (err) {
+      setPromoPercent(null);
+      setPromoCode("");
+      setPromoError(errorMessage(err, "Ce code promo n'est pas valable."));
+    } finally {
+      setCheckingPromo(false);
+    }
+  }
+
   /**
    * Paiement en ligne : le montant est recalculé côté serveur à la création du
    * PaymentIntent — le panier du navigateur ne sert qu'à désigner les articles.
@@ -148,11 +180,16 @@ export function CartPage() {
         articleIds: availableArticles.map((a) => a._id),
         customer: data.customer,
         comment: data.comment || undefined,
+        discountCode: promoCode || undefined,
       });
       const handoff: CheckoutHandoff = {
         draftId: intent.draftId,
         clientSecret: intent.clientSecret,
         total: intent.total,
+        subtotal: intent.subtotal,
+        discountCode: promoCode || undefined,
+        discountPercent: intent.discountPercent,
+        discountAmount: intent.discountAmount,
         items: availableArticles.map((article) => ({
           id: article._id,
           title: article.title,
@@ -245,12 +282,83 @@ export function CartPage() {
             </div>
           )}
 
+          {/* Code promo */}
+          <div className="rounded-[22px] border border-zinc-200 bg-white p-5">
+            <label
+              htmlFor="promo"
+              className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500"
+            >
+              Code promo
+            </label>
+            {promoPercent === null ? (
+              <>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    id="promo"
+                    value={promoInput}
+                    onChange={(e) => {
+                      setPromoInput(e.target.value.toUpperCase());
+                      setPromoError("");
+                    }}
+                    placeholder="RECY…"
+                    autoComplete="off"
+                    className="h-11 flex-1 rounded-xl border border-zinc-200 px-3 font-mono text-sm uppercase tracking-wide text-zinc-900 outline-none transition focus:border-zinc-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyPromo}
+                    disabled={checkingPromo || promoInput.trim().length === 0}
+                    className="rounded-xl border border-zinc-200 px-4 text-sm font-bold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    {checkingPromo ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Appliquer"
+                    )}
+                  </button>
+                </div>
+                {promoError && (
+                  <p className="mt-2 text-sm text-red-600">{promoError}</p>
+                )}
+              </>
+            ) : (
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-2.5">
+                <p className="min-w-0 text-sm font-semibold text-emerald-800">
+                  <span className="font-mono">{promoCode}</span> · −{promoPercent} %
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPromoCode("");
+                    setPromoPercent(null);
+                    setPromoInput("");
+                  }}
+                  className="shrink-0 text-xs font-bold uppercase tracking-wide text-emerald-700 underline"
+                >
+                  Retirer
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Total */}
-          <div className="flex items-center justify-between rounded-[22px] px-6 py-5 text-white shadow-[0_12px_40px_rgba(241,16,79,0.28)]" style={{ backgroundColor: BRAND }}>
-            <div>
+          <div className="rounded-[22px] px-6 py-5 text-white shadow-[0_12px_40px_rgba(241,16,79,0.28)]" style={{ backgroundColor: BRAND }}>
+            {promoPercent !== null && (
+              <div className="mb-3 space-y-1 border-b border-white/25 pb-3 text-sm text-white/85">
+                <div className="flex items-center justify-between">
+                  <span>Sous-total</span>
+                  <span>{formatPrice(subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold">
+                  <span>Remise {promoPercent} %</span>
+                  <span>−{formatPrice(discountAmount)}</span>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-white/70 uppercase tracking-[0.15em]">Total</p>
+              <span className="text-3xl font-extrabold">{formatPrice(total)}</span>
             </div>
-            <span className="text-3xl font-extrabold">{formatPrice(total)}</span>
           </div>
         </div>
 

@@ -30,7 +30,13 @@ import { checkoutAppearance, BRAND, PICKUP_DEADLINE_DAYS } from "./checkoutTheme
 export type CheckoutHandoff = {
   draftId: string;
   clientSecret: string;
+  /** Montant réellement dû, remise déduite. */
   total: number;
+  /** Total avant remise, présent seulement quand un code promo est appliqué. */
+  subtotal?: number;
+  discountCode?: string;
+  discountPercent?: number;
+  discountAmount?: number;
   items: Array<{ id: string; title: string; price: number; imageUrl?: string }>;
 };
 
@@ -319,13 +325,30 @@ function CheckoutLayout({ handoff }: { handoff: CheckoutHandoff }) {
           </div>
 
           <div
-            className="flex items-center justify-between rounded-[22px] px-6 py-5 text-white shadow-[0_12px_40px_rgba(241,16,79,0.28)]"
+            className="rounded-[22px] px-6 py-5 text-white shadow-[0_12px_40px_rgba(241,16,79,0.28)]"
             style={{ backgroundColor: BRAND }}
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/70">
-              Total à payer
-            </p>
-            <span className="text-3xl font-extrabold">{formatPrice(handoff.total)}</span>
+            {handoff.discountPercent !== undefined && (
+              <div className="mb-3 space-y-1 border-b border-white/25 pb-3 text-sm text-white/85">
+                <div className="flex items-center justify-between">
+                  <span>Sous-total</span>
+                  <span>{formatPrice(handoff.subtotal ?? handoff.total)}</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold">
+                  <span>
+                    Remise {handoff.discountPercent} %
+                    {handoff.discountCode ? ` · ${handoff.discountCode}` : ""}
+                  </span>
+                  <span>−{formatPrice(handoff.discountAmount ?? 0)}</span>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/70">
+                Total à payer
+              </p>
+              <span className="text-3xl font-extrabold">{formatPrice(handoff.total)}</span>
+            </div>
           </div>
         </div>
       </div>
