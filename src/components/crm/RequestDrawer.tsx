@@ -583,10 +583,18 @@ function DemandeTab({
   );
 
   if (request.type === "article") {
+    const articles = request.articles?.length
+      ? request.articles
+      : request.article
+        ? [request.article]
+        : [];
     return (
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.72fr)]">
-        <RequestDetails request={request} />
-        <div className="space-y-6">{meta}</div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,0.85fr)]">
+        <div className="space-y-6">
+          <ArticlePaymentSection request={request} />
+          {meta}
+        </div>
+        <ArticleCart articles={articles} />
       </div>
     );
   }
@@ -1738,6 +1746,7 @@ function GestionTab({
       </section>
       )}
 
+      {!isBoutique && (
       <section className="grid grid-cols-2 gap-4">
         <div>
           <SectionTitle>Temps estimé (h)</SectionTitle>
@@ -1768,6 +1777,7 @@ function GestionTab({
           <FieldMeta edit={request.fieldEdits?.actualHours} />
         </div>
       </section>
+      )}
 
       {/* Devis */}
       {!isBoutique && (
@@ -2681,20 +2691,6 @@ function RequestDetails({
     );
   }
 
-  if (request.type === "article" && (request.articles?.length || request.article)) {
-    const articles =
-      request.articles?.length
-        ? request.articles
-        : request.article
-          ? [request.article]
-          : [];
-    return (
-      <div className="space-y-6">
-        <ArticlePaymentSection request={request} />
-        <ArticleRequestTabs articles={articles} />
-      </div>
-    );
-  }
 
   return null;
 }
@@ -2925,234 +2921,191 @@ function ArticlePaymentSection({ request }: { request: RequestDoc }) {
   );
 }
 
-function ArticleRequestTabs({
+/**
+ * Les articles de la demande, présentés comme un panier.
+ *
+ * Une commande boutique porte souvent plusieurs objets, et l'équipe les
+ * prépare l'un après l'autre : une ligne par article — photo, QR code, caisse
+ * et site de retrait — se parcourt en descendant, là où des onglets
+ * obligeaient à cliquer pour savoir ce qu'il restait à sortir des rayons.
+ */
+function ArticleCart({
   articles,
 }: {
   articles: Array<{ articleId: Id<"articles">; articleTitle?: string }>;
 }) {
-  const [selected, setSelected] = useState("0");
-  const index = Math.min(Number(selected) || 0, articles.length - 1);
-  const current = articles[index];
+  const ids = articles.map((article) => article.articleId);
+  const cart = useQuery(api.articles.cartForCrm, ids.length ? { ids } : "skip");
+  const [lightbox, setLightbox] = useState<string[] | null>(null);
 
-  if (articles.length <= 1) {
-    return (
-      <ArticleRequestPreview
-        articleId={current.articleId}
-        fallbackTitle={current.articleTitle}
-      />
-    );
-  }
+  if (articles.length === 0) return null;
+
+  const total = (cart ?? []).reduce(
+    (sum, item) => sum + (item.article?.price ?? 0),
+    0,
+  );
 
   return (
     <section>
-      <SectionTitle>Articles réservés</SectionTitle>
-      <div className="mb-4 flex flex-wrap gap-x-3 gap-y-2 border-b border-[var(--crm-border)] pb-3">
-        {articles.map((article, i) => {
-          const key = String(i);
-          const active = selected === key;
+      <SectionTitle>
+        Panier · {articles.length} article{articles.length > 1 ? "s" : ""}
+      </SectionTitle>
+
+      <div className="space-y-3">
+        {articles.map((article, index) => {
+          const item = cart?.[index];
           return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setSelected(key)}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                active
-                  ? "bg-brand-500 text-white shadow-sm"
-                  : "bg-[var(--crm-surface-2)] text-zinc-500 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200",
-              )}
-              title={article.articleTitle ?? `Article ${i + 1}`}
-            >
-              Article {i + 1}
-            </button>
+            <ArticleCartLine
+              key={`${article.articleId}-${index}`}
+              article={item?.article ?? (cart ? null : undefined)}
+              fallbackTitle={article.articleTitle}
+              onOpenPhotos={setLightbox}
+            />
           );
         })}
       </div>
-      <ArticleRequestPreview
-        articleId={current.articleId}
-        fallbackTitle={current.articleTitle}
-      />
+
+      {cart && cart.length > 1 && (
+        <div className="mt-3 flex items-center justify-between rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3">
+          <span className="text-sm font-medium text-zinc-400">Total</span>
+          <span className="text-base font-bold text-zinc-100">
+            {formatPrice(total)}
+          </span>
+        </div>
+      )}
+
+      {lightbox && (
+        <Lightbox
+          images={lightbox}
+          startIndex={0}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </section>
   );
 }
 
-/**
- * Où est physiquement l'article, et comment ouvrir sa fiche.
- *
- * Depuis une demande, l'équipe n'a aucune idée de l'endroit où l'objet est
- * rangé : on affiche donc la caisse qui le contient et la recyclerie où elle
- * se trouve. Le QR code reprend la référence interne — celle imprimée sur
- * l'étiquette de l'objet : le scanner (bouton scan du CRM) ouvre la fiche
- * article, exactement comme en scannant l'étiquette elle-même.
- */
-function ArticleLocationBlock({
-  reference,
-  location,
-}: {
-  reference?: string;
-  location:
-    | {
-        internalReference: string | null;
-        site: Site | null;
-        location: string | null;
-        caisse: { code: string; label: string | null; zone: string | null } | null;
-      }
-    | null
-    | undefined;
-}) {
-  const qrValue = location?.internalReference ?? reference ?? "";
+type CartArticle = NonNullable<
+  NonNullable<ReturnType<typeof useQuery<typeof api.articles.cartForCrm>>>[number]["article"]
+>;
 
-  return (
-    <div className="mt-4 flex items-start gap-4 border-t border-[var(--crm-border)] pt-4">
-      {qrValue ? (
-        <div className="shrink-0 rounded-xl bg-white p-2 text-black">
-          <QrCode value={qrValue} size={88} displayValue />
-        </div>
-      ) : null}
-      <div className="min-w-0 flex-1 space-y-1.5 text-sm">
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500">Caisse</p>
-          <p className="font-semibold text-zinc-100">
-            {location === undefined
-              ? "…"
-              : location?.caisse
-                ? location.caisse.label
-                  ? `${location.caisse.code} — ${location.caisse.label}`
-                  : location.caisse.code
-                : (location?.location ?? "Aucune caisse renseignée")}
-          </p>
-          {location?.caisse?.zone && (
-            <p className="text-xs text-zinc-500">Zone : {location.caisse.zone}</p>
-          )}
-        </div>
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-            Site de retrait
-          </p>
-          <p className="font-semibold text-zinc-100">
-            {location?.site ? SITE_LABELS[location.site] : "Non renseigné"}
-          </p>
-        </div>
-        {qrValue && (
-          <p className="text-xs text-zinc-500">
-            Scannez ce code pour ouvrir la fiche article.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ArticleRequestPreview({
-  articleId,
+/** Une ligne du panier : photo, informations, QR code et emplacement. */
+function ArticleCartLine({
+  article,
   fallbackTitle,
+  onOpenPhotos,
 }: {
-  articleId: Id<"articles">;
+  article: CartArticle | null | undefined;
   fallbackTitle?: string;
+  onOpenPhotos: (images: string[]) => void;
 }) {
-  const article = useQuery(api.articles.getPublic, { id: articleId });
-  // Emplacement physique : depuis une demande, personne ne sait où est l'objet.
-  const location = useQuery(api.articles.locationForCrm, { id: articleId });
-  const [lb, setLb] = useState<number | null>(null);
-
   if (article === undefined) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)]">
-        <div className="aspect-[4/3] w-full animate-pulse bg-[var(--crm-surface-3)]" />
-        {fallbackTitle && (
-          <div className="p-4">
-            <p className="text-sm font-semibold text-zinc-100">{fallbackTitle}</p>
-            <div className="mt-2 h-4 w-16 animate-pulse rounded bg-[var(--crm-surface-3)]" />
-          </div>
-        )}
+      <div className="flex gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
+        <div className="h-20 w-20 shrink-0 animate-pulse rounded-xl bg-[var(--crm-surface-3)]" />
+        <div className="flex-1 space-y-2 py-1">
+          <p className="text-sm font-semibold text-zinc-100">
+            {fallbackTitle ?? "Chargement…"}
+          </p>
+          <div className="h-3 w-24 animate-pulse rounded bg-[var(--crm-surface-3)]" />
+        </div>
       </div>
     );
   }
 
   if (article === null) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] text-sm text-zinc-500">
-        Article introuvable
+      <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-zinc-500">
+        {fallbackTitle ? `« ${fallbackTitle} » : ` : ""}article introuvable
       </div>
     );
   }
 
+  const qrValue = article.internalReference ?? "";
   const hasDiscount =
-    article.originalPrice !== undefined &&
-    article.originalPrice > article.price;
+    article.originalPrice !== null && article.originalPrice > article.price;
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-[var(--crm-surface)] shadow-[0_14px_34px_rgba(0,0,0,0.10)] ring-1 ring-[var(--crm-border)]">
-      {article.imageUrls[0] ? (
-        <button
-          type="button"
-          onClick={() => setLb(0)}
-          className="block w-full cursor-zoom-in bg-[var(--crm-surface-2)]"
-        >
-          <img
-            src={article.imageUrls[0]}
-            alt={article.title}
-            className="mx-auto h-72 w-auto max-w-full object-contain"
-          />
-        </button>
-      ) : (
-        <div className="flex h-72 w-full items-center justify-center bg-[var(--crm-surface-2)] text-zinc-600">
-          <PackageOpen className="h-10 w-10" />
-        </div>
-      )}
+    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
+      <div className="flex gap-3">
+        {article.imageUrls[0] ? (
+          <button
+            type="button"
+            onClick={() => onOpenPhotos(article.imageUrls)}
+            className="h-20 w-20 shrink-0 cursor-zoom-in overflow-hidden rounded-xl bg-[var(--crm-surface-3)]"
+          >
+            <img
+              src={article.imageUrls[0]}
+              alt={article.title}
+              className="h-full w-full object-cover"
+            />
+          </button>
+        ) : (
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-[var(--crm-surface-3)] text-zinc-600">
+            <PackageOpen className="h-6 w-6" />
+          </div>
+        )}
 
-      <div className="p-4">
-        <p className="text-sm font-semibold leading-5 text-zinc-100">
-          {article.title}
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {article.internalReference && (
-            <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
-              Réf. interne {article.internalReference}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold leading-5 text-zinc-100">
+            {article.title}
+          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-sm font-bold text-zinc-100">
+              {formatPrice(article.price)}
             </span>
-          )}
-          {article.gdrReference && (
-            <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
-              Réf. {article.gdrReference}
-            </span>
-          )}
-          {article.weightKg !== undefined && (
-            <span className="rounded-full bg-[var(--crm-surface-2)] px-2.5 py-1 text-[11px] text-zinc-400">
-              {article.weightKg} kg
-            </span>
-          )}
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          {hasDiscount ? (
-            <>
-              <span className="rounded-lg bg-brand-500 px-2 py-1 text-sm font-bold text-white">
-                {formatPrice(article.price)}
-              </span>
+            {hasDiscount && (
               <span className="text-xs font-medium text-zinc-500 line-through">
                 {formatPrice(article.originalPrice!)}
               </span>
-            </>
-          ) : (
-            <span className="text-base font-bold text-zinc-100">
-              {formatPrice(article.price)}
-            </span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-zinc-500">
+            {article.category}
+            {article.weightKg !== null ? ` · ${article.weightKg} kg` : ""}
+          </p>
+          {article.gdrReference && (
+            <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
+              Réf. {article.gdrReference}
+            </p>
           )}
         </div>
-        <p className="mt-1.5 text-xs text-zinc-500">{article.category}</p>
 
-        <ArticleLocationBlock
-          reference={article.internalReference}
-          location={location}
-        />
+        {/* Le QR code reprend la référence interne : le scanner du CRM ouvre la
+            fiche article, comme en scannant l'étiquette collée sur l'objet. */}
+        {qrValue && (
+          <div className="shrink-0 text-center">
+            <div className="rounded-lg bg-white p-1.5 text-black">
+              <QrCode value={qrValue} size={64} />
+            </div>
+            <p className="mt-1 font-mono text-[10px] text-zinc-500">{qrValue}</p>
+          </div>
+        )}
       </div>
 
-      {lb !== null && (
-        <Lightbox
-          images={article.imageUrls}
-          startIndex={lb}
-          onClose={() => setLb(null)}
-        />
-      )}
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[var(--crm-border)] pt-2 text-xs">
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-zinc-600">Caisse</p>
+          <p className="font-medium text-zinc-300">
+            {article.caisse
+              ? article.caisse.label
+                ? `${article.caisse.code} — ${article.caisse.label}`
+                : article.caisse.code
+              : (article.location ?? "Non rangé")}
+          </p>
+          {article.caisse?.zone && (
+            <p className="text-[11px] text-zinc-600">{article.caisse.zone}</p>
+          )}
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-zinc-600">
+            Site de retrait
+          </p>
+          <p className="font-medium text-zinc-300">
+            {article.site ? SITE_LABELS[article.site] : "Non renseigné"}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
