@@ -68,7 +68,7 @@ function SaisieAtelier() {
   const [lookupRef, setLookupRef] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<{
     _id: Id<"articles">; title: string; price: number; category: string;
-    internalReference?: string; gdrReference?: string; imageUrls: string[];
+    internalReference?: string; imageUrls: string[];
   } | null>(null);
 
   const createSession = useMutation(api.ateliers.createSession);
@@ -232,7 +232,7 @@ function SaisieAtelier() {
                 {selectedArticle.category} · {formatPrice(selectedArticle.price)}
               </p>
               <p className="text-[10px] font-mono text-zinc-600 mt-0.5">
-                {selectedArticle.internalReference ?? selectedArticle.gdrReference}
+                {selectedArticle.internalReference}
               </p>
             </div>
             <button
@@ -316,7 +316,7 @@ function EnCoursList() {
   const terminateSession = useMutation(api.ateliers.terminateSession);
   const [terminating, setTerminating] = useState<string | null>(null);
   const [termPrice, setTermPrice] = useState<Record<string, string>>({});
-  const [printArticle, setPrintArticle] = useState<{ _id: string; title: string; price: number; internalReference?: string; gdrReference?: string; category: string; condition?: string } | null>(null);
+  const [printArticle, setPrintArticle] = useState<{ _id: string; title: string; price: number; internalReference?: string; category: string; condition?: string } | null>(null);
 
   async function handleTerminate(sessionId: Id<"atelierSessions">, price?: number) {
     setTerminating(sessionId);
@@ -376,7 +376,6 @@ function EnCoursList() {
                     title: s.article!.title,
                     price: parseFloat(termPrice[s._id] ?? "") || s.article!.price,
                     internalReference: s.article!.internalReference as string | undefined,
-                    gdrReference: s.article!.gdrReference as string | undefined,
                     category: s.article!.category,
                     condition: s.article!.condition as string | undefined,
                   })}

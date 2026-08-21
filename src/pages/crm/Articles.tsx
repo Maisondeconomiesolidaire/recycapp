@@ -288,7 +288,6 @@ export function Articles() {
         article.category,
         article.subcategory,
         article.internalReference,
-        article.gdrReference,
       ]
         .filter((value): value is string => Boolean(value))
         .map(normalizeText);
@@ -296,7 +295,7 @@ export function Articles() {
       const textMatch = haystack.some((value) => value.includes(normalizedSearch));
       const digitMatch =
         digitSearch.length > 0 &&
-        [article.internalReference, article.gdrReference]
+        [article.internalReference]
           .filter((value): value is string => Boolean(value))
           .map(normalizeDigits)
           .some((value) => value.includes(digitSearch));
@@ -381,7 +380,7 @@ export function Articles() {
       return;
     }
     const found = (articles ?? []).find(
-      (a) => a.internalReference === ref || a.gdrReference === ref,
+      (a) => a.internalReference === ref,
     );
     if (found) {
       openEdit(found);
@@ -846,7 +845,6 @@ export function Articles() {
                         <td className="px-4 py-3 text-zinc-400">
                           <div className="space-y-0.5">
                             <p>Interne : {a.internalReference ?? "—"}</p>
-                            <p>Réf. ext. : {a.gdrReference ?? "—"}</p>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-zinc-400">
@@ -1286,7 +1284,6 @@ function ArticleGridCard({
         </div>
         <div className="mt-3 space-y-0.5 text-xs text-zinc-500">
           <p className="truncate">Interne : {article.internalReference ?? "—"}</p>
-          <p className="truncate">Réf. ext. : {article.gdrReference ?? "—"}</p>
           <p className="truncate">Caisse : {caisseLabel}</p>
         </div>
         <div className="mt-2 flex items-center justify-end gap-1">

@@ -145,7 +145,6 @@ function CaissePanel() {
     price: number;
     imageUrls?: string[];
     internalReference?: string;
-    gdrReference?: string;
     reference?: string;
   }) {
     const alreadyIn = cart.some((item) => item.articleId === article._id);
@@ -160,11 +159,7 @@ function CaissePanel() {
         articleId: article._id,
         title: article.title,
         price: article.price,
-        reference:
-          article.reference ??
-          article.internalReference ??
-          article.gdrReference ??
-          "",
+        reference: article.reference ?? article.internalReference ?? "",
         imageUrl: article.imageUrls?.[0],
       },
     ]);

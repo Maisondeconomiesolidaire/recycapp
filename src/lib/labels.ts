@@ -26,9 +26,8 @@ export function isCaisseCode(raw: string): boolean {
 export function articleLabelReference(article: {
   _id: string;
   internalReference?: string;
-  gdrReference?: string;
 }): string {
-  return article.internalReference ?? article.gdrReference ?? article._id.slice(-8);
+  return article.internalReference ?? article._id.slice(-8);
 }
 
 /**

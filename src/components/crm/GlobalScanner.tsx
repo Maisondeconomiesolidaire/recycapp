@@ -46,7 +46,6 @@ interface FoundArticle {
   condition?: string;
   status: string;
   internalReference?: string;
-  gdrReference?: string;
   imageUrls: string[];
 }
 
@@ -185,7 +184,7 @@ export function GlobalScanner() {
 
   const ref =
     modal.phase === "found" || modal.phase === "already_sold"
-      ? (modal.article.internalReference ?? modal.article.gdrReference ?? "")
+      ? (modal.article.internalReference ?? "")
       : modal.phase === "lookup"
       ? modal.code
       : "";

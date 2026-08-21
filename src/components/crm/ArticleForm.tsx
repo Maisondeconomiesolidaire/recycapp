@@ -193,7 +193,6 @@ export function ArticleForm({
   const [internalReference, setInternalReference] = useState(
     article?.internalReference ?? "",
   );
-  const [gdrReference, setGdrReference] = useState(article?.gdrReference ?? "");
   const [category, setCategory] = useState(
     article?.category ?? ARTICLE_CATEGORIES[0],
   );
@@ -424,8 +423,6 @@ export function ArticleForm({
       return setError(
         "La référence interne doit contenir exactement 6 chiffres.",
       );
-    if (gdrReference.trim() !== "" && !/^\d{15}$/.test(gdrReference))
-      return setError("La référence externe doit contenir exactement 15 chiffres.");
     setError("");
     setSaving(true);
     try {
@@ -441,7 +438,6 @@ export function ArticleForm({
           site: site || undefined,
           originalPrice: originalPriceNum,
           internalReference,
-          gdrReference: gdrReference.trim() || undefined,
           category,
           subcategory: subcategory || undefined,
           condition,
@@ -463,7 +459,6 @@ export function ArticleForm({
           site: site || undefined,
           qrReference: qrReference || undefined,
           originalPrice: originalPriceNum,
-          gdrReference: gdrReference.trim() || undefined,
           category,
           subcategory: subcategory || undefined,
           condition,
@@ -976,17 +971,6 @@ export function ArticleForm({
               )}
             </Field>
           )}
-          <Field label="Référence externe" hint="15 chiffres, facultatif.">
-            <Input
-              inputMode="numeric"
-              maxLength={15}
-              value={gdrReference}
-              onChange={(e) =>
-                setGdrReference(e.target.value.replace(/\D/g, "").slice(0, 15))
-              }
-              placeholder="000000000000123"
-            />
-          </Field>
           <Field label="Catégorie">
             <Select
               value={category}
