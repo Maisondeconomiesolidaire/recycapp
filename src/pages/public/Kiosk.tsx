@@ -1,38 +1,40 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { PackageOpen, Search, ShoppingBag, X } from "lucide-react";
+import { PackageOpen, Search, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
-import { formatPrice } from "../../lib/format";
 import { FullSpinner } from "../../components/ui/Spinner";
-import { ARTICLE_CATEGORIES, ARTICLE_SITES } from "../../lib/constants";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ARTICLE_SITES } from "../../lib/constants";
 import type { Site } from "../../lib/constants";
-import { BRAND } from "./checkoutTheme";
+import { ArticleCard, KIOSK_CALL_MESSAGE } from "../../components/public/ArticleCard";
+
+const BRAND = "#f1104f";
 
 /**
  * Vitrine physique (mode kiosque).
  *
- * Le même catalogue que la boutique en ligne, mais pensé pour un écran tactile
- * posé devant la recyclerie : pas de compte, pas de favoris, pas de panier —
- * un seul geste, « Acheter », qui mène directement au paiement. Réserver n'a
- * aucun sens ici : le client est déjà sur place.
+ * Rigoureusement la boutique en ligne — même carte article, même mise en page,
+ * même catalogue — moins ce qui n'a pas de sens devant un écran posé à
+ * l'entrée : pas de compte, pas de favoris, pas de panier, pas de paiement. Le
+ * client ne conclut pas son achat seul : il appelle un membre de l'équipe.
+ *
+ * La carte est le composant partagé avec la boutique, pour que les deux
+ * vitrines ne divergent jamais.
  */
 export function Kiosk() {
   const [site, setSite] = useState<Site | "all">("all");
-  const [category, setCategory] = useState<string | "all">("all");
   const [search, setSearch] = useState("");
 
   const articles = useQuery(api.articles.listPublic, {
-    categories: category === "all" ? undefined : [category],
     site: site === "all" ? undefined : site,
   });
 
-  const visible = useMemo(() => {
+  const filteredArticles = useMemo(() => {
     if (!articles) return articles;
     const query = search.trim().toLowerCase();
-    // Un kiosque ne vend que ce qui est encore disponible : un article réservé
-    // par quelqu'un d'autre ne doit pas s'afficher comme achetable.
-    const available = articles.filter((a) => a.status === "disponible");
+    // En vitrine, on ne montre que ce qui est encore à vendre : un article
+    // réservé par quelqu'un d'autre n'a rien à faire sur l'écran d'entrée.
+    const available = articles.filter((article) => article.status === "disponible");
     if (!query) return available;
     return available.filter((article) =>
       [article.title, article.description, article.category, article.subcategory]
@@ -42,204 +44,126 @@ export function Kiosk() {
   }, [articles, search]);
 
   return (
-    <div className="min-h-screen bg-[#faf7f3]">
-      <header className="sticky top-0 z-20 border-b border-black/5 bg-white/92 backdrop-blur">
-        <div className="mx-auto w-full max-w-[100rem] px-6 py-5">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="mr-auto">
-              <p
-                className="text-xs font-bold uppercase tracking-[0.22em]"
-                style={{ color: BRAND }}
-              >
-                Recyclerie du Pays de Bray
-              </p>
-              <h1 className="text-3xl font-extrabold tracking-tight text-zinc-950">
-                Vitrine
-              </h1>
-            </div>
-
-            <div className="relative w-full max-w-md">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher un article…"
-                className="h-14 w-full rounded-2xl border border-zinc-200 bg-white pl-12 pr-12 text-lg text-zinc-900 outline-none transition focus:border-zinc-400"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-2 text-zinc-400 hover:bg-zinc-100"
-                  aria-label="Effacer la recherche"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <KioskChip
-              active={site === "all"}
-              onClick={() => setSite("all")}
-              label="Toutes les recycleries"
+    <div className="relative min-h-screen bg-[#f6f4ef]">
+      <section className="border-b border-black/5">
+        <div className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
+          <div className="overflow-hidden rounded-[36px] border border-white/35 bg-white/8 shadow-[0_30px_90px_rgba(24,24,27,0.1)] backdrop-blur-[3px]">
+            <img
+              src="/hero.png"
+              alt="Boutique Recyclerie"
+              className="block h-auto w-full object-cover"
             />
-            {ARTICLE_SITES.map((option) => (
-              <KioskChip
-                key={option.value}
-                active={site === option.value}
-                onClick={() => setSite(option.value)}
-                label={option.label}
-              />
-            ))}
-            <span className="mx-1 h-6 w-px bg-zinc-200" />
-            <KioskChip
-              active={category === "all"}
-              onClick={() => setCategory("all")}
-              label="Tout"
-            />
-            {ARTICLE_CATEGORIES.map((value) => (
-              <KioskChip
-                key={value}
-                active={category === value}
-                onClick={() => setCategory(value)}
-                label={value}
-              />
-            ))}
           </div>
         </div>
-      </header>
+      </section>
 
-      <main className="mx-auto w-full max-w-[100rem] px-6 py-8">
-        {articles === undefined ? (
-          <FullSpinner label="Chargement du catalogue…" />
-        ) : !visible || visible.length === 0 ? (
-          <div className="rounded-[32px] border border-zinc-200 bg-white p-16 text-center">
-            <PackageOpen className="mx-auto h-14 w-14 text-zinc-300" />
-            <p className="mt-4 text-2xl font-bold text-zinc-800">
-              Aucun article ne correspond
-            </p>
-            <p className="mt-1 text-zinc-500">
-              Essayez une autre recherche ou une autre catégorie.
-            </p>
+      {/* Consigne d'achat : c'est la seule action possible ici. */}
+      <section className="mx-auto w-full max-w-[92rem] px-5 sm:px-7 lg:px-8">
+        <p
+          className="rounded-[28px] px-6 py-5 text-center text-base font-bold text-white shadow-[0_18px_45px_rgba(241,16,79,0.24)] sm:text-lg"
+          style={{ backgroundColor: BRAND }}
+        >
+          {KIOSK_CALL_MESSAGE}
+        </p>
+      </section>
+
+      <section className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 lg:px-8">
+        <div>
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Catalogue
+              </p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">
+                Tous les articles
+              </h2>
+              <p className="mt-1 text-sm text-zinc-600">
+                {filteredArticles?.length ?? 0} article
+                {(filteredArticles?.length ?? 0) > 1 ? "s" : ""}
+              </p>
+            </div>
+            <SiteFilter value={site} onChange={setSite} />
           </div>
-        ) : (
-          <>
-            <p className="mb-5 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-500">
-              {visible.length} article{visible.length > 1 ? "s" : ""} disponible
-              {visible.length > 1 ? "s" : ""}
-            </p>
-            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3 xl:grid-cols-4">
-              {visible.map((article) => (
-                <KioskCard key={article._id} article={article} />
+
+          <div className="relative mb-5">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un article…"
+              className="h-14 w-full rounded-2xl border border-white/60 bg-white/80 pl-12 pr-12 text-base text-zinc-900 shadow-sm outline-none backdrop-blur transition focus:border-zinc-300"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-2 text-zinc-400 hover:bg-zinc-100"
+                aria-label="Effacer la recherche"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+
+          {articles === undefined ? (
+            <FullSpinner label="Chargement des articles…" />
+          ) : !filteredArticles || filteredArticles.length === 0 ? (
+            <div className="rounded-[32px] border border-white/35 bg-white/54 p-6 shadow-[0_18px_45px_rgba(24,24,27,0.08)] backdrop-blur-md">
+              <EmptyState
+                icon={<PackageOpen className="h-10 w-10" />}
+                title="Aucun article ne correspond"
+                description="Essayez une autre recherche ou un autre filtre."
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {filteredArticles.map((article) => (
+                <ArticleCard key={article._id} article={article} variant="kiosk" />
               ))}
             </div>
-          </>
-        )}
-      </main>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
 
-function KioskChip({
-  active,
-  onClick,
-  label,
+/** Filtre « recyclerie », identique à celui de la boutique. */
+function SiteFilter({
+  value,
+  onChange,
 }: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
+  value: Site | "all";
+  onChange: (next: Site | "all") => void;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-        active
-          ? "text-white shadow-sm"
-          : "bg-white text-zinc-600 ring-1 ring-zinc-200 hover:text-zinc-900"
-      }`}
-      style={active ? { backgroundColor: BRAND } : undefined}
-    >
-      {label}
-    </button>
-  );
-}
-
-function KioskCard({
-  article,
-}: {
-  article: {
-    _id: string;
-    title: string;
-    category: string;
-    condition: string;
-    price: number;
-    originalPrice?: number;
-    imageUrls: string[];
-    caisseCode?: string;
-  };
-}) {
-  const hasDiscount =
-    article.originalPrice !== undefined && article.originalPrice > article.price;
+  const options: { value: Site | "all"; label: string }[] = [
+    { value: "all", label: "Toutes" },
+    ...ARTICLE_SITES,
+  ];
 
   return (
-    <Link
-      to={`/kiosk/achat/${article._id}`}
-      className="group flex flex-col overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-[0_14px_34px_rgba(24,24,27,0.06)] transition active:scale-[0.99]"
-    >
-      <div className="relative aspect-[1/0.85] overflow-hidden bg-[#f2eee7]">
-        {article.imageUrls[0] ? (
-          <img
-            src={article.imageUrls[0]}
-            alt={article.title}
-            loading="lazy"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-zinc-300">
-            <PackageOpen className="h-14 w-14" />
-          </div>
-        )}
-        <div className="absolute inset-x-0 top-0 flex flex-wrap gap-2 p-3">
-          <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-700 shadow-sm">
-            {article.category}
-          </span>
-          {article.caisseCode && (
-            <span className="rounded-full bg-zinc-950/88 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
-              {article.caisseCode}
-            </span>
-          )}
-        </div>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        Recyclerie
+      </span>
+      <div className="inline-flex rounded-full border border-white/40 bg-white/60 p-1 shadow-[0_10px_24px_rgba(24,24,27,0.08)] backdrop-blur">
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                active ? "text-white" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+              style={active ? { backgroundColor: BRAND } : undefined}
+            >
+              {option.label}
+            </button>
+          );
+        })}
       </div>
-
-      <div className="flex flex-1 flex-col p-5">
-        <h2 className="line-clamp-2 text-lg font-bold leading-6 text-zinc-950">
-          {article.title}
-        </h2>
-        <p className="mt-1 text-sm text-zinc-500">{article.condition}</p>
-
-        <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-          <div className="flex min-w-0 flex-col">
-            <span className="text-2xl font-extrabold text-zinc-950">
-              {formatPrice(article.price)}
-            </span>
-            {hasDiscount && (
-              <span className="text-sm font-medium text-zinc-400 line-through">
-                {formatPrice(article.originalPrice!)}
-              </span>
-            )}
-          </div>
-          <span
-            className="inline-flex shrink-0 items-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(241,16,79,0.3)]"
-            style={{ backgroundColor: BRAND }}
-          >
-            <ShoppingBag className="h-4 w-4" />
-            Acheter
-          </span>
-        </div>
-      </div>
-    </Link>
+    </div>
   );
 }

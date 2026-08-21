@@ -3,7 +3,7 @@ import { PublicLayout } from "./components/public/PublicLayout";
 import { RequirePublicAccount } from "./components/public/RequirePublicAccount";
 import { Boutique } from "./pages/public/Boutique";
 import { Kiosk } from "./pages/public/Kiosk";
-import { KioskCheckout } from "./pages/public/KioskCheckout";
+import { KioskArticle } from "./pages/public/KioskArticle";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
 import { CheckoutPage } from "./pages/public/CheckoutPage";
@@ -59,7 +59,7 @@ export default function App() {
     <Routes>
       {/* Vitrine physique : plein écran, sans en-tête ni compte. */}
       <Route path="/kiosk" element={<Kiosk />} />
-      <Route path="/kiosk/achat/:id" element={<KioskCheckout />} />
+      <Route path="/kiosk/:id" element={<KioskArticle />} />
 
       {/* Public (light mode) */}
       <Route element={<PublicLayout />}>
