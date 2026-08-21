@@ -589,7 +589,7 @@ function DemandeTab({
         ? [request.article]
         : [];
     return (
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,0.85fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
         <div className="space-y-6">
           <ArticlePaymentSection request={request} />
           {meta}
@@ -3070,40 +3070,54 @@ function ArticleCartLine({
             </p>
           )}
         </div>
-
-        {/* Le QR code reprend la référence interne : le scanner du CRM ouvre la
-            fiche article, comme en scannant l'étiquette collée sur l'objet. */}
-        {qrValue && (
-          <div className="shrink-0 text-center">
-            <div className="rounded-lg bg-white p-1.5 text-black">
-              <QrCode value={qrValue} size={64} />
-            </div>
-            <p className="mt-1 font-mono text-[10px] text-zinc-500">{qrValue}</p>
-          </div>
-        )}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[var(--crm-border)] pt-2 text-xs">
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-zinc-600">Caisse</p>
-          <p className="font-medium text-zinc-300">
-            {article.caisse
-              ? article.caisse.label
-                ? `${article.caisse.code} — ${article.caisse.label}`
-                : article.caisse.code
-              : (article.location ?? "Non rangé")}
-          </p>
-          {article.caisse?.zone && (
-            <p className="text-[11px] text-zinc-600">{article.caisse.zone}</p>
-          )}
-        </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-zinc-600">
-            Site de retrait
-          </p>
-          <p className="font-medium text-zinc-300">
-            {article.site ? SITE_LABELS[article.site] : "Non renseigné"}
-          </p>
+      {/* Emplacement : c'est ce qu'on cherche en préparant une commande. Le
+          QR code (référence interne, celui de l'étiquette collée sur l'objet)
+          et le numéro de caisse se lisent sans se pencher sur l'écran — le
+          premier pour ouvrir la fiche au scan, le second pour trouver le bac. */}
+      <div className="mt-3 flex items-center gap-4 border-t border-[var(--crm-border)] pt-3">
+        {qrValue && (
+          <div className="shrink-0 text-center">
+            <div className="rounded-xl bg-white p-2 text-black">
+              <QrCode value={qrValue} size={104} />
+            </div>
+            <p className="mt-1 font-mono text-xs text-zinc-400">{qrValue}</p>
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-600">
+              Caisse
+            </p>
+            {article.caisse ? (
+              <>
+                <p className="text-3xl font-extrabold leading-tight tracking-tight text-zinc-100">
+                  {article.caisse.code}
+                </p>
+                {(article.caisse.label || article.caisse.zone) && (
+                  <p className="truncate text-xs text-zinc-500">
+                    {[article.caisse.label, article.caisse.zone]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-base font-semibold text-zinc-400">
+                {article.location ?? "Non rangé"}
+              </p>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-600">
+              Site de retrait
+            </p>
+            <p className="text-sm font-semibold text-zinc-300">
+              {article.site ? SITE_LABELS[article.site] : "Non renseigné"}
+            </p>
+          </div>
         </div>
       </div>
     </div>

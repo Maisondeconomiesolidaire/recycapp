@@ -215,6 +215,7 @@ function ArticleCard({
     bundledArticleIds?: string[];
     imageUrls: string[];
     location?: string;
+    caisseCode?: string;
   };
   wishlisted?: boolean;
   onToggleWishlist?: () => void;
@@ -266,6 +267,13 @@ function ArticleCard({
             {article.isLot && bundleCount > 0 ? (
               <span className="rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white shadow-sm">
                 {bundleCount} articles
+              </span>
+            ) : null}
+            {/* Le bac où l'objet attend en boutique : le client le retrouve
+                seul le jour du retrait, sans faire chercher l'équipe. */}
+            {article.caisseCode ? (
+              <span className="rounded-full bg-zinc-950/88 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
+                {article.caisseCode}
               </span>
             ) : null}
           </div>

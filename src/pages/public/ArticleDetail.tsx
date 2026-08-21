@@ -232,6 +232,13 @@ export function ArticleDetail() {
                 <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
                 {currentArticle.condition}
                 </span>
+                {/* Le bac où l'objet attend en boutique, annoncé au client
+                    pour qu'il le retrouve seul le jour du retrait. */}
+                {currentArticle.caisseCode && (
+                  <span className="rounded-full bg-zinc-950 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-white">
+                    {currentArticle.caisseCode}
+                  </span>
+                )}
                 {!available && (
                   <span className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
                     Réservé
