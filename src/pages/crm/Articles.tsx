@@ -28,6 +28,7 @@ import {
   MoreHorizontal,
   Link as LinkIcon,
   Ticket,
+  RefreshCw,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -236,6 +237,9 @@ export function Articles() {
   const [runOpen, setRunOpen] = useState(false);
   const [qrPoolOpen, setQrPoolOpen] = useState(false);
   const [discountsOpen, setDiscountsOpen] = useState(false);
+  const [stripeSyncing, setStripeSyncing] = useState(false);
+  const [stripeSyncNote, setStripeSyncNote] = useState("");
+  const syncStripeCatalog = useAction(api.stripeCatalog.syncAll);
   const freeQrCount = useQuery(api.articleQrCodes.freeCount, {});
   // Sélection multiple du stock : cible des impressions QR et des runs IA.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -419,6 +423,28 @@ export function Articles() {
     }
   }
 
+  /**
+   * Pousse tout le stock vers Stripe. Chaque écriture se synchronise déjà
+   * seule : ce bouton sert à la première mise en ligne, ou après un incident.
+   */
+  async function handleStripeSync() {
+    if (stripeSyncing) return;
+    setStripeSyncing(true);
+    setStripeSyncNote("");
+    try {
+      const result = await syncStripeCatalog({});
+      setStripeSyncNote(
+        `${result.scheduled} article${result.scheduled > 1 ? "s" : ""} envoyé${
+          result.scheduled > 1 ? "s" : ""
+        } vers Stripe.`,
+      );
+    } catch (err) {
+      setStripeSyncNote(errorMessage(err, "Synchronisation Stripe impossible."));
+    } finally {
+      setStripeSyncing(false);
+    }
+  }
+
   // Les actions de l'en-tête sont décrites une seule fois : les plus utilisées
   // restent des boutons sur grand écran, les autres passent dans le menu
   // « Plus ». En dessous, tout va dans le menu — l'en-tête ne déborde jamais.
@@ -495,6 +521,23 @@ export function Articles() {
       onClick: handleAnalyzeLots,
       disabled: !canAnalyze || analyzingLots || !articles?.length,
     },
+    ...(canUpdate
+      ? [
+          {
+            key: "stripe",
+            label: "Synchroniser Stripe",
+            title:
+              "Pousser tout le stock vers le catalogue Stripe (la synchro est automatique à chaque modification)",
+            icon: stripeSyncing ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 shrink-0" />
+            ),
+            onClick: handleStripeSync,
+            disabled: stripeSyncing,
+          },
+        ]
+      : []),
     {
       key: "scan",
       label: "Scanner",
@@ -958,6 +1001,12 @@ export function Articles() {
       {paymentLinkNotice && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-2.5 text-sm text-zinc-100 shadow-xl">
           {paymentLinkNotice}
+        </div>
+      )}
+
+      {stripeSyncNote && (
+        <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-2.5 text-sm text-zinc-100 shadow-xl">
+          {stripeSyncNote}
         </div>
       )}
 

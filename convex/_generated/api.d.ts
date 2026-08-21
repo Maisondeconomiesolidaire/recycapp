@@ -57,6 +57,7 @@ import type * as sorties from "../sorties.js";
 import type * as stripe from "../stripe.js";
 import type * as stripeCatalog from "../stripeCatalog.js";
 import type * as team from "../team.js";
+import type * as tmpWebhookInspect from "../tmpWebhookInspect.js";
 import type * as users from "../users.js";
 import type * as vehicleControlReminders from "../vehicleControlReminders.js";
 import type * as vehicleRemarkAnalysis from "../vehicleRemarkAnalysis.js";
@@ -118,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   stripe: typeof stripe;
   stripeCatalog: typeof stripeCatalog;
   team: typeof team;
+  tmpWebhookInspect: typeof tmpWebhookInspect;
   users: typeof users;
   vehicleControlReminders: typeof vehicleControlReminders;
   vehicleRemarkAnalysis: typeof vehicleRemarkAnalysis;
