@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   ScanLine, Plus, Trash2, CreditCard, Banknote, FileText,
@@ -1013,13 +1013,6 @@ function PaiementStep({
             })}
           </div>
 
-          {paymentMethod === "cb" && (
-            <p className="mt-3 text-xs text-zinc-500">
-              Ouvre la page de paiement Stripe : le client règle par carte, puis
-              la vente se termine au retour dans le CRM.
-            </p>
-          )}
-
           {paymentMethod === "especes" && (
             <div className="mt-4">
               <label className="mb-1.5 block text-xs text-zinc-500">Montant reçu</label>
@@ -1139,7 +1132,6 @@ function TerminalPayment({
   const [readers, setReaders] = useState<
     Array<{ id: string; label: string | null; status: string | null; deviceType: string | null }> | null
   >(null);
-  const [readersError, setReadersError] = useState("");
   const [readerId, setReaderId] = useState("");
   const [waiting, setWaiting] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -1152,10 +1144,11 @@ function TerminalPayment({
         setReaders(result);
         if (result[0]) setReaderId(result[0].id);
       })
-      .catch((err: unknown) => {
+      .catch(() => {
+        // Terminal injoignable : la caisse propose simplement les autres
+        // moyens de paiement, sans détailler pourquoi.
         if (cancelled) return;
         setReaders([]);
-        setReadersError(errorMessage(err, "Lecteurs Stripe indisponibles."));
       });
     return () => {
       cancelled = true;
@@ -1185,7 +1178,7 @@ function TerminalPayment({
         }
         if (status.status === "canceled") {
           setWaiting(null);
-          setError("Paiement annulé sur le lecteur.");
+          setError("Paiement annulé sur le terminal.");
           return;
         }
         if (status.lastError) {
@@ -1195,7 +1188,7 @@ function TerminalPayment({
         }
       }
       setWaiting(null);
-      setError("Le lecteur n'a pas répondu. Vérifiez le terminal.");
+      setError("Le terminal n'a pas répondu.");
     } catch (err) {
       setWaiting(null);
       setError(errorMessage(err, "Encaissement sans contact impossible."));
@@ -1216,26 +1209,15 @@ function TerminalPayment({
       </div>
 
       {readers === null ? (
-        <p className="mt-3 text-sm text-zinc-500">Recherche des lecteurs…</p>
+        <p className="mt-3 text-sm text-zinc-500">Recherche du terminal…</p>
       ) : readers.length === 0 ? (
-        <div className="mt-3 rounded-xl bg-[var(--crm-surface-2)] px-4 py-3">
-          <p className="text-sm text-zinc-400">
-            Aucun lecteur Stripe n'est enregistré sur le compte.
-          </p>
-          <p className="mt-1.5 text-xs text-zinc-500">
-            En attendant, encaissez le sans-contact depuis l'application Stripe
-            sur le téléphone, puis validez la vente ici en « Carte bancaire ».
-          </p>
-          <p className="mt-1.5 text-xs text-zinc-500">
-            Tap to Pay ne peut pas être ouvert depuis un navigateur : Stripe ne
-            le propose que dans ses applications iOS et Android. Enregistrez un
-            téléphone comme lecteur Tap to Pay depuis l'app Stripe et il
-            apparaîtra ici, montant pré-rempli.
-          </p>
-          {readersError && <p className="mt-1.5 text-xs text-amber-300">{readersError}</p>}
-        </div>
+        <p className="mt-3 text-sm text-zinc-500">
+          Aucun terminal disponible. Encaissez sur le téléphone, puis validez la
+          vente en « Carte bancaire ».
+        </p>
       ) : (
         <div className="mt-3 space-y-3">
+          {readers.length > 1 && (
           <select
             value={readerId}
             onChange={(e) => setReaderId(e.target.value)}
@@ -1248,12 +1230,13 @@ function TerminalPayment({
               </option>
             ))}
           </select>
+          )}
 
           {waiting ? (
             <div className="flex items-center gap-3 rounded-xl bg-brand-500/10 px-4 py-3">
               <Loader2 className="h-4 w-4 animate-spin text-brand-400" />
               <p className="flex-1 text-sm text-zinc-200">
-                {formatPrice(total)} affiché sur le lecteur — le client peut payer.
+                {formatPrice(total)} affiché sur le terminal — le client peut payer.
               </p>
               <button
                 type="button"
@@ -1377,9 +1360,14 @@ function ReceiptView({
 function HistoriquePanel() {
   const [range, setRange] = useState<"7j" | "30j">("7j");
 
-  const { startDate, endDate } = range === "7j"
-    ? { startDate: Date.now() - 7 * 86400000, endDate: Date.now() }
-    : { startDate: Date.now() - 30 * 86400000, endDate: Date.now() };
+  // Les bornes DOIVENT être figées : calculées à chaque rendu, `Date.now()`
+  // renvoyait des arguments différents à chaque fois, la requête se réabonnait
+  // en boucle et l'historique restait bloqué sur « Chargement… ».
+  const { startDate, endDate } = useMemo(() => {
+    const now = Date.now();
+    const days = range === "7j" ? 7 : 30;
+    return { startDate: now - days * 86400000, endDate: now };
+  }, [range]);
 
   const ventes = useQuery(api.ventes.listVentes, { startDate, endDate });
   const stats = useQuery(api.ventes.ventesStats, { startDate, endDate });
@@ -1420,7 +1408,15 @@ function HistoriquePanel() {
       {ventes === undefined ? (
         <p className="text-sm text-zinc-500">Chargement…</p>
       ) : ventes.length === 0 ? (
-        <p className="text-sm text-zinc-500">Aucune vente sur cette période.</p>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-5 py-8 text-center">
+          <ShoppingCart className="mx-auto h-8 w-8 text-zinc-700" />
+          <p className="mt-2 text-sm font-semibold text-zinc-300">
+            Aucune vente sur cette période
+          </p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Les ventes encaissées en caisse apparaîtront ici.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           {ventes.map((v) => (
