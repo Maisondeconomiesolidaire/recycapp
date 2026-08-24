@@ -4,6 +4,7 @@ import { RequirePublicAccount } from "./components/public/RequirePublicAccount";
 import { Boutique } from "./pages/public/Boutique";
 import { Kiosk } from "./pages/public/Kiosk";
 import { KioskArticle } from "./pages/public/KioskArticle";
+import { AcheterArticle } from "./pages/public/AcheterArticle";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
 import { CheckoutPage } from "./pages/public/CheckoutPage";
@@ -60,6 +61,10 @@ export default function App() {
       {/* Vitrine physique : plein écran, sans en-tête ni compte. */}
       <Route path="/kiosk" element={<Kiosk />} />
       <Route path="/kiosk/:id" element={<KioskArticle />} />
+
+      {/* Achat d'un article scanné en vitrine, sur le téléphone du client :
+          aucun compte n'est demandé, le paiement passe par Stripe Checkout. */}
+      <Route path="/acheter/:id" element={<AcheterArticle />} />
 
       {/* Public (light mode) */}
       <Route element={<PublicLayout />}>

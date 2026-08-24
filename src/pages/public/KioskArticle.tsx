@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ArrowLeft, PackageOpen, Phone } from "lucide-react";
+import { ArrowLeft, PackageOpen } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { Lightbox } from "../../components/ui/Lightbox";
 import { formatPrice } from "../../lib/format";
-import { KIOSK_CALL_MESSAGE } from "../../components/public/ArticleCard";
+import { QrCode } from "../../components/ui/QrCode";
+import {
+  KIOSK_SCAN_LABEL,
+  purchaseUrl,
+} from "../../components/public/ArticleCard";
 
 /**
  * Fiche article en vitrine.
@@ -141,15 +145,23 @@ export function KioskArticle() {
             </div>
           </div>
 
-          {/* Aucune action d'achat en vitrine : la vente se fait au comptoir. */}
-          <div className="flex items-start gap-4 rounded-[28px] border border-brand-200 bg-white p-6 shadow-[0_18px_45px_rgba(24,24,27,0.08)]">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-              <Phone className="h-6 w-6" />
-            </span>
-            <p className="text-lg font-bold leading-7 text-zinc-950">
-              {KIOSK_CALL_MESSAGE}
-            </p>
-          </div>
+          {/* Le client achète depuis SON téléphone : il scanne, il paie. */}
+          {available && (
+            <div className="flex items-center gap-5 rounded-[28px] border border-brand-200 bg-white p-6 shadow-[0_18px_45px_rgba(24,24,27,0.08)]">
+              <span className="shrink-0 rounded-2xl bg-white p-2 text-black ring-1 ring-zinc-200">
+                <QrCode value={purchaseUrl(article._id)} size={140} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-lg font-bold leading-7 text-zinc-950">
+                  {KIOSK_SCAN_LABEL}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-zinc-500">
+                  Ouvrez l'appareil photo de votre téléphone et visez le code :
+                  le paiement se fait en ligne, le retrait à l'accueil.
+                </p>
+              </div>
+            </div>
+          )}
 
           {article.description && (
             <div>

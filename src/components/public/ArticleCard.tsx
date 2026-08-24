@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ArrowRight, Check, Flame, Heart, PackageOpen, Phone, ShoppingCart, X } from "lucide-react";
+import { ArrowRight, Check, Flame, Heart, PackageOpen, ShoppingCart, X } from "lucide-react";
+import { QrCode } from "../ui/QrCode";
 import { api } from "../../../convex/_generated/api";
 import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
@@ -11,17 +12,17 @@ const ORANGE = "#f97316";
 const ORANGE_DARK = "#ea6a0c";
 
 /**
- * Messages de la vitrine, où l'on n'achète pas soi-même.
- *
- * Deux formulations : en haut du catalogue aucun article n'est désigné, donc
- * « un produit » ; sur une fiche, l'article est sous les yeux du client, donc
- * « ce produit ».
+ * Consigne d'achat en vitrine : le client scanne et paie sur son téléphone.
  */
 export const KIOSK_CALL_MESSAGE_GENERAL =
-  "Intéressé par un produit ? Appelez un membre de l'équipe pour effectuer votre achat.";
+  "Intéressé par un produit ? Scannez son QR code pour l'acheter depuis votre téléphone.";
 
-export const KIOSK_CALL_MESSAGE =
-  "Intéressé par ce produit ? Appelez un membre de l'équipe pour effectuer votre achat.";
+export const KIOSK_SCAN_LABEL = "Scannez pour acheter cet article";
+
+/** Lien d'achat d'un article, encodé dans le QR code de la vitrine. */
+export function purchaseUrl(articleId: string) {
+  return `${window.location.origin}/acheter/${articleId}`;
+}
 
 export type ShopArticleCard = {
   _id: string;
@@ -200,10 +201,16 @@ export function ArticleCard({
         </div>
 
         {kiosk ? (
-          <p className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-zinc-100 py-3 text-center text-xs font-bold leading-4 text-zinc-600">
-            <Phone className="h-3.5 w-3.5 shrink-0" />
-            Appelez un membre de l'équipe
-          </p>
+          /* Le QR code porte le lien d'achat de CET article : le client le
+             scanne avec son appareil photo et paie sur son propre téléphone. */
+          <div className="mt-3 flex items-center gap-3 rounded-2xl bg-zinc-50 p-3">
+            <span className="shrink-0 rounded-lg bg-white p-1.5 text-black">
+              <QrCode value={purchaseUrl(article._id)} size={72} />
+            </span>
+            <span className="min-w-0 text-sm font-bold leading-5 text-zinc-700">
+              {KIOSK_SCAN_LABEL}
+            </span>
+          </div>
         ) : !reserved && (
           <button
             type="button"
