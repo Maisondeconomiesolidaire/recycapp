@@ -32,7 +32,6 @@ type NavItem = (typeof CRM_PAGES)[number];
 // accessibles et seront réintégrées plus tard).
 const HIDDEN_NAV_KEYS: CrmPageKey[] = [
   "tournees",
-  "caisse",
   "arrivages",
   "sorties",
   "ateliers",

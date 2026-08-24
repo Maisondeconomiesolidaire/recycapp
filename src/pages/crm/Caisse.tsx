@@ -84,10 +84,16 @@ const PAYMENT_METHODS = [
 
 type PaymentMethod = typeof PAYMENT_METHODS[number]["key"];
 
-/** Étapes de la vente, dans l'ordre. */
+/**
+ * Étapes de la vente, dans l'ordre.
+ *
+ * L'article vient EN PREMIER : en vitrine comme au comptoir, le client se
+ * présente avec un objet en main. On le scanne pendant qu'on l'a sous les
+ * yeux, on demande ses coordonnées ensuite.
+ */
 const STEPS = [
-  { key: "client" as const, label: "Client" },
   { key: "articles" as const, label: "Articles" },
+  { key: "client" as const, label: "Client" },
   { key: "paiement" as const, label: "Paiement" },
 ];
 
@@ -132,7 +138,7 @@ export function Caisse() {
  * et dans le CRM, exactement comme un achat en ligne retiré en boutique.
  */
 function VentePanel() {
-  const [step, setStep] = useState<Step>("client");
+  const [step, setStep] = useState<Step>("articles");
   const [clientMode, setClientMode] = useState<ClientMode>("existant");
   const [customer, setCustomer] = useState<SaleCustomer | null>(null);
 
@@ -192,7 +198,7 @@ function VentePanel() {
   useEffect(() => {
     if (!draftHydratedRef.current) return;
 
-    if (cart.length === 0 && !customer && step === "client") {
+    if (cart.length === 0 && !customer && step === "articles") {
       window.localStorage.removeItem(CAISSE_DRAFT_STORAGE_KEY);
       return;
     }
@@ -269,7 +275,7 @@ function VentePanel() {
     setAmountTendered("");
     setPaymentMethod("especes");
     setCustomer(null);
-    setStep("client");
+    setStep("articles");
     window.localStorage.removeItem(CAISSE_DRAFT_STORAGE_KEY);
   }
 
@@ -345,21 +351,21 @@ function VentePanel() {
         </div>
       )}
 
+      {step === "articles" && (
+        <ArticlesStep
+          cart={cart}
+          onCart={setCart}
+          onNext={() => setStep("client")}
+        />
+      )}
+
       {step === "client" && (
         <ClientStep
           mode={clientMode}
           onModeChange={setClientMode}
           customer={customer}
           onCustomer={setCustomer}
-          onNext={() => setStep("articles")}
-        />
-      )}
-
-      {step === "articles" && (
-        <ArticlesStep
-          cart={cart}
-          onCart={setCart}
-          onBack={() => setStep("client")}
+          onBack={() => setStep("articles")}
           onNext={() => setStep("paiement")}
         />
       )}
@@ -379,7 +385,7 @@ function VentePanel() {
           onPaymentMethod={setPaymentMethod}
           paying={paying}
           onPay={handlePay}
-          onBack={() => setStep("articles")}
+          onBack={() => setStep("client")}
           onTerminalPaid={(paymentIntentId) =>
             handleTerminalPaid(paymentIntentId)
           }
@@ -484,19 +490,21 @@ function StepBar({
   );
 }
 
-// ─── Étape 1 : le client ──────────────────────────────────────────────────────
+// ─── Étape 2 : le client ──────────────────────────────────────────────────────
 
 function ClientStep({
   mode,
   onModeChange,
   customer,
   onCustomer,
+  onBack,
   onNext,
 }: {
   mode: ClientMode;
   onModeChange: (mode: ClientMode) => void;
   customer: SaleCustomer | null;
   onCustomer: (customer: SaleCustomer | null) => void;
+  onBack: () => void;
   onNext: () => void;
 }) {
   const [search, setSearch] = useState("");
@@ -688,21 +696,27 @@ function ClientStep({
           </p>
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="mt-5 rounded-xl border border-[var(--crm-border)] px-5 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-[var(--crm-surface-2)]"
+      >
+        Retour aux articles
+      </button>
     </div>
   );
 }
 
-// ─── Étape 2 : les articles ───────────────────────────────────────────────────
+// ─── Étape 1 : les articles ───────────────────────────────────────────────────
 
 function ArticlesStep({
   cart,
   onCart,
-  onBack,
   onNext,
 }: {
   cart: CartItem[];
   onCart: (updater: (prev: CartItem[]) => CartItem[]) => void;
-  onBack: () => void;
   onNext: () => void;
 }) {
   const [scanInput, setScanInput] = useState("");
@@ -919,15 +933,8 @@ function ArticlesStep({
               disabled={cart.length === 0}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3.5 text-sm font-bold text-white transition disabled:opacity-50"
             >
-              Passer au paiement
+              Renseigner le client
               <ArrowRight className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={onBack}
-              className="mt-2 w-full rounded-xl border border-[var(--crm-border)] py-3 text-sm font-semibold text-zinc-300 transition hover:bg-[var(--crm-surface-2)]"
-            >
-              Retour au client
             </button>
           </div>
         </div>
@@ -1096,7 +1103,7 @@ function PaiementStep({
             onClick={onBack}
             className="mt-2 w-full rounded-xl border border-[var(--crm-border)] py-3 text-sm font-semibold text-zinc-300 transition hover:bg-[var(--crm-surface-2)]"
           >
-            Retour aux articles
+            Retour au client
           </button>
         </div>
       </div>
@@ -1216,9 +1223,13 @@ function TerminalPayment({
             Aucun lecteur Stripe n'est enregistré sur le compte.
           </p>
           <p className="mt-1.5 text-xs text-zinc-500">
+            En attendant, encaissez le sans-contact depuis l'application Stripe
+            sur le téléphone, puis validez la vente ici en « Carte bancaire ».
+          </p>
+          <p className="mt-1.5 text-xs text-zinc-500">
             Tap to Pay ne peut pas être ouvert depuis un navigateur : Stripe ne
             le propose que dans ses applications iOS et Android. Enregistrez un
-            lecteur (ou un téléphone Tap to Pay via l'app Stripe) et il
+            téléphone comme lecteur Tap to Pay depuis l'app Stripe et il
             apparaîtra ici, montant pré-rempli.
           </p>
           {readersError && <p className="mt-1.5 text-xs text-amber-300">{readersError}</p>}
