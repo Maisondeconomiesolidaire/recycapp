@@ -49,7 +49,7 @@ export function ProductOfDayHero({
   const href = kiosk ? `/kiosk/${product._id}` : `/boutique/${product._id}`;
 
   return (
-    <section className="mx-auto w-full max-w-3xl px-5 pt-6 sm:px-7 lg:px-8">
+    <section className="mx-auto w-full max-w-4xl px-5 pt-6 sm:px-7 lg:px-8">
       <style>{`
         @keyframes podFloat {
           0%, 100% { transform: translateY(0); }
@@ -65,16 +65,16 @@ export function ProductOfDayHero({
         <div className="pointer-events-none absolute -right-20 -top-20 h-32 w-32 rounded-full bg-brand-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-1/3 h-32 w-32 rounded-full bg-amber-300/20 blur-3xl" />
 
-        <div className="relative grid items-stretch md:grid-cols-2">
+        <div className="relative grid items-stretch md:grid-cols-[260px_1fr]">
           <Link
             to={href}
-            className="group relative block h-44 overflow-hidden bg-[#f2eee7] sm:h-48 md:h-[200px]"
+            className="group relative block h-60 overflow-hidden bg-[#f2eee7] md:h-[260px]"
           >
             {product.imageUrls[0] ? (
               <img
                 src={product.imageUrls[0]}
                 alt={product.title}
-                className="h-full w-full object-contain p-3 transition-transform duration-700 group-hover:scale-105"
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-zinc-300">
@@ -99,25 +99,25 @@ export function ProductOfDayHero({
             )}
           </Link>
 
-          <div className="relative flex min-w-0 flex-col justify-center gap-2 p-5 sm:p-6">
-            <h2 className="line-clamp-2 text-lg font-black leading-[1.15] tracking-tight text-zinc-950 sm:text-xl">
+          <div className="relative flex min-w-0 flex-col justify-center gap-2.5 p-6 sm:p-7">
+            <h2 className="line-clamp-2 text-xl font-black leading-[1.15] tracking-tight text-zinc-950 sm:text-2xl">
               {product.title}
             </h2>
-            <p className="line-clamp-2 max-w-prose text-xs leading-5 text-zinc-600">
-              {truncateDescription(product.description, 100)}
+            <p className="line-clamp-2 max-w-prose text-sm leading-6 text-zinc-600">
+              {truncateDescription(product.description, 140)}
             </p>
             <div className="flex flex-wrap items-center gap-3">
               {product.originalPrice && product.originalPrice > product.price ? (
                 <>
-                  <span className="text-xl font-black tracking-tight sm:text-2xl" style={{ color: BRAND }}>
+                  <span className="text-2xl font-black tracking-tight sm:text-3xl" style={{ color: BRAND }}>
                     {formatPrice(product.price)}
                   </span>
-                  <span className="text-sm font-semibold text-zinc-400 line-through">
+                  <span className="text-base font-semibold text-zinc-400 line-through">
                     {formatPrice(product.originalPrice)}
                   </span>
                 </>
               ) : (
-                <span className="text-xl font-black tracking-tight sm:text-2xl" style={{ color: BRAND }}>
+                <span className="text-2xl font-black tracking-tight sm:text-3xl" style={{ color: BRAND }}>
                   {formatPrice(product.price)}
                 </span>
               )}
@@ -127,7 +127,7 @@ export function ProductOfDayHero({
             </div>
             <Link
               to={href}
-              className="inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white shadow-[0_10px_22px_rgba(241,16,79,0.28)] transition hover:-translate-y-0.5"
+              className="inline-flex w-fit items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-[0_12px_26px_rgba(241,16,79,0.3)] transition hover:-translate-y-0.5"
               style={{ backgroundColor: BRAND }}
             >
               Découvrir l'article
