@@ -181,8 +181,16 @@ export function KioskArticle() {
 
 function KioskShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#f6f4ef]">
-      <div className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
+    <div className="relative min-h-screen bg-transparent">
+      {/* Même fond animé que la fiche article de la boutique, voilé pour que
+          le texte reste lisible par-dessus. */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <video autoPlay muted loop playsInline className="h-full w-full object-cover">
+          <source src="/Beautiful%20Wallpaper%20Video.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(246,244,239,0.48)_0%,rgba(246,244,239,0.64)_16%,rgba(246,244,239,0.78)_34%,rgba(246,244,239,0.88)_100%)]" />
+      </div>
+      <div className="relative z-10 mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
         <Link
           to="/kiosk"
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 shadow-sm transition hover:text-zinc-900"

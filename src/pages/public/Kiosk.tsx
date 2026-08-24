@@ -4,10 +4,12 @@ import { PackageOpen, Search, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { ARTICLE_CATEGORIES } from "../../lib/constants";
 import {
   ArticleCard,
   KIOSK_CALL_MESSAGE_GENERAL,
 } from "../../components/public/ArticleCard";
+import { ProductOfDayHero } from "../../components/public/ProductOfDayHero";
 
 const BRAND = "#f1104f";
 
@@ -24,8 +26,15 @@ const BRAND = "#f1104f";
  */
 export function Kiosk() {
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
 
-  const articles = useQuery(api.articles.listPublic, {});
+  const articles = useQuery(api.articles.listPublic, {
+    categories: category ? [category] : undefined,
+  });
+  const productOfDay = useQuery(api.articles.getProductOfDay, {});
+  // La mise en avant s'efface dès qu'on filtre ou qu'on cherche : elle
+  // désignerait un article absent de la liste affichée juste en dessous.
+  const showFeatured = !category && !search.trim();
 
   const filteredArticles = useMemo(() => {
     if (!articles) return articles;
@@ -42,7 +51,16 @@ export function Kiosk() {
   }, [articles, search]);
 
   return (
-    <div className="relative min-h-screen bg-[#f6f4ef]">
+    <div className="relative min-h-screen bg-transparent">
+      {/* Le même fond animé que la boutique en ligne : la vitrine et le site
+          doivent se ressembler jusque dans le décor. */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <video autoPlay muted loop playsInline className="h-full w-full object-cover">
+          <source src="/Beautiful%20Wallpaper%20Video.mp4" type="video/mp4" />
+        </video>
+      </div>
+
+      <div className="relative z-10">
       <section className="border-b border-black/5">
         <div className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
           <div className="overflow-hidden rounded-[36px] border border-white/35 bg-white/8 shadow-[0_30px_90px_rgba(24,24,27,0.1)] backdrop-blur-[3px]">
@@ -65,6 +83,27 @@ export function Kiosk() {
         </p>
       </section>
 
+      {showFeatured && productOfDay && (
+        <ProductOfDayHero product={productOfDay} variant="kiosk" />
+      )}
+
+      {/* Catégories : les mêmes que dans l'en-tête de la boutique. */}
+      <nav className="mx-auto flex w-full max-w-[92rem] flex-wrap gap-2 px-5 pt-8 sm:px-7 lg:px-8">
+        <CategoryChip
+          label="Tout"
+          active={category === null}
+          onClick={() => setCategory(null)}
+        />
+        {ARTICLE_CATEGORIES.map((item) => (
+          <CategoryChip
+            key={item}
+            label={item}
+            active={category === item}
+            onClick={() => setCategory(item)}
+          />
+        ))}
+      </nav>
+
       <section className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 lg:px-8">
         <div>
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
@@ -73,7 +112,7 @@ export function Kiosk() {
                 Catalogue
               </p>
               <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">
-                Tous les articles
+                {category ?? "Tous les articles"}
               </h2>
               <p className="mt-1 text-sm text-zinc-600">
                 {filteredArticles?.length ?? 0} article
@@ -121,6 +160,32 @@ export function Kiosk() {
           )}
         </div>
       </section>
+      </div>
     </div>
+  );
+}
+
+/** Pastille de catégorie, reprise de l'en-tête de la boutique. */
+function CategoryChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${
+        active
+          ? "bg-white/84 text-zinc-950 shadow-sm"
+          : "text-zinc-700 hover:bg-white/70 hover:text-zinc-950"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
