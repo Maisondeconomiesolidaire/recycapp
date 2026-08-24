@@ -27,12 +27,9 @@ function truncateDescription(value: string, max = 88) {
 /**
  * « Produit du jour », partagé par la boutique en ligne et la vitrine.
  *
- * Il met un article en avant sans manger tout l'écran : le catalogue doit
- * rester visible sous lui, sinon la mise en avant se paie d'une page qu'il faut
- * faire défiler avant de voir quoi que ce soit d'autre.
- *
  * En vitrine (`variant="kiosk"`), les favoris disparaissent et les liens
- * pointent vers les fiches du kiosque.
+ * pointent vers les fiches du kiosque. Tout le reste — dimensions comprises —
+ * est identique des deux côtés.
  */
 export function ProductOfDayHero({
   product,
@@ -49,7 +46,7 @@ export function ProductOfDayHero({
   const href = kiosk ? `/kiosk/${product._id}` : `/boutique/${product._id}`;
 
   return (
-    <section className="mx-auto w-full max-w-4xl px-5 pt-6 sm:px-7 lg:px-8">
+    <section className="mx-auto w-full max-w-[92rem] px-5 pt-8 sm:px-7 lg:px-8">
       <style>{`
         @keyframes podFloat {
           0%, 100% { transform: translateY(0); }
@@ -60,15 +57,15 @@ export function ProductOfDayHero({
           60%, 100% { transform: translateX(220%) skewX(-12deg); }
         }
       `}</style>
-      <div className="relative overflow-hidden rounded-[28px] border border-brand-500/15 bg-gradient-to-br from-white via-[#fff7ef] to-[#ffe9d6] shadow-[0_24px_70px_rgba(241,16,79,0.14)]">
+      <div className="relative overflow-hidden rounded-[36px] border border-brand-500/15 bg-gradient-to-br from-white via-[#fff7ef] to-[#ffe9d6] shadow-[0_36px_110px_rgba(241,16,79,0.16)]">
         {/* halos décoratifs */}
-        <div className="pointer-events-none absolute -right-20 -top-20 h-32 w-32 rounded-full bg-brand-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 left-1/3 h-32 w-32 rounded-full bg-amber-300/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-amber-300/20 blur-3xl" />
 
-        <div className="relative grid items-stretch md:grid-cols-[260px_1fr]">
+        <div className="relative grid items-stretch md:grid-cols-2">
           <Link
             to={href}
-            className="group relative block h-60 overflow-hidden bg-[#f2eee7] md:h-[260px]"
+            className="group relative block aspect-[4/3] overflow-hidden bg-[#f2eee7] md:aspect-auto md:min-h-[380px]"
           >
             {product.imageUrls[0] ? (
               <img
@@ -83,7 +80,7 @@ export function ProductOfDayHero({
             )}
             {/* reflet animé */}
             <span className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent" style={{ animation: "podSheen 4.5s ease-in-out infinite" }} />
-            <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white shadow-[0_8px_20px_rgba(241,16,79,0.36)]" style={{ animation: "podFloat 3.5s ease-in-out infinite" }}>
+            <span className="absolute left-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white shadow-[0_10px_24px_rgba(241,16,79,0.4)]" style={{ animation: "podFloat 3.5s ease-in-out infinite" }}>
               Produit du jour
             </span>
             {onToggleWishlist && !kiosk && (
@@ -94,44 +91,44 @@ export function ProductOfDayHero({
                   e.stopPropagation();
                   onToggleWishlist();
                 }}
-                className="absolute right-3 top-3 h-9 w-9"
+                className="absolute right-5 top-5 h-11 w-11"
               />
             )}
           </Link>
 
-          <div className="relative flex min-w-0 flex-col justify-center gap-2.5 p-6 sm:p-7">
-            <h2 className="line-clamp-2 text-xl font-black leading-[1.15] tracking-tight text-zinc-950 sm:text-2xl">
+          <div className="relative flex flex-col justify-center gap-4 p-7 sm:p-9 lg:p-10">
+            <h2 className="text-3xl font-black leading-[1.05] tracking-tight text-zinc-950 sm:text-4xl lg:text-5xl">
               {product.title}
             </h2>
-            <p className="line-clamp-2 max-w-prose text-sm leading-6 text-zinc-600">
-              {truncateDescription(product.description, 140)}
+            <p className="max-w-prose text-base leading-7 text-zinc-600 sm:text-lg">
+              {truncateDescription(product.description, 240)}
             </p>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-4">
               {product.originalPrice && product.originalPrice > product.price ? (
                 <>
-                  <span className="text-2xl font-black tracking-tight sm:text-3xl" style={{ color: BRAND }}>
+                  <span className="text-4xl font-black tracking-tight sm:text-5xl" style={{ color: BRAND }}>
                     {formatPrice(product.price)}
                   </span>
-                  <span className="text-base font-semibold text-zinc-400 line-through">
+                  <span className="text-xl font-semibold text-zinc-400 line-through">
                     {formatPrice(product.originalPrice)}
                   </span>
                 </>
               ) : (
-                <span className="text-2xl font-black tracking-tight sm:text-3xl" style={{ color: BRAND }}>
+                <span className="text-4xl font-black tracking-tight sm:text-5xl" style={{ color: BRAND }}>
                   {formatPrice(product.price)}
                 </span>
               )}
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-zinc-600 shadow-sm ring-1 ring-black/5">
+              <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-zinc-600 shadow-sm ring-1 ring-black/5">
                 {product.condition}
               </span>
             </div>
             <Link
               to={href}
-              className="inline-flex w-fit items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-[0_12px_26px_rgba(241,16,79,0.3)] transition hover:-translate-y-0.5"
+              className="inline-flex w-fit items-center gap-2.5 rounded-full px-7 py-3.5 text-sm font-bold text-white shadow-[0_16px_40px_rgba(241,16,79,0.34)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(241,16,79,0.42)]"
               style={{ backgroundColor: BRAND }}
             >
               Découvrir l'article
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-5 w-5" />
             </Link>
           </div>
         </div>
