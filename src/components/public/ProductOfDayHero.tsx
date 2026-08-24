@@ -60,7 +60,7 @@ export function ProductOfDayHero({
           60%, 100% { transform: translateX(220%) skewX(-12deg); }
         }
       `}</style>
-      <div className="relative overflow-hidden rounded-[28px] border border-brand-500/15 bg-gradient-to-br from-white via-[#fff7ef] to-[#ffe9d6] shadow-[0_24px_70px_rgba(241,16,79,0.14)] md:max-h-[300px]">
+      <div className="relative overflow-hidden rounded-[28px] border border-brand-500/15 bg-gradient-to-br from-white via-[#fff7ef] to-[#ffe9d6] shadow-[0_24px_70px_rgba(241,16,79,0.14)]">
         {/* halos décoratifs */}
         <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-brand-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-amber-300/20 blur-3xl" />
@@ -68,7 +68,7 @@ export function ProductOfDayHero({
         <div className="relative grid items-stretch md:grid-cols-2">
           <Link
             to={href}
-            className="group relative block h-48 overflow-hidden bg-[#f2eee7] sm:h-56 md:h-full md:min-h-[240px]"
+            className="group relative block h-48 overflow-hidden bg-[#f2eee7] sm:h-56 md:h-[260px]"
           >
             {product.imageUrls[0] ? (
               <img
