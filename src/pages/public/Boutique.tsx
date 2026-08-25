@@ -123,7 +123,7 @@ export function Boutique() {
         <div className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
           <div className="overflow-hidden rounded-[36px] border border-white/35 bg-white/8 shadow-[0_30px_90px_rgba(24,24,27,0.1)] backdrop-blur-[3px]">
             <img
-              src="/hero-new.png"
+              src="/hero-new.jpeg"
               alt="Boutique Recyclerie"
               className="block h-auto w-full object-cover"
             />
