@@ -7,6 +7,8 @@ import { api } from "../../../convex/_generated/api";
 import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
 
+import { PRICE_BG, PRICE_SHADOW } from "../../lib/publicColors";
+
 const BRAND = "#f1104f";
 const ORANGE = "#f97316";
 const ORANGE_DARK = "#ea6a0c";
@@ -179,8 +181,8 @@ export function ArticleCard({
             {article.originalPrice && article.originalPrice > article.price ? (
               <>
                 <span
-                  className="rounded-2xl px-2.5 py-2 text-xl font-extrabold leading-none text-white shadow-[0_12px_28px_rgba(241,16,79,0.22)]"
-                  style={{ backgroundColor: BRAND }}
+                  className="rounded-2xl px-2.5 py-2 text-xl font-extrabold leading-none text-white"
+                  style={{ backgroundColor: PRICE_BG, boxShadow: PRICE_SHADOW }}
                 >
                   {formatPrice(article.price)}
                 </span>

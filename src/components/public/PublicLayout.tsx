@@ -29,8 +29,9 @@ import { AccountMenu } from "./AccountMenu";
 import { PageSwitcher } from "./PageSwitcher";
 
 const PUBLIC_CONTAINER = "mx-auto w-full max-w-[92rem] px-5 sm:px-7 lg:px-8";
+import { CART_BG, CART_BG_DARK, CART_SHADOW } from "../../lib/publicColors";
+
 const BRAND = "#f1104f";
-const BRAND_DARK = "#c90d40";
 
 const MARQUEE_ITEMS = [
   "Déstockage jusqu'à -70% sur une sélection de belles pièces",
@@ -420,12 +421,15 @@ function Header() {
                   type="button"
                   onClick={() => setCartOpen((v) => !v)}
                   aria-label="Mon panier"
-                  className="relative inline-flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_14px_34px_rgba(241,16,79,0.28)] transition hover:-translate-y-0.5 sm:h-14 sm:w-14"
-                  style={{ backgroundColor: cartOpen ? BRAND_DARK : BRAND }}
+                  className="relative inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:-translate-y-0.5 sm:h-14 sm:w-14"
+                  style={{
+                    backgroundColor: cartOpen ? CART_BG_DARK : CART_BG,
+                    boxShadow: CART_SHADOW,
+                  }}
                 >
                   <ShoppingCart className="h-5 w-5" />
                   {cart.count > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-extrabold ring-2 ring-[#f6f4ef]" style={{ color: BRAND }}>
+                    <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-extrabold ring-2 ring-[#f6f4ef]" style={{ color: CART_BG }}>
                       {cart.count}
                     </span>
                   )}

@@ -16,6 +16,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
+import { PRICE_BG, PRICE_SHADOW } from "../../lib/publicColors";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { Button } from "../../components/ui/Button";
 import { Lightbox } from "../../components/ui/Lightbox";
@@ -284,7 +285,8 @@ export function ArticleDetail() {
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 {currentArticle.originalPrice && currentArticle.originalPrice > currentArticle.price ? (
                   <>
-                    <span className="rounded-2xl bg-brand-500 px-4 py-3 text-3xl font-extrabold leading-none text-white shadow-[0_16px_34px_rgba(255,119,0,0.24)] sm:text-4xl">
+                    <span className="rounded-2xl px-4 py-3 text-3xl font-extrabold leading-none text-white sm:text-4xl"
+                      style={{ backgroundColor: PRICE_BG, boxShadow: PRICE_SHADOW }}>
                       {formatPrice(currentArticle.price)}
                     </span>
                     <span className="text-xl font-semibold text-zinc-400 line-through sm:text-2xl">
