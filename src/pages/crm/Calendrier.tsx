@@ -33,7 +33,7 @@ import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Drawer } from "../../components/ui/Drawer";
-import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Select } from "../../components/ui/Field";
 import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -47,7 +47,6 @@ import {
   DEPOT_SITE_LABELS,
   DEPOT_VEHICLE_LABELS,
   REQUEST_TYPES,
-  SITE_LABELS,
   TYPE_COLORS,
   TYPE_LABELS,
   type DepotSite,
@@ -62,9 +61,9 @@ function formatHours(hours: number) {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1).replace(".", ",")} h`;
 }
 
-/** Heures portées par un créneau : la saisie manuelle prime sur sa durée. */
-function activityHours(activity: { plannedHours?: number; startAt: number; endAt: number }) {
-  return activity.plannedHours ?? Math.max(0, activity.endAt - activity.startAt) / 3_600_000;
+/** Heures de main d'œuvre d'un créneau : sa durée. */
+function activityHours(activity: { startAt: number; endAt: number }) {
+  return Math.max(0, activity.endAt - activity.startAt) / 3_600_000;
 }
 
 type CalView = "demandes" | "depots";
@@ -78,8 +77,8 @@ type ScheduleList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalent
 type DroppedTask = { taskId: Id<"polyvalentTasks">; startAt: number; endAt: number };
 type DisplayActivity = Pick<Activity, "_id" | "_creationTime" | "taskId" | "workerId" | "startAt" | "endAt" | "taskName" | "workerName"> & {
   recurrenceId?: Id<"polyvalentTaskRecurrences">;
-  plannedHours?: number;
-  site?: Site;
+  /** Recyclerie de la tâche planifiée (filtre principal de la page). */
+  taskSite?: Site | null;
 };
 
 const RESOURCE_DAY_START_HOUR = 6;
@@ -602,19 +601,30 @@ function RequestDayPanel({
  * toujours sur la semaine en cours, et la colonne de gauche permet de ne
  * garder que les agents dont on veut suivre les tâches.
  */
-export function ResourceCalendar() {
+export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const access = useCrmAccess();
   const canRead = canAccess(access, "agents-polyvalents", "read");
   const canCreate = canAccess(access, "agents-polyvalents", "create");
   const canUpdate = canAccess(access, "agents-polyvalents", "update");
   const canDelete = canAccess(access, "agents-polyvalents", "delete");
 
-  const workers = useQuery(api.polyvalents.listWorkers, canRead ? {} : "skip");
-  const tasks = useQuery(api.polyvalents.listTasks, canRead ? {} : "skip");
+  const allWorkers = useQuery(api.polyvalents.listWorkers, canRead ? {} : "skip");
+  const allTasks = useQuery(api.polyvalents.listTasks, canRead ? {} : "skip");
   const schedules = useQuery(api.polyvalents.listWorkerSchedules, canRead ? {} : "skip");
   const activities = useQuery(api.polyvalents.listActivities, canRead ? {} : "skip");
   const recurrences = useQuery(api.polyvalents.listRecurrences, canRead ? {} : "skip");
   const removeRecurrence = useMutation(api.polyvalents.deleteRecurrence);
+
+  // Le filtre principal de la page restreint tout le planning à une recyclerie :
+  // les tâches à planifier, les salariés proposés et les créneaux affichés.
+  const workers = useMemo(
+    () => (allWorkers ?? []).filter((worker) => !siteFilter || worker.sites?.includes(siteFilter)),
+    [allWorkers, siteFilter],
+  );
+  const tasks = useMemo(
+    () => (allTasks ?? []).filter((task) => !siteFilter || task.site === siteFilter),
+    [allTasks, siteFilter],
+  );
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [weekStart, setWeekStart] = useState(() =>
@@ -635,7 +645,9 @@ export function ResourceCalendar() {
   // date de fin (créneaux multi-jours inclus).
   const byDay = useMemo(() => {
     const map = new Map<string, DisplayActivity[]>();
+    const matchesSite = (taskSite: Site | null | undefined) => !siteFilter || taskSite === siteFilter;
     for (const activity of activities ?? []) {
+      if (!matchesSite(activity.taskSite)) continue;
       let cursor = startOfDay(new Date(activity.startAt));
       const last = startOfDay(new Date(activity.endAt));
       while (cursor <= last) {
@@ -647,6 +659,7 @@ export function ResourceCalendar() {
       }
     }
     for (const recurrence of recurrences ?? []) {
+      if (!matchesSite(recurrence.taskSite)) continue;
       for (const day of days) {
         const weekday = day.getDay() || 7;
         for (const slot of recurrence.slots.filter((item) => item.weekday === weekday)) {
@@ -656,45 +669,13 @@ export function ResourceCalendar() {
           const end = new Date(day); end.setHours(endHour, endMinute, 0, 0);
           const key = format(day, "yyyy-MM-dd");
           const arr = map.get(key) ?? [];
-          arr.push({ _id: `${recurrence._id}-${weekday}` as Activity["_id"], _creationTime: recurrence._creationTime, taskId: recurrence.taskId, workerId: recurrence.workerId, startAt: start.getTime(), endAt: end.getTime(), taskName: recurrence.taskName, workerName: recurrence.workerName, recurrenceId: recurrence._id, plannedHours: recurrence.plannedHours, site: recurrence.site });
+          arr.push({ _id: `${recurrence._id}-${weekday}` as Activity["_id"], _creationTime: recurrence._creationTime, taskId: recurrence.taskId, workerId: recurrence.workerId, startAt: start.getTime(), endAt: end.getTime(), taskName: recurrence.taskName, workerName: recurrence.workerName, recurrenceId: recurrence._id, taskSite: recurrence.taskSite });
           map.set(key, arr);
         }
       }
     }
     return map;
-  }, [activities, days, recurrences]);
-
-  /**
-   * Charge de la semaine par recyclerie, face aux heures contractuelles des
-   * salariés actifs. Un créneau sans recyclerie prend celle de son salarié ;
-   * ce qui reste sans rattachement est compté à part, il faudra l'arbitrer.
-   */
-  const workload = useMemo(() => {
-    const workerSite = new Map(
-      (workers ?? []).map((worker) => [String(worker._id), worker.sites?.[0]]),
-    );
-    const planned: Record<string, number> = { "60": 0, "76": 0, unassigned: 0 };
-    for (const day of days) {
-      for (const activity of byDay.get(format(day, "yyyy-MM-dd")) ?? []) {
-        // Un créneau multi-jours est compté une fois, le jour où il démarre.
-        if (!activity.recurrenceId && !isSameDay(new Date(activity.startAt), day)) continue;
-        const site =
-          activity.site ??
-          (activity.workerId ? workerSite.get(String(activity.workerId)) : undefined);
-        planned[site ?? "unassigned"] += activityHours(activity);
-      }
-    }
-    const available: Record<string, number> = { "60": 0, "76": 0 };
-    for (const worker of workers ?? []) {
-      const site = worker.sites?.[0];
-      if (worker.active === false || !worker.monthlyHours || !site) continue;
-      // Durée mensuelle du contrat ramenée à la semaine, comptée sur la
-      // recyclerie de rattachement (jamais sur les deux : on ne double pas
-      // la capacité d'un salarié partagé).
-      available[site] += worker.monthlyHours / 4;
-    }
-    return { planned, available };
-  }, [workers, byDay, days]);
+  }, [activities, days, recurrences, siteFilter]);
 
   const selectedDayActivities = useMemo(() => {
     if (!selectedDay) return [];
@@ -764,34 +745,7 @@ export function ResourceCalendar() {
         >
           Cette semaine
         </Button>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {(["60", "76"] as Site[]).map((site) => {
-            const planned = workload.planned[site];
-            const available = workload.available[site];
-            const over = available > 0 && planned > available;
-            return (
-              <div
-                key={site}
-                className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-1.5 text-xs"
-                title={`Heures à répartir cette semaine sur ${SITE_LABELS[site]}, face aux heures contractuelles des salariés actifs`}
-              >
-                <span className="font-semibold text-zinc-300">{SITE_LABELS[site]}</span>
-                <span className={cn("ml-2 font-semibold", over ? "text-amber-300" : "text-brand-300")}>
-                  {formatHours(planned)}
-                </span>
-                <span className="text-zinc-500"> à répartir / {formatHours(available)} dispo.</span>
-              </div>
-            );
-          })}
-          {workload.planned.unassigned > 0 ? (
-            <div
-              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200"
-              title="Créneaux sans recyclerie ni salarié affecté"
-            >
-              {formatHours(workload.planned.unassigned)} sans recyclerie
-            </div>
-          ) : null}
-        </div>
+        <p className="ml-auto text-xs text-zinc-500">Déposez une tâche sur le créneau souhaité, puis renseignez-la si besoin.</p>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
@@ -963,8 +917,6 @@ function ResourceDayPanel({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Id<"polyvalentActivities"> | null>(null);
   const [extraSlots, setExtraSlots] = useState<{ startAt: number; endAt: number }[]>([]);
-  const [plannedHours, setPlannedHours] = useState("");
-  const [site, setSite] = useState<"" | "60" | "76">("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceSlots, setRecurrenceSlots] = useState<Record<number, { start: string; end: string }>>({});
 
@@ -975,8 +927,6 @@ function ResourceDayPanel({
     setWorkerId("");
     setStartAt(droppedTask.startAt);
     setEndAt(droppedTask.endAt);
-    setPlannedHours("");
-    setSite("");
     setExtraSlots([]);
     setIsRecurring(false);
     setRecurrenceSlots({});
@@ -991,8 +941,6 @@ function ResourceDayPanel({
     setTaskId("");
     setStartAt(dayAtHour(day, 8));
     setEndAt(dayAtHour(day, 17));
-    setPlannedHours("");
-    setSite("");
     setExtraSlots([]);
     setIsRecurring(false);
     setRecurrenceSlots({});
@@ -1006,8 +954,6 @@ function ResourceDayPanel({
     setTaskId(activity.taskId);
     setStartAt(activity.startAt);
     setEndAt(activity.endAt);
-    setPlannedHours(activity.plannedHours != null ? String(activity.plannedHours) : "");
-    setSite(activity.site ?? "");
     setError(null);
     setFormOpen(true);
   }
@@ -1018,17 +964,8 @@ function ResourceDayPanel({
     if (startAt == null) return setError("Renseigne la date de début.");
     if (endAt == null) return setError("Renseigne la date de fin.");
     if (endAt < startAt) return setError("La fin doit être après le début.");
-    const hours = plannedHours.trim() ? Number(plannedHours.replace(",", ".")) : undefined;
-    if (hours !== undefined && (!Number.isFinite(hours) || hours <= 0)) {
-      return setError("Le nombre d'heures doit être un nombre positif.");
-    }
     setSaving(true);
-    const shared = {
-      workerId: workerId || undefined,
-      taskId,
-      plannedHours: hours,
-      site: site || undefined,
-    };
+    const shared = { workerId: workerId || undefined, taskId };
     try {
       if (editing) {
         await updateActivity({ id: editing._id, ...shared, startAt, endAt });
@@ -1100,7 +1037,6 @@ function ResourceDayPanel({
                 <span className="text-zinc-500">
                   {" · "}
                   {formatHours(activityHours(activity))}
-                  {activity.site ? ` · ${SITE_LABELS[activity.site]}` : ""}
                 </span>
               </p>
             </div>
@@ -1138,29 +1074,6 @@ function ResourceDayPanel({
             <Field label="Fin">
               <DateTimePicker value={endAt} onChange={setEndAt} placeholder="Date et heure de fin" />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Heures de travail (facultatif)">
-                <Input
-                  value={plannedHours}
-                  onChange={(event) => setPlannedHours(event.target.value)}
-                  inputMode="decimal"
-                  placeholder={
-                    startAt != null && endAt != null && endAt > startAt
-                      ? `${formatHours((endAt - startAt) / 3_600_000)} d'après le créneau`
-                      : "Calculé d'après le créneau"
-                  }
-                />
-              </Field>
-              <Field label="Recyclerie">
-                <Select value={site} onChange={(event) => setSite(event.target.value as "" | "60" | "76")}>
-                  <option value="">
-                    {workerId ? "Celle du salarié affecté" : "Non précisée"}
-                  </option>
-                  <option value="60">{SITE_LABELS["60"]}</option>
-                  <option value="76">{SITE_LABELS["76"]}</option>
-                </Select>
-              </Field>
-            </div>
             {!editing ? (
               <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
                 <Checkbox label="Cette tâche est-elle récurrente ?" variant="inline" checked={isRecurring} onChange={(event) => { setIsRecurring(event.target.checked); if (event.target.checked && Object.keys(recurrenceSlots).length === 0) { const start = startAt ? format(new Date(startAt), "HH:mm") : "08:00"; const end = endAt ? format(new Date(endAt), "HH:mm") : "17:00"; setRecurrenceSlots({ [day.getDay() || 7]: { start, end } }); } }} />

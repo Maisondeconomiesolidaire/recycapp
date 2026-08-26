@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ListChecks, Pencil, Plus, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { ListChecks, Pencil, Plus, Search, Trash2, UserPlus, UsersRound } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
@@ -43,6 +43,9 @@ export function Taches() {
   const tasks = useQuery(api.polyvalents.listTasks);
   const schedules = useQuery(api.polyvalents.listWorkerSchedules);
   const [tab, setTab] = useState<Tab>("planning");
+  // Filtre principal de la page : il pilote à la fois le planning, l'équipe et
+  // le catalogue de tâches. `null` = les deux recycleries.
+  const [siteFilter, setSiteFilter] = useState<Site | null>(null);
 
   const canCreate = canAccess(access, "agents-polyvalents", "create");
   const canUpdate = canAccess(access, "agents-polyvalents", "update");
@@ -52,6 +55,11 @@ export function Taches() {
     return <FullSpinner label="Chargement des tâches…" />;
   }
 
+  const visibleWorkers = workers.filter(
+    (worker) => !siteFilter || worker.sites?.includes(siteFilter),
+  );
+  const visibleTasks = tasks.filter((task) => !siteFilter || task.site === siteFilter);
+
   return (
     <div className="pb-16">
       <PageHeader
@@ -60,6 +68,25 @@ export function Taches() {
       />
 
       <div className="px-4 py-4 sm:px-6">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {([null, "60", "76"] as Array<Site | null>).map((site) => (
+            <button
+              key={site ?? "all"}
+              type="button"
+              onClick={() => setSiteFilter(site)}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                siteFilter === site
+                  ? "bg-brand-500 text-white"
+                  : "bg-[var(--crm-surface-2)] text-zinc-300 hover:bg-[var(--crm-surface-3)]"
+              }`}
+            >
+              {site ? SITE_LABELS[site] : "Tout"}
+            </button>
+          ))}
+        </div>
+
+        <WorkloadSummary tasks={tasks} workers={workers} siteFilter={siteFilter} />
+
         <UnderlineTabs
           className="mb-1"
           items={[
@@ -72,19 +99,85 @@ export function Taches() {
         />
 
         {tab === "planning" ? (
-          <ResourceCalendar />
+          <ResourceCalendar siteFilter={siteFilter} />
         ) : tab === "ouvriers" ? (
           <WorkersTab
-            workers={workers}
+            workers={visibleWorkers}
             schedules={schedules}
             canCreate={canCreate}
             canUpdate={canUpdate}
             canDelete={canDelete}
           />
         ) : (
-          <TasksTab tasks={tasks} canCreate={canCreate} canUpdate={canUpdate} canDelete={canDelete} />
+          <TasksTab
+            tasks={visibleTasks}
+            siteFilter={siteFilter}
+            canCreate={canCreate}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
+          />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Plan de charge par recyclerie : main d'œuvre requise par les tâches du site
+ * face aux heures contractuelles de ses salariés actifs, à la semaine.
+ */
+function WorkloadSummary({
+  tasks,
+  workers,
+  siteFilter,
+}: {
+  tasks: TaskList;
+  workers: WorkerList;
+  siteFilter: Site | null;
+}) {
+  const sites = siteFilter ? [siteFilter] : (["60", "76"] as Site[]);
+  return (
+    <div className="mb-4 grid gap-3 sm:grid-cols-2">
+      {sites.map((site) => {
+        const required = tasks
+          .filter((task) => task.site === site)
+          .reduce((total, task) => total + (task.requiredMonthlyHours ?? 0), 0);
+        const available = workers
+          .filter((worker) => worker.active !== false && worker.sites?.[0] === site)
+          .reduce((total, worker) => total + (worker.monthlyHours ?? 0), 0);
+        const missing = required - available;
+        return (
+          <div
+            key={site}
+            className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {SITE_LABELS[site]}
+            </p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+              <p className="text-sm text-zinc-300">
+                <span className="text-lg font-semibold text-zinc-100">{formatWeeklyHours(required)}</span>
+                <span className="text-zinc-500"> de main d’œuvre requise / semaine</span>
+              </p>
+              <p className="text-sm text-zinc-300">
+                <span
+                  className={`text-lg font-semibold ${missing > 0 ? "text-amber-300" : "text-brand-300"}`}
+                >
+                  {formatWeeklyHours(available)}
+                </span>
+                <span className="text-zinc-500"> disponibles</span>
+              </p>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              {required === 0
+                ? "Renseignez les heures requises des tâches de ce site."
+                : missing > 0
+                  ? `Il manque ${formatWeeklyHours(missing)} par semaine pour couvrir les tâches.`
+                  : `Marge de ${formatWeeklyHours(-missing)} par semaine.`}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -523,156 +616,230 @@ function WorkerScheduleEditor({
 
 function TasksTab({
   tasks,
+  siteFilter,
   canCreate,
   canUpdate,
   canDelete,
 }: {
   tasks: TaskList;
+  siteFilter: Site | null;
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
 }) {
-  const createTask = useMutation(api.polyvalents.createTask);
-  const updateTask = useMutation(api.polyvalents.updateTask);
   const removeTask = useMutation(api.polyvalents.deleteTask);
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<Id<"polyvalentTasks"> | null>(null);
-  const [editingId, setEditingId] = useState<Id<"polyvalentTasks"> | null>(null);
-  const [editName, setEditName] = useState("");
+  const [deleting, setDeleting] = useState<TaskList[number] | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<TaskList[number] | null>(null);
 
-  async function add() {
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
-      await createTask({ name });
-      setName("");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveEdit() {
-    if (!editingId || !editName.trim()) return;
-    await updateTask({ id: editingId, name: editName });
-    setEditingId(null);
+  function openNew() {
+    setEditing(null);
+    setFormOpen(true);
   }
 
   return (
     <div className="grid gap-5">
       {canCreate ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void add();
-          }}
-          className="grid gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 sm:grid-cols-[1fr_auto]"
-        >
-          <Field label="Nom de la tâche">
-            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex : Tri textile, Réparation vélos…" />
-          </Field>
-          <div className="flex items-end">
-            <Button type="submit" disabled={saving || !name.trim()} className="w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Ajouter
-            </Button>
-          </div>
-        </form>
+        <div className="flex justify-end">
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" /> Nouvelle tâche
+          </Button>
+        </div>
       ) : null}
 
       {tasks.length === 0 ? (
         <EmptyState
           icon={<ListChecks className="h-10 w-10" />}
           title="Aucune tâche"
-          description="Crée les tâches confiées aux agents polyvalents."
+          description="Créez les tâches confiées à l’équipe, avec leur recyclerie et la main d’œuvre qu’elles demandent."
+          action={
+            canCreate ? (
+              <Button onClick={openNew}>
+                <Plus className="h-4 w-4" /> Nouvelle tâche
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {tasks.map((task) =>
-            editingId === task._id ? (
-              <div
-                key={task._id}
-                className="flex items-center gap-2 rounded-xl border border-brand-500/40 bg-[var(--crm-surface)] px-3 py-2"
-              >
-                <Input
-                  value={editName}
-                  onChange={(event) => setEditName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void saveEdit();
-                    }
-                  }}
-                  placeholder="Nom de la tâche"
-                />
-                <button
-                  type="button"
-                  onClick={() => void saveEdit()}
-                  className="rounded-lg p-1.5 text-emerald-400 transition hover:bg-[var(--crm-surface-2)]"
-                  aria-label="Enregistrer"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingId(null)}
-                  className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)]"
-                  aria-label="Annuler"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <div
-                key={task._id}
-                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-3"
-              >
-                <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-100">
-                  <ListChecks className="h-4 w-4 shrink-0 text-brand-300" />
-                  <span className="truncate">{task.name}</span>
-                </span>
-                <div className="flex shrink-0 items-center gap-0.5">
-                  {canUpdate ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingId(task._id);
-                        setEditName(task.name);
-                      }}
-                      className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-brand-300"
-                      aria-label="Modifier la tâche"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                  {canDelete ? (
-                    <button
-                      type="button"
-                      onClick={() => setDeleting(task._id)}
-                      className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-red-400"
-                      aria-label="Supprimer la tâche"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ),
-          )}
+        <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)]">
+          <table className="min-w-[640px] w-full text-sm">
+            <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Tâche</th>
+                <th className="px-4 py-3 text-left font-medium">Recyclerie</th>
+                <th className="px-4 py-3 text-left font-medium">Main d’œuvre requise</th>
+                <th className="px-4 py-3 text-left font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800">
+              {tasks.map((task) => (
+                <tr key={task._id} className="bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-2)]">
+                  <td className="px-4 py-3">
+                    <span className="inline-flex min-w-0 items-center gap-2 font-medium text-zinc-100">
+                      <ListChecks className="h-4 w-4 shrink-0 text-brand-300" />
+                      <span className="truncate">{task.name}</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-400">
+                    {task.site ? SITE_LABELS[task.site] : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-400">
+                    {task.requiredMonthlyHours ? (
+                      <>
+                        {formatWeeklyHours(task.requiredMonthlyHours)}
+                        <span className="text-zinc-500"> / semaine</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      {canUpdate ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditing(task);
+                            setFormOpen(true);
+                          }}
+                          className="rounded-lg p-2 text-zinc-400 transition hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
+                          aria-label="Modifier la tâche"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(task)}
+                          className="rounded-lg p-2 text-zinc-400 transition hover:bg-[var(--crm-surface-3)] hover:text-red-400"
+                          aria-label="Supprimer la tâche"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+
+      {formOpen ? (
+        <TaskForm
+          key={editing?._id ?? "new"}
+          task={editing}
+          defaultSite={siteFilter}
+          onClose={() => setFormOpen(false)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
         onConfirm={async () => {
-          if (deleting) await removeTask({ id: deleting });
+          if (deleting) await removeTask({ id: deleting._id });
           setDeleting(null);
         }}
         title="Supprimer la tâche ?"
-        description="Les affectations liées à cette tâche seront également supprimées."
+        description={
+          deleting
+            ? `Les affectations liées à « ${deleting.name} » seront également supprimées.`
+            : undefined
+        }
         confirmLabel="Supprimer"
       />
     </div>
+  );
+}
+
+/** Fiche d'une tâche : nom, site de traitement et main d'œuvre requise. */
+function TaskForm({
+  task,
+  defaultSite,
+  onClose,
+}: {
+  task: TaskList[number] | null;
+  defaultSite: Site | null;
+  onClose: () => void;
+}) {
+  const createTask = useMutation(api.polyvalents.createTask);
+  const updateTask = useMutation(api.polyvalents.updateTask);
+  const [name, setName] = useState(task?.name ?? "");
+  const [site, setSite] = useState<Site | "">(task?.site ?? defaultSite ?? "");
+  // Saisie hebdomadaire, stockée au mois : c'est la semaine qui se compare aux
+  // heures des salariés.
+  const [weeklyHours, setWeeklyHours] = useState(
+    task?.requiredMonthlyHours ? String(task.requiredMonthlyHours / 4).replace(".", ",") : "",
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (!name.trim()) return;
+    const weekly = weeklyHours.trim() ? Number(weeklyHours.replace(",", ".")) : undefined;
+    if (weekly !== undefined && (!Number.isFinite(weekly) || weekly <= 0)) {
+      setError("Les heures requises doivent être un nombre positif.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const profile = {
+        name,
+        site: site || undefined,
+        requiredMonthlyHours: weekly !== undefined ? weekly * 4 : undefined,
+      };
+      if (task) await updateTask({ id: task._id, ...profile });
+      else await createTask(profile);
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Enregistrement impossible.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={task ? "Modifier la tâche" : "Nouvelle tâche"}>
+      <div className="space-y-4">
+        <Field label="Nom de la tâche" required>
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Ex : Tri textile, Réparation vélos…"
+          />
+        </Field>
+        <Field label="Recyclerie de traitement">
+          <Select value={site} onChange={(event) => setSite(event.target.value as Site | "")}>
+            <option value="">Non précisée</option>
+            {(Object.keys(SITE_LABELS) as Site[]).map((value) => (
+              <option key={value} value={value}>
+                {SITE_LABELS[value]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Main d’œuvre requise (heures par semaine)">
+          <Input
+            value={weeklyHours}
+            onChange={(event) => setWeeklyHours(event.target.value)}
+            inputMode="decimal"
+            placeholder="Ex : 30"
+          />
+        </Field>
+        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button onClick={() => void save()} disabled={saving || !name.trim()}>
+            {saving ? "Enregistrement…" : task ? "Enregistrer" : "Ajouter"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
