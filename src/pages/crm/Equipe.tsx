@@ -66,7 +66,8 @@ export function Equipe() {
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">Salarié</th>
                   <th className="px-4 py-3 text-left font-medium">Email</th>
-                  <th className="px-4 py-3 text-left font-medium">Site</th>
+                  <th className="px-4 py-3 text-left font-medium">Recyclerie</th>
+                  <th className="px-4 py-3 text-left font-medium">Type</th>
                   <th className="px-4 py-3 text-left font-medium">Statut</th>
                   <th className="px-4 py-3 text-left font-medium">Créé</th>
                   <th className="px-4 py-3 text-left font-medium">Actions</th>
@@ -85,8 +86,9 @@ export function Equipe() {
                     </td>
                     <td className="px-4 py-3 text-zinc-400">{m.email || "—"}</td>
                     <td className="px-4 py-3 text-zinc-400">
-                      {m.site ? SITE_LABELS[m.site] : "—"}
+                      {(m.sites?.length ? m.sites : m.site ? [m.site] : []).map((site) => SITE_LABELS[site]).join(" · ") || "—"}
                     </td>
+                    <td className="px-4 py-3 text-zinc-400">{m.employmentType === "polyvalent" ? "Agent polyvalent" : "Agent permanent"}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
@@ -179,7 +181,8 @@ function MemberForm({
   const update = useMutation(api.team.update);
   const [name, setName] = useState(member?.name ?? "");
   const [email, setEmail] = useState(member?.email ?? "");
-  const [site, setSite] = useState<Site | "">(member?.site ?? "");
+  const [sites, setSites] = useState<Site[]>(member?.sites ?? (member?.site ? [member.site] : []));
+  const [employmentType, setEmploymentType] = useState<"permanent" | "polyvalent">(member?.employmentType ?? "permanent");
   const [active, setActive] = useState(member?.active ?? true);
   const [saving, setSaving] = useState(false);
 
@@ -193,11 +196,12 @@ function MemberForm({
           name,
           role: member.role,
           email: email || undefined,
-          site: site || undefined,
+          site: sites[0], sites,
+          employmentType,
           active,
         });
       } else {
-        await create({ name, email: email || undefined, site: site || undefined });
+        await create({ name, email: email || undefined, site: sites[0], sites, employmentType });
       }
       onClose();
     } finally {
@@ -219,13 +223,10 @@ function MemberForm({
         <Field label="Email">
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
-        <Field label="Site de fonction">
-          <Select value={site} onChange={(e) => setSite(e.target.value as Site | "")}>
-            <option value="">Sélectionner un site</option>
-            <option value="60">{SITE_LABELS["60"]}</option>
-            <option value="76">{SITE_LABELS["76"]}</option>
-          </Select>
+        <Field label="Recyclerie">
+          <div className="flex flex-wrap gap-2"><Checkbox label="Recyclerie 60" variant="inline" checked={sites.includes("60")} onChange={() => setSites((current) => current.includes("60") ? current.filter((site) => site !== "60") : [...current, "60"])} /><Checkbox label="Recyclerie 76" variant="inline" checked={sites.includes("76")} onChange={() => setSites((current) => current.includes("76") ? current.filter((site) => site !== "76") : [...current, "76"])} /></div>
         </Field>
+        <Field label="Type de salarié"><Select value={employmentType} onChange={(event) => setEmploymentType(event.target.value as "permanent" | "polyvalent")}><option value="permanent">Agent permanent</option><option value="polyvalent">Agent polyvalent</option></Select></Field>
         {member && (
           <Checkbox
             checked={active}
