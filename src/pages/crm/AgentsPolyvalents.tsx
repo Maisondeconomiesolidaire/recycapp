@@ -7,7 +7,7 @@ import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { Field, Input } from "../../components/ui/Field";
+import { Checkbox, Field, Input } from "../../components/ui/Field";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
@@ -289,7 +289,7 @@ function WorkerScheduleEditor({
       <div className="grid gap-2 sm:grid-cols-2">
         {days.map((label, index) => {
           const weekday = index + 1; const value = slots[weekday];
-          return <div key={weekday} className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 rounded-lg border border-[var(--crm-border)] p-2 text-sm"><label className="flex items-center gap-1.5"><input type="checkbox" checked={Boolean(value)} onChange={() => setSlots((current) => { const next = { ...current }; if (next[weekday]) delete next[weekday]; else next[weekday] = { start: "09:00", end: "17:00" }; return next; })} />{label}</label><input type="time" disabled={!value} value={value?.start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { end: "17:00" }), start: event.target.value } }))} className="rounded border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-1 py-1 disabled:opacity-40" /><input type="time" disabled={!value} value={value?.end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { start: "09:00" }), end: event.target.value } }))} className="rounded border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-1 py-1 disabled:opacity-40" /></div>;
+          return <div key={weekday} className="grid grid-cols-[minmax(130px,1fr)_1fr_1fr] items-center gap-3 rounded-lg border border-[var(--crm-border)] p-2 text-sm"><Checkbox label={label} variant="inline" checked={Boolean(value)} onChange={() => setSlots((current) => { const next = { ...current }; if (next[weekday]) delete next[weekday]; else next[weekday] = { start: "09:00", end: "17:00" }; return next; })} /><input type="time" disabled={!value} value={value?.start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { end: "17:00" }), start: event.target.value } }))} className="rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 disabled:opacity-40" /><input type="time" disabled={!value} value={value?.end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { start: "09:00" }), end: event.target.value } }))} className="rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 disabled:opacity-40" /></div>;
         })}
       </div>
       <div className="mt-3 flex justify-end"><Button size="sm" onClick={() => void save()} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer les horaires"}</Button></div>

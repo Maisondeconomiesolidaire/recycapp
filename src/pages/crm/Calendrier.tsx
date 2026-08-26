@@ -33,7 +33,7 @@ import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Drawer } from "../../components/ui/Drawer";
-import { Field, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Select } from "../../components/ui/Field";
 import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -64,6 +64,7 @@ type WorkerList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.
 type TaskList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
 type ScheduleList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkerSchedules>>>;
 type DroppedTask = { taskId: Id<"polyvalentTasks">; startAt: number; endAt: number };
+type DisplayActivity = Pick<Activity, "_id" | "_creationTime" | "taskId" | "workerId" | "startAt" | "endAt" | "taskName" | "workerName"> & { recurrenceId?: Id<"polyvalentTaskRecurrences"> };
 
 const RESOURCE_DAY_START_HOUR = 6;
 const RESOURCE_DAY_END_HOUR = 20;
@@ -596,6 +597,8 @@ export function ResourceCalendar() {
   const tasks = useQuery(api.polyvalents.listTasks, canRead ? {} : "skip");
   const schedules = useQuery(api.polyvalents.listWorkerSchedules, canRead ? {} : "skip");
   const activities = useQuery(api.polyvalents.listActivities, canRead ? {} : "skip");
+  const recurrences = useQuery(api.polyvalents.listRecurrences, canRead ? {} : "skip");
+  const removeRecurrence = useMutation(api.polyvalents.deleteRecurrence);
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [weekStart, setWeekStart] = useState(() =>
@@ -615,7 +618,7 @@ export function ResourceCalendar() {
   // Une activité s'affiche sur chaque jour compris entre sa date de début et sa
   // date de fin (créneaux multi-jours inclus).
   const byDay = useMemo(() => {
-    const map = new Map<string, Activity[]>();
+    const map = new Map<string, DisplayActivity[]>();
     for (const activity of activities ?? []) {
       let cursor = startOfDay(new Date(activity.startAt));
       const last = startOfDay(new Date(activity.endAt));
@@ -627,12 +630,27 @@ export function ResourceCalendar() {
         cursor = addDays(cursor, 1);
       }
     }
+    for (const recurrence of recurrences ?? []) {
+      for (const day of days) {
+        const weekday = day.getDay() || 7;
+        for (const slot of recurrence.slots.filter((item) => item.weekday === weekday)) {
+          const [startHour, startMinute] = slot.start.split(":").map(Number);
+          const [endHour, endMinute] = slot.end.split(":").map(Number);
+          const start = new Date(day); start.setHours(startHour, startMinute, 0, 0);
+          const end = new Date(day); end.setHours(endHour, endMinute, 0, 0);
+          const key = format(day, "yyyy-MM-dd");
+          const arr = map.get(key) ?? [];
+          arr.push({ _id: `${recurrence._id}-${weekday}` as Activity["_id"], _creationTime: recurrence._creationTime, taskId: recurrence.taskId, workerId: recurrence.workerId, startAt: start.getTime(), endAt: end.getTime(), taskName: recurrence.taskName, workerName: recurrence.workerName, recurrenceId: recurrence._id });
+          map.set(key, arr);
+        }
+      }
+    }
     return map;
-  }, [activities]);
+  }, [activities, days, recurrences]);
 
   const selectedDayActivities = useMemo(() => {
     if (!selectedDay) return [];
-    return byDay.get(format(selectedDay, "yyyy-MM-dd")) ?? [];
+    return (byDay.get(format(selectedDay, "yyyy-MM-dd")) ?? []).filter((activity): activity is Activity => !activity.recurrenceId);
   }, [selectedDay, byDay]);
 
   if (!canRead) {
@@ -669,7 +687,7 @@ export function ResourceCalendar() {
                   event.dataTransfer.setData("application/x-recycapp-task", String(task._id));
                   event.dataTransfer.effectAllowed = "copy";
                 }}
-                className="flex shrink-0 cursor-grab items-center gap-1.5 rounded-xl border border-brand-500/35 bg-brand-500/10 px-3 py-2 text-sm font-medium text-brand-200 active:cursor-grabbing"
+                className="flex shrink-0 cursor-grab items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm active:cursor-grabbing"
               >
                 <ListChecks className="h-4 w-4" />
                 <span>{task.name}</span>
@@ -678,6 +696,7 @@ export function ResourceCalendar() {
           })}
           {tasks?.length === 0 ? <p className="text-sm text-zinc-500">Créez d’abord une tâche dans l’onglet « Tâches ».</p> : null}
         </div>
+        {(recurrences?.length ?? 0) > 0 ? <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--crm-border)] pt-3">{recurrences?.map((recurrence) => <div key={recurrence._id} className="flex items-center gap-2 rounded-lg bg-[var(--crm-surface-2)] px-2 py-1.5 text-xs"><span>Récurrente : {recurrence.taskName}</span>{canDelete ? <button type="button" onClick={() => void removeRecurrence({ id: recurrence._id })} className="font-semibold text-red-400 hover:underline">Annuler</button> : null}</div>)}</div> : null}
       </div>
       {/* ── Semaine ─────────────────────────────────────────────────────── */}
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -784,6 +803,7 @@ export function ResourceCalendar() {
         variant="side"
         title={selectedDay ? format(selectedDay, "EEEE d MMMM yyyy", { locale: fr }) : ""}
         bodyClassName="p-0"
+        panelClassName="max-w-4xl"
       >
         {selectedDay ? (
           <ResourceDayPanel
@@ -805,7 +825,7 @@ export function ResourceCalendar() {
 }
 
 /** Portion d'une activité visible sur une journée, calée sur la grille horaire. */
-function resourceActivitySegment(activity: Activity, day: Date) {
+function resourceActivitySegment(activity: DisplayActivity, day: Date) {
   const dayStart = startOfDay(day).getTime();
   const dayEnd = addDays(startOfDay(day), 1).getTime();
   const visibleStart = Math.max(activity.startAt, dayStart);
@@ -854,6 +874,7 @@ function ResourceDayPanel({
 }) {
   const createActivity = useMutation(api.polyvalents.createActivity);
   const createActivities = useMutation(api.polyvalents.createActivities);
+  const createRecurrence = useMutation(api.polyvalents.createRecurrence);
   const updateActivity = useMutation(api.polyvalents.updateActivity);
   const removeActivity = useMutation(api.polyvalents.deleteActivity);
 
@@ -867,6 +888,8 @@ function ResourceDayPanel({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Id<"polyvalentActivities"> | null>(null);
   const [extraSlots, setExtraSlots] = useState<{ startAt: number; endAt: number }[]>([]);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceSlots, setRecurrenceSlots] = useState<Record<number, { start: string; end: string }>>({});
 
   useEffect(() => {
     if (!droppedTask) return;
@@ -876,6 +899,8 @@ function ResourceDayPanel({
     setStartAt(droppedTask.startAt);
     setEndAt(droppedTask.endAt);
     setExtraSlots([]);
+    setIsRecurring(false);
+    setRecurrenceSlots({});
     setError(null);
     setFormOpen(true);
     onDroppedTaskConsumed();
@@ -888,6 +913,8 @@ function ResourceDayPanel({
     setStartAt(dayAtHour(day, 8));
     setEndAt(dayAtHour(day, 17));
     setExtraSlots([]);
+    setIsRecurring(false);
+    setRecurrenceSlots({});
     setError(null);
     setFormOpen(true);
   }
@@ -912,6 +939,8 @@ function ResourceDayPanel({
     try {
       if (editing) {
         await updateActivity({ id: editing._id, workerId: workerId || undefined, taskId, startAt, endAt });
+      } else if (isRecurring) {
+        await createRecurrence({ workerId: workerId || undefined, taskId, slots: Object.entries(recurrenceSlots).map(([weekday, slot]) => ({ weekday: Number(weekday), ...slot })) });
       } else if (extraSlots.length > 0) {
         await createActivities({ workerId: workerId || undefined, taskId, slots: [{ startAt, endAt }, ...extraSlots] });
       } else {
@@ -1013,9 +1042,12 @@ function ResourceDayPanel({
             </Field>
             {!editing ? (
               <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
+                <Checkbox label="Cette tâche est-elle récurrente ?" variant="inline" checked={isRecurring} onChange={(event) => { setIsRecurring(event.target.checked); if (event.target.checked && Object.keys(recurrenceSlots).length === 0) { const start = startAt ? format(new Date(startAt), "HH:mm") : "08:00"; const end = endAt ? format(new Date(endAt), "HH:mm") : "17:00"; setRecurrenceSlots({ [day.getDay() || 7]: { start, end } }); } }} />
+                {isRecurring ? <div className="mt-4 space-y-2"><p className="text-xs text-zinc-500">Choisissez les jours et leurs horaires. La règle reste active jusqu’à son annulation dans l’onglet Tâches.</p>{["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((label, index) => { const weekday = index + 1; const slot = recurrenceSlots[weekday]; return <div key={weekday} className="grid grid-cols-[minmax(132px,1fr)_1fr_1fr] items-center gap-3 rounded-lg border border-[var(--crm-border)] p-2"><Checkbox label={label} variant="inline" checked={Boolean(slot)} onChange={() => setRecurrenceSlots((current) => { const next = { ...current }; if (next[weekday]) delete next[weekday]; else next[weekday] = { start: "09:00", end: "17:00" }; return next; })} /><input type="time" disabled={!slot} value={slot?.start ?? "09:00"} onChange={(event) => setRecurrenceSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { end: "17:00" }), start: event.target.value } }))} className="rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface)] px-2 py-2 text-sm disabled:opacity-40" /><input type="time" disabled={!slot} value={slot?.end ?? "17:00"} onChange={(event) => setRecurrenceSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { start: "09:00" }), end: event.target.value } }))} className="rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface)] px-2 py-2 text-sm disabled:opacity-40" /></div>; })}</div> : <>
                 <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">Autres créneaux</p><Button type="button" variant="outline" size="sm" onClick={() => setExtraSlots((current) => [...current, { startAt: startAt ?? dayAtHour(day, 8), endAt: endAt ?? dayAtHour(day, 9) }])}><Plus className="h-4 w-4" />Ajouter</Button></div>
                 <p className="mb-3 text-xs text-zinc-500">Ajoutez uniquement les jours nécessaires : chaque créneau a sa propre date et ses propres horaires.</p>
                 {extraSlots.map((slot, index) => <div key={index} className="mb-2 grid grid-cols-[1fr_1fr_auto] gap-2"><DateTimePicker value={slot.startAt} onChange={(value) => setExtraSlots((current) => current.map((item, i) => i === index ? { ...item, startAt: value ?? item.startAt } : item))} placeholder="Début" /><DateTimePicker value={slot.endAt} onChange={(value) => setExtraSlots((current) => current.map((item, i) => i === index ? { ...item, endAt: value ?? item.endAt } : item))} placeholder="Fin" /><button type="button" onClick={() => setExtraSlots((current) => current.filter((_, i) => i !== index))} className="rounded-lg p-2 text-zinc-500 hover:bg-[var(--crm-surface)] hover:text-red-400" aria-label="Retirer ce créneau"><Trash2 className="h-4 w-4" /></button></div>)}
+                </>}
               </div>
             ) : null}
             {error ? (
