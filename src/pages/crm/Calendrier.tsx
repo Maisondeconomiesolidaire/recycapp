@@ -32,7 +32,7 @@ import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Drawer } from "../../components/ui/Drawer";
-import { Field, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Select } from "../../components/ui/Field";
 import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -678,157 +678,136 @@ function ResourceCalendar() {
   const weekLabel = `${format(weekStart, "d MMM", { locale: fr })} – ${format(weekEnd, "d MMM yyyy", { locale: fr })}`;
 
   return (
-    <div className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">
+    // Le planning occupe la hauteur de l'écran : une semaine chargée se lit
+    // d'un coup d'œil, sans faire défiler la page.
+    <div className="flex h-[calc(100dvh-11rem)] min-h-[520px] flex-col gap-3 p-4 sm:p-6">
       {/* ── Agents : filtre d'affichage ─────────────────────────────────── */}
-      <aside className="shrink-0 lg:w-64">
-        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Agents
-            </h3>
-            {selectedWorkerIds.size > 0 ? (
-              <button
-                type="button"
-                onClick={() => setSelectedWorkerIds(new Set())}
-                className="text-xs font-medium text-brand-400 hover:underline"
-              >
-                Tout afficher
-              </button>
-            ) : null}
-          </div>
-
-          {workers === undefined ? (
-            <p className="px-1 py-2 text-xs text-zinc-500">Chargement…</p>
-          ) : workers.length === 0 ? (
-            <p className="px-1 py-2 text-xs text-zinc-500">
-              Aucun agent. Ajoutez-en depuis « Agents polyvalents ».
-            </p>
+      <div className="shrink-0 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Agents
+          </h3>
+          {selectedWorkerIds.size > 0 ? (
+            <button
+              type="button"
+              onClick={() => setSelectedWorkerIds(new Set())}
+              className="text-xs font-medium text-brand-400 hover:underline"
+            >
+              Tout afficher ({workers?.length ?? 0})
+            </button>
           ) : (
-            <ul className="max-h-[60vh] space-y-0.5 overflow-y-auto">
-              {workers.map((worker) => {
-                const id = String(worker._id);
-                const checked = selectedWorkerIds.has(id);
-                const count = weekCountByWorker.get(id) ?? 0;
-                return (
-                  <li key={id}>
-                    <label
-                      className={cn(
-                        "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors",
-                        checked ? "bg-brand-500/10" : "hover:bg-[var(--crm-surface-2)]",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleWorker(id)}
-                        className="h-4 w-4 shrink-0 accent-[var(--brand-500,#f1104f)]"
-                      />
-                      <span className="min-w-0 flex-1 truncate">
-                        {worker.firstName} {worker.lastName}
-                      </span>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-full px-1.5 py-0.5 text-[11px]",
-                          count > 0 ? "bg-brand-500/20 text-brand-300" : "text-zinc-600",
-                        )}
-                        title="Affectations cette semaine"
-                      >
-                        {count}
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
+            <span className="text-xs text-zinc-500">
+              Cochez un agent pour ne voir que ses tâches
+            </span>
           )}
         </div>
-      </aside>
 
-      {/* ── Semaine ─────────────────────────────────────────────────────── */}
-      <div className="min-w-0 flex-1">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[170px] text-center text-sm font-semibold capitalize">
-            {weekLabel}
-          </span>
-          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, 7))}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
-          >
-            Cette semaine
-          </Button>
-          <p className="ml-auto text-xs text-zinc-500">
-            Cliquez sur un jour pour affecter des agents à des tâches.
+        {workers === undefined ? (
+          <p className="px-1 py-1 text-xs text-zinc-500">Chargement…</p>
+        ) : workers.length === 0 ? (
+          <p className="px-1 py-1 text-xs text-zinc-500">
+            Aucun agent. Ajoutez-en depuis « Agents polyvalents ».
           </p>
-        </div>
-
-        <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
-          <div className="grid min-w-[840px] grid-cols-7">
-            {days.map((day) => {
-              const key = format(day, "yyyy-MM-dd");
-              const items = byDay.get(key) ?? [];
-              const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
-              const today = isToday(day);
+        ) : (
+          <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+            {workers.map((worker) => {
+              const id = String(worker._id);
+              const count = weekCountByWorker.get(id) ?? 0;
+              const name = `${worker.firstName} ${worker.lastName}`.trim();
               return (
-                <div
-                  key={key}
-                  onClick={() => setSelectedDay(day)}
-                  className={cn(
-                    "min-h-[260px] cursor-pointer border-r border-[var(--crm-border)] p-2 transition-colors last:border-r-0",
-                    isSelected
-                      ? "bg-brand-500/8 ring-1 ring-inset ring-brand-500/30"
-                      : "hover:bg-[var(--crm-surface-2)]",
-                  )}
-                >
-                  <div className="mb-2 flex items-center gap-2 border-b border-[var(--crm-border)] pb-2">
-                    <span
-                      className={cn(
-                        "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs",
-                        today ? "bg-brand-600 font-semibold text-white" : "text-zinc-300",
-                      )}
-                    >
-                      {format(day, "d")}
-                    </span>
-                    <span className="text-xs font-semibold capitalize text-zinc-500">
-                      {format(day, "EEEE", { locale: fr })}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    {items.length === 0 ? (
-                      <p className="px-1 text-[11px] text-zinc-600">—</p>
-                    ) : (
-                      items.map((activity) => (
-                        <div
-                          key={activity._id}
-                          className="rounded-md bg-brand-500/20 px-1.5 py-1 text-[11px] font-medium text-brand-200"
-                          title={`${activity.workerName} — ${activity.taskName}`}
-                        >
-                          <p className="truncate">{activity.workerName}</p>
-                          <p className="truncate font-normal text-brand-100/80">
-                            {activity.taskName}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <Checkbox
+                  key={id}
+                  variant="inline"
+                  label={count > 0 ? `${name} (${count})` : name}
+                  checked={selectedWorkerIds.has(id)}
+                  onChange={() => toggleWorker(id)}
+                />
               );
             })}
           </div>
-        </div>
+        )}
+      </div>
 
-        {selectedWorkerIds.size > 0 ? (
-          <p className="mt-3 text-xs text-zinc-500">
-            Affichage limité à {selectedWorkerIds.size} agent
-            {selectedWorkerIds.size > 1 ? "s" : ""} sur {workers?.length ?? 0}.
-          </p>
-        ) : null}
+      {/* ── Semaine ─────────────────────────────────────────────────────── */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="min-w-[170px] text-center text-sm font-semibold capitalize">
+          {weekLabel}
+        </span>
+        <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+        >
+          Cette semaine
+        </Button>
+        <p className="ml-auto text-xs text-zinc-500">
+          {selectedWorkerIds.size > 0
+            ? `Affichage limité à ${selectedWorkerIds.size} agent${selectedWorkerIds.size > 1 ? "s" : ""} sur ${workers?.length ?? 0}.`
+            : "Cliquez sur un jour pour affecter des agents à des tâches."}
+        </p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
+        <div className="grid h-full min-w-[840px] grid-cols-7">
+          {days.map((day) => {
+            const key = format(day, "yyyy-MM-dd");
+            const items = byDay.get(key) ?? [];
+            const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
+            const today = isToday(day);
+            return (
+              <div
+                key={key}
+                onClick={() => setSelectedDay(day)}
+                className={cn(
+                  "flex min-h-0 cursor-pointer flex-col border-r border-[var(--crm-border)] p-2 transition-colors last:border-r-0",
+                  isSelected
+                    ? "bg-brand-500/8 ring-1 ring-inset ring-brand-500/30"
+                    : "hover:bg-[var(--crm-surface-2)]",
+                )}
+              >
+                <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-[var(--crm-border)] pb-2">
+                  <span
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs",
+                      today ? "bg-brand-600 font-semibold text-white" : "text-zinc-300",
+                    )}
+                  >
+                    {format(day, "d")}
+                  </span>
+                  <span className="text-xs font-semibold capitalize text-zinc-500">
+                    {format(day, "EEEE", { locale: fr })}
+                  </span>
+                </div>
+                {/* Chaque journée défile pour elle-même : une journée chargée
+                    n'étire pas la semaine entière. */}
+                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+                  {items.length === 0 ? (
+                    <p className="px-1 text-[11px] text-zinc-600">—</p>
+                  ) : (
+                    items.map((activity) => (
+                      <div
+                        key={activity._id}
+                        className="rounded-md bg-brand-500/20 px-1.5 py-1 text-[11px] font-medium text-brand-200"
+                        title={`${activity.workerName} — ${activity.taskName}`}
+                      >
+                        <p className="truncate">{activity.workerName}</p>
+                        <p className="truncate font-normal text-brand-100/80">
+                          {activity.taskName}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <Drawer
