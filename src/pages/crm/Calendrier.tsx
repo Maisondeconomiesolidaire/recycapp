@@ -62,6 +62,11 @@ type Activity = ActivityList[number];
 type WorkerList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
 type TaskList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
 
+const RESOURCE_DAY_START_HOUR = 6;
+const RESOURCE_DAY_END_HOUR = 20;
+const RESOURCE_HOUR_HEIGHT = 72;
+const RESOURCE_DAY_HEIGHT = (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * RESOURCE_HOUR_HEIGHT;
+
 export function Calendrier() {
   const [view, setView] = useState<CalView>("demandes");
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
@@ -753,60 +758,69 @@ function ResourceCalendar() {
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
-        <div className="grid h-full min-w-[840px] grid-cols-7">
+      <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
+        <div className="min-w-[980px]">
+          <div className="sticky top-0 z-20 grid grid-cols-[56px_repeat(7,minmax(132px,1fr))] border-b border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-sm">
+            <div className="border-r border-[var(--crm-border)]" />
+            {days.map((day) => {
+              const key = format(day, "yyyy-MM-dd");
+              const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
+              const today = isToday(day);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedDay(day)}
+                  className={cn(
+                    "flex min-h-14 items-center justify-center gap-2 border-r border-[var(--crm-border)] px-2 py-2 text-left last:border-r-0",
+                    isSelected && "bg-brand-500/8",
+                  )}
+                >
+                  <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-full text-xs", today ? "bg-brand-600 font-semibold text-white" : "text-zinc-300")}>
+                    {format(day, "d")}
+                  </span>
+                  <span className="text-xs font-semibold capitalize text-zinc-500">{format(day, "EEEE", { locale: fr })}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-[56px_repeat(7,minmax(132px,1fr))]">
+            <div className="relative border-r border-[var(--crm-border)]" style={{ height: RESOURCE_DAY_HEIGHT }}>
+              {Array.from({ length: RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR + 1 }, (_, index) => {
+                const hour = RESOURCE_DAY_START_HOUR + index;
+                return <span key={hour} className="absolute -top-2 right-2 text-[10px] font-medium text-zinc-500" style={{ top: index * RESOURCE_HOUR_HEIGHT }}>{`${String(hour).padStart(2, "0")}:00`}</span>;
+              })}
+            </div>
           {days.map((day) => {
             const key = format(day, "yyyy-MM-dd");
             const items = byDay.get(key) ?? [];
             const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
-            const today = isToday(day);
             return (
               <div
                 key={key}
                 onClick={() => setSelectedDay(day)}
                 className={cn(
-                  "flex min-h-0 cursor-pointer flex-col border-r border-[var(--crm-border)] p-2 transition-colors last:border-r-0",
+                  "relative cursor-pointer border-r border-[var(--crm-border)] transition-colors last:border-r-0",
                   isSelected
                     ? "bg-brand-500/8 ring-1 ring-inset ring-brand-500/30"
                     : "hover:bg-[var(--crm-surface-2)]",
                 )}
+                style={{ height: RESOURCE_DAY_HEIGHT }}
               >
-                <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-[var(--crm-border)] pb-2">
-                  <span
-                    className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs",
-                      today ? "bg-brand-600 font-semibold text-white" : "text-zinc-300",
-                    )}
-                  >
-                    {format(day, "d")}
-                  </span>
-                  <span className="text-xs font-semibold capitalize text-zinc-500">
-                    {format(day, "EEEE", { locale: fr })}
-                  </span>
-                </div>
-                {/* Chaque journée défile pour elle-même : une journée chargée
-                    n'étire pas la semaine entière. */}
-                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-                  {items.length === 0 ? (
-                    <p className="px-1 text-[11px] text-zinc-600">—</p>
-                  ) : (
-                    items.map((activity) => (
-                      <div
-                        key={activity._id}
-                        className="rounded-md bg-brand-500/20 px-1.5 py-1 text-[11px] font-medium text-brand-200"
-                        title={`${activity.workerName} — ${activity.taskName}`}
-                      >
-                        <p className="truncate">{activity.workerName}</p>
-                        <p className="truncate font-normal text-brand-100/80">
-                          {activity.taskName}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
+                {Array.from({ length: RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR + 1 }, (_, index) => <div key={index} className="absolute left-0 right-0 border-t border-[var(--crm-border)]" style={{ top: index * RESOURCE_HOUR_HEIGHT }} />)}
+                {items.map((activity) => {
+                  const segment = resourceActivitySegment(activity, day);
+                  if (!segment) return null;
+                  return <button key={activity._id} type="button" onClick={(event) => { event.stopPropagation(); setSelectedDay(day); }} className="absolute left-1 right-1 z-10 overflow-hidden rounded-md border border-brand-400/40 bg-brand-500/25 px-1.5 py-1 text-left text-[11px] font-medium text-brand-100 shadow-sm transition hover:bg-brand-500/40" style={{ top: segment.top, height: segment.height }} title={`${activity.workerName} — ${activity.taskName} · ${segment.timeLabel}`}>
+                    <p className="truncate font-semibold">{activity.workerName}</p>
+                    <p className="truncate text-brand-100/80">{activity.taskName}</p>
+                    {segment.height >= 46 ? <p className="mt-0.5 text-[10px] font-normal text-brand-100/70">{segment.timeLabel}</p> : null}
+                  </button>;
+                })}
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 
@@ -831,6 +845,25 @@ function ResourceCalendar() {
       </Drawer>
     </div>
   );
+}
+
+/** Portion d'une activité visible sur une journée, calée sur la grille horaire. */
+function resourceActivitySegment(activity: Activity, day: Date) {
+  const dayStart = startOfDay(day).getTime();
+  const dayEnd = addDays(startOfDay(day), 1).getTime();
+  const visibleStart = Math.max(activity.startAt, dayStart);
+  const visibleEnd = Math.min(activity.endAt, dayEnd);
+  if (visibleEnd <= visibleStart) return null;
+  const gridStart = dayAtHour(day, RESOURCE_DAY_START_HOUR);
+  const gridEnd = dayAtHour(day, RESOURCE_DAY_END_HOUR);
+  const start = Math.max(visibleStart, gridStart);
+  const end = Math.min(visibleEnd, gridEnd);
+  if (end <= start) return null;
+  return {
+    top: ((start - gridStart) / 3_600_000) * RESOURCE_HOUR_HEIGHT,
+    height: Math.max(26, ((end - start) / 3_600_000) * RESOURCE_HOUR_HEIGHT),
+    timeLabel: `${format(new Date(visibleStart), "HH:mm")} – ${format(new Date(visibleEnd), "HH:mm")}`,
+  };
 }
 
 function dayAtHour(day: Date, hour: number) {
