@@ -19,6 +19,12 @@ import { ResourceCalendar } from "./Calendrier";
 
 type Tab = "planning" | "ouvriers" | "taches";
 
+/** Durée mensuelle du contrat ramenée à la semaine (base RH : mois = 4 semaines). */
+function formatWeeklyHours(monthlyHours: number) {
+  const weekly = monthlyHours / 4;
+  return `${Number.isInteger(weekly) ? weekly : weekly.toFixed(1).replace(".", ",")} h`;
+}
+
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   permanent: "Ouvrier permanent",
   polyvalent: "Ouvrier polyvalent",
@@ -185,6 +191,7 @@ function WorkersTab({
                 <th className="px-4 py-3 text-left font-medium">Email</th>
                 <th className="px-4 py-3 text-left font-medium">Recyclerie</th>
                 <th className="px-4 py-3 text-left font-medium">Type</th>
+                <th className="px-4 py-3 text-left font-medium">Heures / sem.</th>
                 <th className="px-4 py-3 text-left font-medium">Statut</th>
                 <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
@@ -226,6 +233,9 @@ function WorkersTab({
                     ) : (
                       <span className="text-zinc-400">{EMPLOYMENT_TYPE_LABELS[worker.employmentType ?? "none"]}</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-400" title="Durée mensuelle du contrat ramenée à la semaine">
+                    {worker.monthlyHours ? formatWeeklyHours(worker.monthlyHours) : "—"}
                   </td>
                   <td className="px-4 py-3">
                     <span
