@@ -1798,10 +1798,16 @@ export default defineSchema(
     aiNotes: v.optional(v.string()),
     trackingNotes: v.optional(v.string()),
     featured: v.optional(v.boolean()),
+    /**
+     * Mise aux archives : l'article sort du stock, de la boutique et des
+     * rapports, mais garde son statut pour pouvoir être remis en ligne.
+     */
+    archivedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_status", ["status"])
+    .index("by_archivedAt", ["archivedAt"])
     .index("by_createdAt", ["createdAt"])
     .index("by_sku", ["sku"])
     .index("by_boutiquePublished", ["publishedOnBoutique"])
@@ -2465,6 +2471,11 @@ export default defineSchema(
     contractEndAt: v.optional(v.string()),
     /** Réactivation manuelle : la synchro RH ne redésactive plus ce salarié. */
     reactivatedAt: v.optional(v.number()),
+    /**
+     * Statut forcé à la main dans l'app. Il l'emporte sur la fin de contrat,
+     * mais pas sur une sortie d'effectif RH.
+     */
+    activeOverride: v.optional(v.boolean()),
     /** Durée mensuelle de travail du dernier contrat, en heures (source RH). */
     monthlyHours: v.optional(v.number()),
     createdBy: v.string(),

@@ -19,6 +19,13 @@ import { ResourceCalendar } from "./Calendrier";
 
 type Tab = "planning" | "ouvriers" | "taches";
 
+/**
+ * Recyclerie couverte par cet espace. La Recyclerie 76 sera servie par un
+ * espace distinct : deux sites dans la même page mélangeraient des tâches
+ * homonymes et des salariés qui ne travaillent pas ensemble.
+ */
+const GESTION_SITE: Site = "60";
+
 /** Durée mensuelle du contrat ramenée à la semaine (base RH : mois = 4 semaines). */
 function formatWeeklyHours(monthlyHours: number) {
   const weekly = monthlyHours / 4;
@@ -43,49 +50,30 @@ export function Taches() {
   const tasks = useQuery(api.polyvalents.listTasks);
   const schedules = useQuery(api.polyvalents.listWorkerSchedules);
   const [tab, setTab] = useState<Tab>("planning");
-  // Filtre principal de la page : il pilote à la fois le planning, l'équipe et
-  // le catalogue de tâches. `null` = les deux recycleries.
-  const [siteFilter, setSiteFilter] = useState<Site | null>(null);
 
   const canCreate = canAccess(access, "agents-polyvalents", "create");
   const canUpdate = canAccess(access, "agents-polyvalents", "update");
   const canDelete = canAccess(access, "agents-polyvalents", "delete");
 
   if (workers === undefined || tasks === undefined || schedules === undefined) {
-    return <FullSpinner label="Chargement des tâches…" />;
+    return <FullSpinner label="Chargement de la gestion…" />;
   }
 
-  const visibleWorkers = workers.filter(
-    (worker) => !siteFilter || worker.sites?.includes(siteFilter),
-  );
-  const visibleTasks = tasks.filter((task) => !siteFilter || task.site === siteFilter);
+  // Toute la page est cloisonnée sur la Recyclerie 60 : une même tâche
+  // (« Caisse magasin »…) existe des deux côtés, les mélanger rendrait le
+  // planning illisible. La Recyclerie 76 aura son propre espace.
+  const visibleWorkers = workers.filter((worker) => worker.sites?.includes(GESTION_SITE));
+  const visibleTasks = tasks.filter((task) => task.site === GESTION_SITE);
 
   return (
     <div className="pb-16">
       <PageHeader
-        title="Tâches"
-        subtitle="Planifiez les tâches, gérez l’équipe et suivez les disponibilités."
+        title="Gestion"
+        subtitle={`${SITE_LABELS[GESTION_SITE]} — planifiez les tâches, gérez l’équipe et suivez les disponibilités.`}
       />
 
       <div className="px-4 py-4 sm:px-6">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {([null, "60", "76"] as Array<Site | null>).map((site) => (
-            <button
-              key={site ?? "all"}
-              type="button"
-              onClick={() => setSiteFilter(site)}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                siteFilter === site
-                  ? "bg-brand-500 text-white"
-                  : "bg-[var(--crm-surface-2)] text-zinc-300 hover:bg-[var(--crm-surface-3)]"
-              }`}
-            >
-              {site ? SITE_LABELS[site] : "Tout"}
-            </button>
-          ))}
-        </div>
-
-        <WorkloadSummary tasks={tasks} workers={workers} siteFilter={siteFilter} />
+        <WorkloadSummary tasks={visibleTasks} workers={visibleWorkers} />
 
         <UnderlineTabs
           className="mb-1"
@@ -99,7 +87,7 @@ export function Taches() {
         />
 
         {tab === "planning" ? (
-          <ResourceCalendar siteFilter={siteFilter} />
+          <ResourceCalendar siteFilter={GESTION_SITE} />
         ) : tab === "ouvriers" ? (
           <WorkersTab
             workers={visibleWorkers}
@@ -111,7 +99,6 @@ export function Taches() {
         ) : (
           <TasksTab
             tasks={visibleTasks}
-            siteFilter={siteFilter}
             canCreate={canCreate}
             canUpdate={canUpdate}
             canDelete={canDelete}
@@ -123,66 +110,43 @@ export function Taches() {
 }
 
 /**
- * Plan de charge par recyclerie : main d'œuvre requise par les tâches du site
- * face aux heures contractuelles de ses salariés actifs, à la semaine.
+ * Plan de charge de la recyclerie : main d'œuvre requise par ses tâches face
+ * aux heures contractuelles de ses salariés actifs, à la semaine.
  */
-function WorkloadSummary({
-  tasks,
-  workers,
-  siteFilter,
-}: {
-  tasks: TaskList;
-  workers: WorkerList;
-  siteFilter: Site | null;
-}) {
-  const sites = siteFilter ? [siteFilter] : (["60", "76"] as Site[]);
+function WorkloadSummary({ tasks, workers }: { tasks: TaskList; workers: WorkerList }) {
+  const required = tasks.reduce((total, task) => total + (task.requiredMonthlyHours ?? 0), 0);
+  const available = workers
+    .filter((worker) => worker.active !== false)
+    .reduce((total, worker) => total + (worker.monthlyHours ?? 0), 0);
+  const missing = required - available;
+
   return (
-    <div className="mb-4 grid gap-3 sm:grid-cols-2">
-      {sites.map((site) => {
-        const required = tasks
-          .filter((task) => task.site === site)
-          .reduce((total, task) => total + (task.requiredMonthlyHours ?? 0), 0);
-        const available = workers
-          .filter((worker) => worker.active !== false && worker.sites?.[0] === site)
-          .reduce((total, worker) => total + (worker.monthlyHours ?? 0), 0);
-        const missing = required - available;
-        return (
-          <div
-            key={site}
-            className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              {SITE_LABELS[site]}
-            </p>
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-              <p className="text-sm text-zinc-300">
-                <span className="text-lg font-semibold text-zinc-100">{formatWeeklyHours(required)}</span>
-                <span className="text-zinc-500"> de main d’œuvre requise / semaine</span>
-              </p>
-              <p className="text-sm text-zinc-300">
-                <span
-                  className={`text-lg font-semibold ${missing > 0 ? "text-amber-300" : "text-brand-300"}`}
-                >
-                  {formatWeeklyHours(available)}
-                </span>
-                <span className="text-zinc-500"> disponibles</span>
-              </p>
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              {required === 0
-                ? "Renseignez les heures requises des tâches de ce site."
-                : missing > 0
-                  ? `Il manque ${formatWeeklyHours(missing)} par semaine pour couvrir les tâches.`
-                  : `Marge de ${formatWeeklyHours(-missing)} par semaine.`}
-            </p>
-          </div>
-        );
-      })}
+    <div className="mb-4 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        {SITE_LABELS[GESTION_SITE]}
+      </p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+        <p className="text-sm text-zinc-300">
+          <span className="text-lg font-semibold text-zinc-100">{formatWeeklyHours(required)}</span>
+          <span className="text-zinc-500"> de main d’œuvre requise / semaine</span>
+        </p>
+        <p className="text-sm text-zinc-300">
+          <span className={`text-lg font-semibold ${missing > 0 ? "text-amber-300" : "text-brand-300"}`}>
+            {formatWeeklyHours(available)}
+          </span>
+          <span className="text-zinc-500"> disponibles</span>
+        </p>
+      </div>
+      <p className="mt-1 text-xs text-zinc-500">
+        {required === 0
+          ? "Renseignez les heures requises des tâches de ce site."
+          : missing > 0
+            ? `Il manque ${formatWeeklyHours(missing)} par semaine pour couvrir les tâches.`
+            : `Marge de ${formatWeeklyHours(-missing)} par semaine.`}
+      </p>
     </div>
   );
 }
-
-/* ─── Agents ──────────────────────────────────────────────────────────────── */
 
 function WorkersTab({
   workers,
@@ -455,7 +419,7 @@ function WorkerForm({
   const [firstName, setFirstName] = useState(worker?.firstName ?? "");
   const [lastName, setLastName] = useState(worker?.lastName ?? "");
   const [email, setEmail] = useState(worker?.email ?? "");
-  const [sites, setSites] = useState<Site[]>(worker?.sites ?? []);
+  const [sites, setSites] = useState<Site[]>(worker?.sites ?? [GESTION_SITE]);
   const [employmentType, setEmploymentType] = useState<"permanent" | "polyvalent" | "">(
     worker?.employmentType ?? "",
   );
@@ -616,13 +580,11 @@ function WorkerScheduleEditor({
 
 function TasksTab({
   tasks,
-  siteFilter,
   canCreate,
   canUpdate,
   canDelete,
 }: {
   tasks: TaskList;
-  siteFilter: Site | null;
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
@@ -666,7 +628,6 @@ function TasksTab({
             <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Tâche</th>
-                <th className="px-4 py-3 text-left font-medium">Recyclerie</th>
                 <th className="px-4 py-3 text-left font-medium">Main d’œuvre requise</th>
                 <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
@@ -679,9 +640,6 @@ function TasksTab({
                       <ListChecks className="h-4 w-4 shrink-0 text-brand-300" />
                       <span className="truncate">{task.name}</span>
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {task.site ? SITE_LABELS[task.site] : "—"}
                   </td>
                   <td className="px-4 py-3 text-zinc-400">
                     {task.requiredMonthlyHours ? (
@@ -728,12 +686,7 @@ function TasksTab({
       )}
 
       {formOpen ? (
-        <TaskForm
-          key={editing?._id ?? "new"}
-          task={editing}
-          defaultSite={siteFilter}
-          onClose={() => setFormOpen(false)}
-        />
+        <TaskForm key={editing?._id ?? "new"} task={editing} onClose={() => setFormOpen(false)} />
       ) : null}
 
       <ConfirmDialog
@@ -755,20 +708,20 @@ function TasksTab({
   );
 }
 
-/** Fiche d'une tâche : nom, site de traitement et main d'œuvre requise. */
+/**
+ * Fiche d'une tâche : nom et main d'œuvre requise. Le site de traitement n'est
+ * pas proposé — une tâche créée ici appartient à la recyclerie de l'espace.
+ */
 function TaskForm({
   task,
-  defaultSite,
   onClose,
 }: {
   task: TaskList[number] | null;
-  defaultSite: Site | null;
   onClose: () => void;
 }) {
   const createTask = useMutation(api.polyvalents.createTask);
   const updateTask = useMutation(api.polyvalents.updateTask);
   const [name, setName] = useState(task?.name ?? "");
-  const [site, setSite] = useState<Site | "">(task?.site ?? defaultSite ?? "");
   // Saisie hebdomadaire, stockée au mois : c'est la semaine qui se compare aux
   // heures des salariés.
   const [weeklyHours, setWeeklyHours] = useState(
@@ -789,7 +742,7 @@ function TaskForm({
     try {
       const profile = {
         name,
-        site: site || undefined,
+        site: task?.site ?? GESTION_SITE,
         requiredMonthlyHours: weekly !== undefined ? weekly * 4 : undefined,
       };
       if (task) await updateTask({ id: task._id, ...profile });
@@ -811,16 +764,6 @@ function TaskForm({
             onChange={(event) => setName(event.target.value)}
             placeholder="Ex : Tri textile, Réparation vélos…"
           />
-        </Field>
-        <Field label="Recyclerie de traitement">
-          <Select value={site} onChange={(event) => setSite(event.target.value as Site | "")}>
-            <option value="">Non précisée</option>
-            {(Object.keys(SITE_LABELS) as Site[]).map((value) => (
-              <option key={value} value={value}>
-                {SITE_LABELS[value]}
-              </option>
-            ))}
-          </Select>
         </Field>
         <Field label="Main d’œuvre requise (heures par semaine)">
           <Input

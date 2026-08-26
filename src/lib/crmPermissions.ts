@@ -212,8 +212,8 @@ export const CRM_PAGES: CrmPageDefinition[] = [
   },
   {
     key: "agents-polyvalents",
-    label: "Tâches",
-    description: "Planning hebdomadaire, équipe et tâches à affecter.",
+    label: "Gestion",
+    description: "Recyclerie 60 : planning hebdomadaire, équipe et tâches à affecter.",
     to: "/crm/taches",
     icon: ListChecks,
     actions: ["read", "create", "update", "delete"],
