@@ -71,6 +71,9 @@ export function Calendrier() {
       <PageHeader
         title="Calendrier"
         actions={
+          // L'onglet « Gestion ressources » se navigue à la semaine : le
+          // sélecteur de mois n'y aurait aucun effet.
+          view === "ressources" ? null : (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setMonth(subMonths(month, 1))}>
               <ChevronLeft className="h-4 w-4" />
@@ -85,6 +88,7 @@ export function Calendrier() {
               Aujourd'hui
             </Button>
           </div>
+          )
         }
       />
 
@@ -105,7 +109,7 @@ export function Calendrier() {
       ) : view === "depots" ? (
         <DepotCalendar month={month} />
       ) : (
-        <ResourceCalendar month={month} />
+        <ResourceCalendar />
       )}
     </div>
   );
@@ -575,7 +579,14 @@ function RequestDayPanel({
 
 /* ─── Gestion ressources : salariés affectés à des tâches ─────────────────── */
 
-function ResourceCalendar({ month }: { month: Date }) {
+/**
+ * Planning des agents polyvalents, à la semaine.
+ *
+ * Une affectation se lit sur quelques jours, pas sur un mois : la vue s'ouvre
+ * toujours sur la semaine en cours, et la colonne de gauche permet de ne
+ * garder que les agents dont on veut suivre les tâches.
+ */
+function ResourceCalendar() {
   const access = useCrmAccess();
   const canRead = canAccess(access, "agents-polyvalents", "read");
   const canCreate = canAccess(access, "agents-polyvalents", "create");
@@ -587,13 +598,32 @@ function ResourceCalendar({ month }: { month: Date }) {
   const activities = useQuery(api.polyvalents.listActivities, canRead ? {} : "skip");
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
-  const days = useMonthDays(month);
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 }),
+  );
+  /** Agents cochés. Vide = aucun filtre, tout le monde s'affiche. */
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<Set<string>>(new Set());
+
+  const days = useMemo(
+    () =>
+      eachDayOfInterval({
+        start: weekStart,
+        end: endOfWeek(weekStart, { weekStartsOn: 1 }),
+      }),
+    [weekStart],
+  );
+
+  const visibleActivities = useMemo(() => {
+    const all = activities ?? [];
+    if (selectedWorkerIds.size === 0) return all;
+    return all.filter((activity) => selectedWorkerIds.has(String(activity.workerId)));
+  }, [activities, selectedWorkerIds]);
 
   // Une activité s'affiche sur chaque jour compris entre sa date de début et sa
   // date de fin (créneaux multi-jours inclus).
   const byDay = useMemo(() => {
     const map = new Map<string, Activity[]>();
-    for (const activity of activities ?? []) {
+    for (const activity of visibleActivities) {
       let cursor = startOfDay(new Date(activity.startAt));
       const last = startOfDay(new Date(activity.endAt));
       while (cursor <= last) {
@@ -605,12 +635,34 @@ function ResourceCalendar({ month }: { month: Date }) {
       }
     }
     return map;
-  }, [activities]);
+  }, [visibleActivities]);
 
   const selectedDayActivities = useMemo(() => {
     if (!selectedDay) return [];
     return byDay.get(format(selectedDay, "yyyy-MM-dd")) ?? [];
   }, [selectedDay, byDay]);
+
+  /** Nombre d'affectations de la semaine, par agent (avant filtrage). */
+  const weekCountByWorker = useMemo(() => {
+    const counts = new Map<string, number>();
+    const from = startOfDay(weekStart);
+    const to = endOfWeek(weekStart, { weekStartsOn: 1 });
+    for (const activity of activities ?? []) {
+      if (activity.endAt < from.getTime() || activity.startAt > to.getTime()) continue;
+      const key = String(activity.workerId);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [activities, weekStart]);
+
+  function toggleWorker(workerId: string) {
+    setSelectedWorkerIds((current) => {
+      const next = new Set(current);
+      if (next.has(workerId)) next.delete(workerId);
+      else next.add(workerId);
+      return next;
+    });
+  }
 
   if (!canRead) {
     return (
@@ -622,43 +674,161 @@ function ResourceCalendar({ month }: { month: Date }) {
     );
   }
 
-  return (
-    <div className="p-4 sm:p-6">
-      <p className="mb-4 text-xs text-zinc-500">
-        Cliquez sur un jour pour affecter des agents à des tâches.
-      </p>
+  const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+  const weekLabel = `${format(weekStart, "d MMM", { locale: fr })} – ${format(weekEnd, "d MMM yyyy", { locale: fr })}`;
 
-      <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
-        <div className="min-w-[720px]">
-          <WeekdayHeader />
-          <div className="grid grid-cols-7">
+  return (
+    <div className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">
+      {/* ── Agents : filtre d'affichage ─────────────────────────────────── */}
+      <aside className="shrink-0 lg:w-64">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Agents
+            </h3>
+            {selectedWorkerIds.size > 0 ? (
+              <button
+                type="button"
+                onClick={() => setSelectedWorkerIds(new Set())}
+                className="text-xs font-medium text-brand-400 hover:underline"
+              >
+                Tout afficher
+              </button>
+            ) : null}
+          </div>
+
+          {workers === undefined ? (
+            <p className="px-1 py-2 text-xs text-zinc-500">Chargement…</p>
+          ) : workers.length === 0 ? (
+            <p className="px-1 py-2 text-xs text-zinc-500">
+              Aucun agent. Ajoutez-en depuis « Agents polyvalents ».
+            </p>
+          ) : (
+            <ul className="max-h-[60vh] space-y-0.5 overflow-y-auto">
+              {workers.map((worker) => {
+                const id = String(worker._id);
+                const checked = selectedWorkerIds.has(id);
+                const count = weekCountByWorker.get(id) ?? 0;
+                return (
+                  <li key={id}>
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors",
+                        checked ? "bg-brand-500/10" : "hover:bg-[var(--crm-surface-2)]",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleWorker(id)}
+                        className="h-4 w-4 shrink-0 accent-[var(--brand-500,#f1104f)]"
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {worker.firstName} {worker.lastName}
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-1.5 py-0.5 text-[11px]",
+                          count > 0 ? "bg-brand-500/20 text-brand-300" : "text-zinc-600",
+                        )}
+                        title="Affectations cette semaine"
+                      >
+                        {count}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </aside>
+
+      {/* ── Semaine ─────────────────────────────────────────────────────── */}
+      <div className="min-w-0 flex-1">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[170px] text-center text-sm font-semibold capitalize">
+            {weekLabel}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+          >
+            Cette semaine
+          </Button>
+          <p className="ml-auto text-xs text-zinc-500">
+            Cliquez sur un jour pour affecter des agents à des tâches.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
+          <div className="grid min-w-[840px] grid-cols-7">
             {days.map((day) => {
               const key = format(day, "yyyy-MM-dd");
               const items = byDay.get(key) ?? [];
-              const inMonth = isSameMonth(day, month);
               const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
+              const today = isToday(day);
               return (
-                <DayCell
+                <div
                   key={key}
-                  day={day}
-                  inMonth={inMonth}
-                  isSelected={isSelected}
                   onClick={() => setSelectedDay(day)}
+                  className={cn(
+                    "min-h-[260px] cursor-pointer border-r border-[var(--crm-border)] p-2 transition-colors last:border-r-0",
+                    isSelected
+                      ? "bg-brand-500/8 ring-1 ring-inset ring-brand-500/30"
+                      : "hover:bg-[var(--crm-surface-2)]",
+                  )}
                 >
-                  {items.map((activity) => (
-                    <div
-                      key={activity._id}
-                      className="truncate rounded-md bg-brand-500/20 px-1.5 py-1 text-[11px] font-medium text-brand-200"
-                      title={`${activity.workerName} — ${activity.taskName}`}
+                  <div className="mb-2 flex items-center gap-2 border-b border-[var(--crm-border)] pb-2">
+                    <span
+                      className={cn(
+                        "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs",
+                        today ? "bg-brand-600 font-semibold text-white" : "text-zinc-300",
+                      )}
                     >
-                      {activity.workerName} · {activity.taskName}
-                    </div>
-                  ))}
-                </DayCell>
+                      {format(day, "d")}
+                    </span>
+                    <span className="text-xs font-semibold capitalize text-zinc-500">
+                      {format(day, "EEEE", { locale: fr })}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {items.length === 0 ? (
+                      <p className="px-1 text-[11px] text-zinc-600">—</p>
+                    ) : (
+                      items.map((activity) => (
+                        <div
+                          key={activity._id}
+                          className="rounded-md bg-brand-500/20 px-1.5 py-1 text-[11px] font-medium text-brand-200"
+                          title={`${activity.workerName} — ${activity.taskName}`}
+                        >
+                          <p className="truncate">{activity.workerName}</p>
+                          <p className="truncate font-normal text-brand-100/80">
+                            {activity.taskName}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
         </div>
+
+        {selectedWorkerIds.size > 0 ? (
+          <p className="mt-3 text-xs text-zinc-500">
+            Affichage limité à {selectedWorkerIds.size} agent
+            {selectedWorkerIds.size > 1 ? "s" : ""} sur {workers?.length ?? 0}.
+          </p>
+        ) : null}
       </div>
 
       <Drawer
