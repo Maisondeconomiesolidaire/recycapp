@@ -33,7 +33,7 @@ import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Drawer } from "../../components/ui/Drawer";
-import { Checkbox, Field, Select } from "../../components/ui/Field";
+import { Field, Select } from "../../components/ui/Field";
 import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -63,6 +63,7 @@ type Activity = ActivityList[number];
 type WorkerList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
 type TaskList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
 type ScheduleList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkerSchedules>>>;
+type DroppedTask = { taskId: Id<"polyvalentTasks">; startAt: number; endAt: number };
 
 const RESOURCE_DAY_START_HOUR = 6;
 const RESOURCE_DAY_END_HOUR = 20;
@@ -600,9 +601,7 @@ export function ResourceCalendar() {
   const [weekStart, setWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   );
-  /** Agents cochés. Vide = aucun filtre, tout le monde s'affiche. */
-  const [selectedWorkerIds, setSelectedWorkerIds] = useState<Set<string>>(new Set());
-  const [droppedTaskId, setDroppedTaskId] = useState<Id<"polyvalentTasks"> | null>(null);
+  const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
 
   const days = useMemo(
     () =>
@@ -613,17 +612,11 @@ export function ResourceCalendar() {
     [weekStart],
   );
 
-  const visibleActivities = useMemo(() => {
-    const all = activities ?? [];
-    if (selectedWorkerIds.size === 0) return all;
-    return all.filter((activity) => selectedWorkerIds.has(String(activity.workerId)));
-  }, [activities, selectedWorkerIds]);
-
   // Une activité s'affiche sur chaque jour compris entre sa date de début et sa
   // date de fin (créneaux multi-jours inclus).
   const byDay = useMemo(() => {
     const map = new Map<string, Activity[]>();
-    for (const activity of visibleActivities) {
+    for (const activity of activities ?? []) {
       let cursor = startOfDay(new Date(activity.startAt));
       const last = startOfDay(new Date(activity.endAt));
       while (cursor <= last) {
@@ -635,39 +628,12 @@ export function ResourceCalendar() {
       }
     }
     return map;
-  }, [visibleActivities]);
+  }, [activities]);
 
   const selectedDayActivities = useMemo(() => {
     if (!selectedDay) return [];
     return byDay.get(format(selectedDay, "yyyy-MM-dd")) ?? [];
   }, [selectedDay, byDay]);
-
-  /** Nombre d'affectations de la semaine, par agent (avant filtrage). */
-  const weekCountByWorker = useMemo(() => {
-    const counts = new Map<string, number>();
-    const from = startOfDay(weekStart);
-    const to = endOfWeek(weekStart, { weekStartsOn: 1 });
-    for (const activity of activities ?? []) {
-      if (activity.endAt < from.getTime() || activity.startAt > to.getTime()) continue;
-      const key = String(activity.workerId);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  }, [activities, weekStart]);
-
-  const assignedTaskIds = useMemo(
-    () => new Set((activities ?? []).map((activity) => String(activity.taskId))),
-    [activities],
-  );
-
-  function toggleWorker(workerId: string) {
-    setSelectedWorkerIds((current) => {
-      const next = new Set(current);
-      if (next.has(workerId)) next.delete(workerId);
-      else next.add(workerId);
-      return next;
-    });
-  }
 
   if (!canRead) {
     return (
@@ -695,7 +661,6 @@ export function ResourceCalendar() {
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {(tasks ?? []).map((task) => {
-            const unassigned = !assignedTaskIds.has(String(task._id));
             return (
               <div
                 key={task._id}
@@ -708,64 +673,12 @@ export function ResourceCalendar() {
               >
                 <ListChecks className="h-4 w-4" />
                 <span>{task.name}</span>
-                {unassigned ? (
-                  <span title="Aucun salarié affecté" aria-label="Aucun salarié affecté">
-                    <TriangleAlert className="h-4 w-4 text-amber-400" />
-                  </span>
-                ) : null}
               </div>
             );
           })}
           {tasks?.length === 0 ? <p className="text-sm text-zinc-500">Créez d’abord une tâche dans l’onglet « Tâches ».</p> : null}
         </div>
       </div>
-      {/* ── Agents : filtre d'affichage ─────────────────────────────────── */}
-      <div className="shrink-0 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Agents
-          </h3>
-          {selectedWorkerIds.size > 0 ? (
-            <button
-              type="button"
-              onClick={() => setSelectedWorkerIds(new Set())}
-              className="text-xs font-medium text-brand-400 hover:underline"
-            >
-              Tout afficher ({workers?.length ?? 0})
-            </button>
-          ) : (
-            <span className="text-xs text-zinc-500">
-              Cochez un agent pour ne voir que ses tâches
-            </span>
-          )}
-        </div>
-
-        {workers === undefined ? (
-          <p className="px-1 py-1 text-xs text-zinc-500">Chargement…</p>
-        ) : workers.length === 0 ? (
-          <p className="px-1 py-1 text-xs text-zinc-500">
-            Aucun agent. Ajoutez-en depuis « Agents polyvalents ».
-          </p>
-        ) : (
-          <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-            {workers.map((worker) => {
-              const id = String(worker._id);
-              const count = weekCountByWorker.get(id) ?? 0;
-              const name = `${worker.firstName} ${worker.lastName}`.trim();
-              return (
-                <Checkbox
-                  key={id}
-                  variant="inline"
-                  label={count > 0 ? `${name} (${count})` : name}
-                  checked={selectedWorkerIds.has(id)}
-                  onChange={() => toggleWorker(id)}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {/* ── Semaine ─────────────────────────────────────────────────────── */}
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
@@ -784,11 +697,7 @@ export function ResourceCalendar() {
         >
           Cette semaine
         </Button>
-        <p className="ml-auto text-xs text-zinc-500">
-          {selectedWorkerIds.size > 0
-            ? `Affichage limité à ${selectedWorkerIds.size} agent${selectedWorkerIds.size > 1 ? "s" : ""} sur ${workers?.length ?? 0}.`
-            : "Cliquez sur un jour pour affecter des agents à des tâches."}
-        </p>
+        <p className="ml-auto text-xs text-zinc-500">Déposez une tâche sur le créneau souhaité, puis renseignez-la si besoin.</p>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
@@ -839,7 +748,9 @@ export function ResourceCalendar() {
                   const taskId = event.dataTransfer.getData("application/x-recycapp-task") as Id<"polyvalentTasks">;
                   if (!canCreate || !taskId) return;
                   event.preventDefault();
-                  setDroppedTaskId(taskId);
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  const hour = Math.max(RESOURCE_DAY_START_HOUR, Math.min(RESOURCE_DAY_END_HOUR - 1, RESOURCE_DAY_START_HOUR + Math.floor((event.clientY - bounds.top) / RESOURCE_HOUR_HEIGHT)));
+                  setDroppedTask({ taskId, startAt: dayAtHour(day, hour), endAt: dayAtHour(day, hour + 1) });
                   setSelectedDay(day);
                 }}
                 className={cn(
@@ -855,8 +766,8 @@ export function ResourceCalendar() {
                   const segment = resourceActivitySegment(activity, day);
                   if (!segment) return null;
                   return <button key={activity._id} type="button" onClick={(event) => { event.stopPropagation(); setSelectedDay(day); }} className="absolute left-1 right-1 z-10 overflow-hidden rounded-md border border-brand-400/40 bg-brand-500/25 px-1.5 py-1 text-left text-[11px] font-medium text-brand-100 shadow-sm transition hover:bg-brand-500/40" style={{ top: segment.top, height: segment.height }} title={`${activity.workerName} — ${activity.taskName} · ${segment.timeLabel}`}>
-                    <p className="truncate font-semibold">{activity.workerName}</p>
-                    <p className="truncate text-brand-100/80">{activity.taskName}</p>
+                    <p className="flex items-center gap-1 truncate font-semibold"><span className="truncate">{activity.taskName}</span>{!activity.workerId ? <span title="Aucun salarié affecté" aria-label="Aucun salarié affecté"><TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-300" /></span> : null}</p>
+                    <p className="truncate text-brand-100/80">{activity.workerName}</p>
                     {segment.height >= 46 ? <p className="mt-0.5 text-[10px] font-normal text-brand-100/70">{segment.timeLabel}</p> : null}
                   </button>;
                 })}
@@ -884,8 +795,8 @@ export function ResourceCalendar() {
             canCreate={canCreate}
             canUpdate={canUpdate}
             canDelete={canDelete}
-            droppedTaskId={droppedTaskId}
-            onDroppedTaskConsumed={() => setDroppedTaskId(null)}
+            droppedTask={droppedTask}
+            onDroppedTaskConsumed={() => setDroppedTask(null)}
           />
         ) : null}
       </Drawer>
@@ -927,7 +838,7 @@ function ResourceDayPanel({
   canCreate,
   canUpdate,
   canDelete,
-  droppedTaskId,
+  droppedTask,
   onDroppedTaskConsumed,
 }: {
   day: Date;
@@ -938,7 +849,7 @@ function ResourceDayPanel({
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
-  droppedTaskId: Id<"polyvalentTasks"> | null;
+  droppedTask: DroppedTask | null;
   onDroppedTaskConsumed: () => void;
 }) {
   const createActivity = useMutation(api.polyvalents.createActivity);
@@ -955,24 +866,20 @@ function ResourceDayPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Id<"polyvalentActivities"> | null>(null);
-  const [repeatUntil, setRepeatUntil] = useState("");
-  const [repeatDays, setRepeatDays] = useState<Set<number>>(new Set());
-  const [repeatTimes, setRepeatTimes] = useState<Record<number, { start: string; end: string }>>({});
+  const [extraSlots, setExtraSlots] = useState<{ startAt: number; endAt: number }[]>([]);
 
   useEffect(() => {
-    if (!droppedTaskId) return;
+    if (!droppedTask) return;
     setEditing(null);
-    setTaskId(droppedTaskId);
+    setTaskId(droppedTask.taskId);
     setWorkerId("");
-    setStartAt(dayAtHour(day, 8));
-    setEndAt(dayAtHour(day, 17));
-    setRepeatUntil("");
-    setRepeatDays(new Set([day.getDay() || 7]));
-    setRepeatTimes({ [day.getDay() || 7]: { start: "08:00", end: "17:00" } });
+    setStartAt(droppedTask.startAt);
+    setEndAt(droppedTask.endAt);
+    setExtraSlots([]);
     setError(null);
     setFormOpen(true);
     onDroppedTaskConsumed();
-  }, [day, droppedTaskId, onDroppedTaskConsumed]);
+  }, [droppedTask, onDroppedTaskConsumed]);
 
   function openCreate() {
     setEditing(null);
@@ -980,16 +887,14 @@ function ResourceDayPanel({
     setTaskId("");
     setStartAt(dayAtHour(day, 8));
     setEndAt(dayAtHour(day, 17));
-    setRepeatUntil("");
-    setRepeatDays(new Set([day.getDay() || 7]));
-    setRepeatTimes({ [day.getDay() || 7]: { start: "08:00", end: "17:00" } });
+    setExtraSlots([]);
     setError(null);
     setFormOpen(true);
   }
 
   function openEdit(activity: Activity) {
     setEditing(activity);
-    setWorkerId(activity.workerId);
+    setWorkerId(activity.workerId ?? "");
     setTaskId(activity.taskId);
     setStartAt(activity.startAt);
     setEndAt(activity.endAt);
@@ -999,7 +904,6 @@ function ResourceDayPanel({
 
   async function save() {
     setError(null);
-    if (!workerId) return setError("Sélectionne un agent.");
     if (!taskId) return setError("Sélectionne une tâche.");
     if (startAt == null) return setError("Renseigne la date de début.");
     if (endAt == null) return setError("Renseigne la date de fin.");
@@ -1007,14 +911,11 @@ function ResourceDayPanel({
     setSaving(true);
     try {
       if (editing) {
-        await updateActivity({ id: editing._id, workerId, taskId, startAt, endAt });
-      } else if (repeatUntil) {
-        const until = new Date(`${repeatUntil}T23:59:59`);
-        const slots = recurringSlots(day, until, repeatDays, repeatTimes);
-        if (slots.length === 0) return setError("Choisissez au moins un jour de récurrence.");
-        await createActivities({ workerId, taskId, slots });
+        await updateActivity({ id: editing._id, workerId: workerId || undefined, taskId, startAt, endAt });
+      } else if (extraSlots.length > 0) {
+        await createActivities({ workerId: workerId || undefined, taskId, slots: [{ startAt, endAt }, ...extraSlots] });
       } else {
-        await createActivity({ workerId, taskId, startAt, endAt });
+        await createActivity({ workerId: workerId || undefined, taskId, startAt, endAt });
       }
       setFormOpen(false);
     } catch (err) {
@@ -1082,11 +983,11 @@ function ResourceDayPanel({
         {formOpen ? (
           <div className="grid gap-3 rounded-2xl border border-brand-500/40 bg-[var(--crm-surface)] p-4">
             <p className="text-sm font-semibold text-zinc-100">
-              {editing ? "Modifier l'affectation" : "Ajouter un salarié"}
+              {editing ? "Modifier le créneau" : "Planifier une tâche"}
             </p>
-            <Field label="Agent">
+            <Field label="Salarié (facultatif)">
               <Select value={workerId} onChange={(e) => setWorkerId(e.target.value as Id<"polyvalentWorkers">)}>
-                <option value="">Sélectionner un agent</option>
+                <option value="">Aucun salarié affecté</option>
                 {workers.map((worker) => (
                   <option key={worker._id} value={worker._id}>
                     {worker.firstName} {worker.lastName}{availabilityLabel(schedules, worker._id, day)}
@@ -1112,31 +1013,9 @@ function ResourceDayPanel({
             </Field>
             {!editing ? (
               <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
-                <Field label="Répéter jusqu’au (facultatif)">
-                  <input
-                    type="date"
-                    value={repeatUntil}
-                    min={format(day, "yyyy-MM-dd")}
-                    onChange={(event) => setRepeatUntil(event.target.value)}
-                    className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2 text-sm"
-                  />
-                </Field>
-                {repeatUntil ? (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-xs text-zinc-400">Jours et horaires de la récurrence</p>
-                    {[{ key: 1, label: "Lun" }, { key: 2, label: "Mar" }, { key: 3, label: "Mer" }, { key: 4, label: "Jeu" }, { key: 5, label: "Ven" }, { key: 6, label: "Sam" }, { key: 7, label: "Dim" }].map(({ key, label }) => {
-                      const active = repeatDays.has(key);
-                      const times = repeatTimes[key] ?? { start: "08:00", end: "17:00" };
-                      return (
-                        <div key={key} className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 text-sm">
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={active} onChange={() => setRepeatDays((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} /> {label}</label>
-                          <input disabled={!active} type="time" value={times.start} onChange={(event) => setRepeatTimes((current) => ({ ...current, [key]: { ...times, start: event.target.value } }))} className="rounded-md border border-[var(--crm-border)] bg-[var(--crm-surface)] px-2 py-1 disabled:opacity-40" />
-                          <input disabled={!active} type="time" value={times.end} onChange={(event) => setRepeatTimes((current) => ({ ...current, [key]: { ...times, end: event.target.value } }))} className="rounded-md border border-[var(--crm-border)] bg-[var(--crm-surface)] px-2 py-1 disabled:opacity-40" />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
+                <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">Autres créneaux</p><Button type="button" variant="outline" size="sm" onClick={() => setExtraSlots((current) => [...current, { startAt: startAt ?? dayAtHour(day, 8), endAt: endAt ?? dayAtHour(day, 9) }])}><Plus className="h-4 w-4" />Ajouter</Button></div>
+                <p className="mb-3 text-xs text-zinc-500">Ajoutez uniquement les jours nécessaires : chaque créneau a sa propre date et ses propres horaires.</p>
+                {extraSlots.map((slot, index) => <div key={index} className="mb-2 grid grid-cols-[1fr_1fr_auto] gap-2"><DateTimePicker value={slot.startAt} onChange={(value) => setExtraSlots((current) => current.map((item, i) => i === index ? { ...item, startAt: value ?? item.startAt } : item))} placeholder="Début" /><DateTimePicker value={slot.endAt} onChange={(value) => setExtraSlots((current) => current.map((item, i) => i === index ? { ...item, endAt: value ?? item.endAt } : item))} placeholder="Fin" /><button type="button" onClick={() => setExtraSlots((current) => current.filter((_, i) => i !== index))} className="rounded-lg p-2 text-zinc-500 hover:bg-[var(--crm-surface)] hover:text-red-400" aria-label="Retirer ce créneau"><Trash2 className="h-4 w-4" /></button></div>)}
               </div>
             ) : null}
             {error ? (
@@ -1178,28 +1057,6 @@ function ResourceDayPanel({
       />
     </div>
   );
-}
-
-function recurringSlots(
-  firstDay: Date,
-  until: Date,
-  weekdays: Set<number>,
-  times: Record<number, { start: string; end: string }>,
-) {
-  const slots: { startAt: number; endAt: number }[] = [];
-  for (let cursor = startOfDay(firstDay); cursor <= until && slots.length <= 100; cursor = addDays(cursor, 1)) {
-    const weekday = cursor.getDay() || 7;
-    if (!weekdays.has(weekday)) continue;
-    const time = times[weekday] ?? { start: "08:00", end: "17:00" };
-    const [startHour, startMinute] = time.start.split(":").map(Number);
-    const [endHour, endMinute] = time.end.split(":").map(Number);
-    const start = new Date(cursor);
-    const end = new Date(cursor);
-    start.setHours(startHour, startMinute, 0, 0);
-    end.setHours(endHour, endMinute, 0, 0);
-    if (end > start) slots.push({ startAt: start.getTime(), endAt: end.getTime() });
-  }
-  return slots;
 }
 
 function availabilityLabel(schedules: ScheduleList, workerId: Id<"polyvalentWorkers">, day: Date) {
