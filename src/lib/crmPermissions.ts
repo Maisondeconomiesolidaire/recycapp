@@ -5,6 +5,7 @@ import {
   FolderOpen,
   KanbanSquare,
   LayoutDashboard,
+  ListChecks,
   MessageSquare,
   Package,
   PackagePlus,
@@ -13,7 +14,6 @@ import {
   Truck,
   UserCog,
   Users,
-  UsersRound,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -222,10 +222,10 @@ export const CRM_PAGES: CrmPageDefinition[] = [
   },
   {
     key: "agents-polyvalents",
-    label: "Agents polyvalents",
-    description: "Ouvriers polyvalents : tâches, ouvriers et planning d'activités.",
-    to: "/crm/agents-polyvalents",
-    icon: UsersRound,
+    label: "Tâches",
+    description: "Planning hebdomadaire, équipe et tâches à affecter.",
+    to: "/crm/taches",
+    icon: ListChecks,
     actions: ["read", "create", "update", "delete"],
   },
 ];

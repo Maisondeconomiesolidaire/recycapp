@@ -12,51 +12,56 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { ResourceCalendar } from "./Calendrier";
 
-type Tab = "ouvriers" | "taches";
+type Tab = "planning" | "ouvriers" | "taches";
 type WorkerList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
 type TaskList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
+type ScheduleList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkerSchedules>>>;
 
 /**
- * Page « Agents polyvalents » : gestion des agents (ouvriers polyvalents) et
- * des tâches. L'affectation des agents à des tâches sur des créneaux se fait
- * dans le Calendrier (onglet « Gestion ressources »).
+ * Espace unique des tâches : planning, équipe et catalogue de tâches.
  */
-export function AgentsPolyvalents() {
+export function Taches() {
   const access = useCrmAccess();
   const workers = useQuery(api.polyvalents.listWorkers);
   const tasks = useQuery(api.polyvalents.listTasks);
-  const [tab, setTab] = useState<Tab>("ouvriers");
+  const schedules = useQuery(api.polyvalents.listWorkerSchedules);
+  const [tab, setTab] = useState<Tab>("planning");
 
   const canCreate = canAccess(access, "agents-polyvalents", "create");
   const canUpdate = canAccess(access, "agents-polyvalents", "update");
   const canDelete = canAccess(access, "agents-polyvalents", "delete");
 
-  if (workers === undefined || tasks === undefined) {
-    return <FullSpinner label="Chargement des agents polyvalents…" />;
+  if (workers === undefined || tasks === undefined || schedules === undefined) {
+    return <FullSpinner label="Chargement des tâches…" />;
   }
 
   return (
     <div className="pb-16">
       <PageHeader
-        title="Agents polyvalents"
-        subtitle="Gestion des agents et des tâches. Les affectations se font dans le Calendrier."
+        title="Tâches"
+        subtitle="Planifiez les tâches, gérez l’équipe et suivez les disponibilités."
       />
 
       <div className="px-4 py-4 sm:px-6">
         <UnderlineTabs
-          className="mb-5"
+          className="mb-1"
           items={[
-            { key: "ouvriers", label: "Agents" },
+            { key: "planning", label: "Planning" },
+            { key: "ouvriers", label: "Équipe" },
             { key: "taches", label: "Tâches" },
           ]}
           value={tab}
           onChange={setTab}
         />
 
-        {tab === "ouvriers" ? (
+        {tab === "planning" ? (
+          <ResourceCalendar />
+        ) : tab === "ouvriers" ? (
           <WorkersTab
             workers={workers}
+            schedules={schedules}
             canCreate={canCreate}
             canUpdate={canUpdate}
             canDelete={canDelete}
@@ -73,11 +78,13 @@ export function AgentsPolyvalents() {
 
 function WorkersTab({
   workers,
+  schedules,
   canCreate,
   canUpdate,
   canDelete,
 }: {
   workers: WorkerList;
+  schedules: ScheduleList;
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
@@ -92,6 +99,7 @@ function WorkersTab({
   const [editingId, setEditingId] = useState<Id<"polyvalentWorkers"> | null>(null);
   const [editFirst, setEditFirst] = useState("");
   const [editLast, setEditLast] = useState("");
+  const [scheduleWorkerId, setScheduleWorkerId] = useState<Id<"polyvalentWorkers"> | null>(null);
 
   async function add() {
     if (!firstName.trim() && !lastName.trim()) return;
@@ -198,6 +206,11 @@ function WorkersTab({
                 </span>
                 <div className="flex shrink-0 items-center gap-0.5">
                   {canUpdate ? (
+                    <button type="button" onClick={() => setScheduleWorkerId(worker._id)} className="rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-[var(--crm-surface-2)] hover:text-brand-300">
+                      Horaires
+                    </button>
+                  ) : null}
+                  {canUpdate ? (
                     <button
                       type="button"
                       onClick={() => startEdit(worker)}
@@ -224,6 +237,14 @@ function WorkersTab({
         </div>
       )}
 
+      {scheduleWorkerId ? (
+        <WorkerScheduleEditor
+          worker={workers.find((worker) => worker._id === scheduleWorkerId)!}
+          schedule={schedules.find((schedule) => schedule.workerId === scheduleWorkerId)?.availability ?? []}
+          onClose={() => setScheduleWorkerId(null)}
+        />
+      ) : null}
+
       <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
@@ -235,6 +256,43 @@ function WorkersTab({
         description="Ses affectations planifiées seront également supprimées."
         confirmLabel="Supprimer"
       />
+    </div>
+  );
+}
+
+function WorkerScheduleEditor({
+  worker,
+  schedule,
+  onClose,
+}: {
+  worker: WorkerList[number];
+  schedule: { weekday: number; start: string; end: string }[];
+  onClose: () => void;
+}) {
+  const setSchedule = useMutation(api.polyvalents.setWorkerSchedule);
+  const initial = Object.fromEntries(schedule.map((slot) => [slot.weekday, { start: slot.start, end: slot.end }]));
+  const [slots, setSlots] = useState<Record<number, { start: string; end: string }>>(initial);
+  const [saving, setSaving] = useState(false);
+  const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+
+  async function save() {
+    setSaving(true);
+    try {
+      await setSchedule({ workerId: worker._id, availability: Object.entries(slots).map(([weekday, time]) => ({ weekday: Number(weekday), ...time })) });
+      onClose();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="rounded-2xl border border-brand-500/40 bg-[var(--crm-surface)] p-4">
+      <div className="mb-3 flex items-center justify-between gap-2"><div><p className="font-semibold">Horaires de {worker.firstName} {worker.lastName}</p><p className="text-xs text-zinc-500">Les créneaux servent à repérer les salariés disponibles lors d’une affectation.</p></div><button type="button" onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 hover:bg-[var(--crm-surface-2)]"><X className="h-4 w-4" /></button></div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {days.map((label, index) => {
+          const weekday = index + 1; const value = slots[weekday];
+          return <div key={weekday} className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 rounded-lg border border-[var(--crm-border)] p-2 text-sm"><label className="flex items-center gap-1.5"><input type="checkbox" checked={Boolean(value)} onChange={() => setSlots((current) => { const next = { ...current }; if (next[weekday]) delete next[weekday]; else next[weekday] = { start: "09:00", end: "17:00" }; return next; })} />{label}</label><input type="time" disabled={!value} value={value?.start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { end: "17:00" }), start: event.target.value } }))} className="rounded border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-1 py-1 disabled:opacity-40" /><input type="time" disabled={!value} value={value?.end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { start: "09:00" }), end: event.target.value } }))} className="rounded border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-1 py-1 disabled:opacity-40" /></div>;
+        })}
+      </div>
+      <div className="mt-3 flex justify-end"><Button size="sm" onClick={() => void save()} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer les horaires"}</Button></div>
     </div>
   );
 }
