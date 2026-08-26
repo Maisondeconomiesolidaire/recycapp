@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ListChecks, Pencil, Plus, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { Check, ListChecks, Pencil, Plus, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
@@ -18,6 +18,12 @@ import { canAccess } from "../../lib/crmPermissions";
 import { ResourceCalendar } from "./Calendrier";
 
 type Tab = "planning" | "ouvriers" | "taches";
+
+const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
+  permanent: "Ouvrier permanent",
+  polyvalent: "Ouvrier polyvalent",
+  none: "À définir",
+};
 type WorkerList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
 type TaskList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
 type ScheduleList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkerSchedules>>>;
@@ -92,11 +98,34 @@ function WorkersTab({
   canUpdate: boolean;
   canDelete: boolean;
 }) {
+  const syncFromHr = useMutation(api.polyvalents.syncFromHr);
   const removeWorker = useMutation(api.polyvalents.deleteWorker);
+  const setActive = useMutation(api.polyvalents.setWorkerActive);
+  const setEmploymentType = useMutation(api.polyvalents.setWorkerEmploymentType);
   const [deleting, setDeleting] = useState<WorkerList[number] | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<WorkerList[number] | null>(null);
   const [scheduleWorkerId, setScheduleWorkerId] = useState<Id<"polyvalentWorkers"> | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
+  const [search, setSearch] = useState("");
+
+  // L'annuaire RH fait foi : on se réaligne à l'ouverture de l'onglet, puis
+  // chaque nuit par cron. Sans écart, la synchro n'écrit rien.
+  useEffect(() => {
+    void syncFromHr({}).catch(() => undefined);
+  }, [syncFromHr]);
+
+  const normalized = search.trim().toLocaleLowerCase("fr-FR");
+  const visible = workers
+    .filter((worker) => (showInactive ? worker.active === false : worker.active !== false))
+    .filter(
+      (worker) =>
+        !normalized ||
+        `${worker.firstName} ${worker.lastName} ${worker.email ?? ""}`
+          .toLocaleLowerCase("fr-FR")
+          .includes(normalized),
+    );
+  const inactiveCount = workers.filter((worker) => worker.active === false).length;
 
   function openNew() {
     setEditing(null);
@@ -105,21 +134,42 @@ function WorkersTab({
 
   return (
     <div className="grid gap-5">
-      {canCreate ? (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Rechercher un salarié…"
+              className="w-full pl-9 sm:w-72"
+            />
+          </div>
+          <Checkbox
+            label={`Voir les salariés non actifs${inactiveCount ? ` (${inactiveCount})` : ""}`}
+            variant="inline"
+            checked={showInactive}
+            onChange={() => setShowInactive((current) => !current)}
+          />
+        </div>
+        {canCreate ? (
           <Button onClick={openNew}>
             <UserPlus className="h-4 w-4" /> Nouveau membre
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
-      {workers.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState
           icon={<UsersRound className="h-10 w-10" />}
-          title="Aucun salarié"
-          description="Ajoutez des membres pour pouvoir leur attribuer des demandes et des tâches."
+          title={showInactive ? "Aucun salarié non actif" : "Aucun salarié"}
+          description={
+            showInactive
+              ? "Tous les salariés des recycleries 60 et 76 sont actifs."
+              : "Les salariés rattachés aux recycleries 60 et 76 dans les ressources humaines apparaissent ici."
+          }
           action={
-            canCreate ? (
+            canCreate && !showInactive ? (
               <Button onClick={openNew}>
                 <UserPlus className="h-4 w-4" /> Nouveau membre
               </Button>
@@ -128,7 +178,7 @@ function WorkersTab({
         />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)]">
-          <table className="min-w-[760px] w-full text-sm">
+          <table className="min-w-[820px] w-full text-sm">
             <thead className="bg-[var(--crm-surface-2)] text-zinc-400">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Salarié</th>
@@ -136,12 +186,11 @@ function WorkersTab({
                 <th className="px-4 py-3 text-left font-medium">Recyclerie</th>
                 <th className="px-4 py-3 text-left font-medium">Type</th>
                 <th className="px-4 py-3 text-left font-medium">Statut</th>
-                <th className="px-4 py-3 text-left font-medium">Créé</th>
                 <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
-              {workers.map((worker) => (
+              {visible.map((worker) => (
                 <tr key={worker._id} className="bg-[var(--crm-surface)] hover:bg-[var(--crm-surface-2)]">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -157,8 +206,26 @@ function WorkersTab({
                   <td className="px-4 py-3 text-zinc-400">
                     {worker.sites?.length ? worker.sites.map((site) => SITE_LABELS[site]).join(" · ") : "—"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {worker.employmentType === "permanent" ? "Agent permanent" : "Agent polyvalent"}
+                  <td className="px-4 py-3">
+                    {canUpdate ? (
+                      <Select
+                        value={worker.employmentType ?? ""}
+                        onChange={(event) =>
+                          void setEmploymentType({
+                            id: worker._id,
+                            employmentType:
+                              (event.target.value as "permanent" | "polyvalent") || undefined,
+                          })
+                        }
+                        className="h-9 w-[190px] text-xs"
+                      >
+                        <option value="">À définir</option>
+                        <option value="polyvalent">Ouvrier polyvalent</option>
+                        <option value="permanent">Ouvrier permanent</option>
+                      </Select>
+                    ) : (
+                      <span className="text-zinc-400">{EMPLOYMENT_TYPE_LABELS[worker.employmentType ?? "none"]}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -166,14 +233,29 @@ function WorkersTab({
                         worker.active === false ? "bg-zinc-700 text-zinc-100" : "bg-brand-500 text-white"
                       }`}
                     >
-                      {worker.active === false ? "Inactif" : "Actif"}
+                      {worker.active === false ? "Non actif" : "Actif"}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {new Date(worker.createdAt).toLocaleDateString("fr-FR")}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {canUpdate && worker.active === false ? (
+                        <button
+                          type="button"
+                          onClick={() => void setActive({ id: worker._id, active: true })}
+                          className="rounded-lg px-2 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-[var(--crm-surface-3)]"
+                        >
+                          Réactiver
+                        </button>
+                      ) : null}
+                      {canUpdate && worker.active !== false ? (
+                        <button
+                          type="button"
+                          onClick={() => void setActive({ id: worker._id, active: false })}
+                          className="rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
+                        >
+                          Désactiver
+                        </button>
+                      ) : null}
                       {canUpdate ? (
                         <button
                           type="button"
@@ -196,7 +278,9 @@ function WorkersTab({
                           <Pencil className="h-4 w-4" />
                         </button>
                       ) : null}
-                      {canDelete ? (
+                      {/* Un salarié RH réapparaîtrait à la synchro suivante : seules
+                          les fiches créées à la main sont supprimables. */}
+                      {canDelete && !worker.hrEmployeeId ? (
                         <button
                           type="button"
                           onClick={() => setDeleting(worker)}
@@ -250,7 +334,12 @@ function WorkersTab({
   );
 }
 
-/** Création / modification d'une fiche salarié (mêmes champs que l'ancienne équipe). */
+/**
+ * Création / modification d'une fiche salarié. Pour un salarié rattaché aux
+ * ressources humaines, l'identité et la recyclerie viennent de sa fiche RH :
+ * seuls l'email et le type de contrat, absents du référentiel RH, se saisissent
+ * ici.
+ */
 function WorkerForm({
   worker,
   onClose,
@@ -264,9 +353,10 @@ function WorkerForm({
   const [lastName, setLastName] = useState(worker?.lastName ?? "");
   const [email, setEmail] = useState(worker?.email ?? "");
   const [sites, setSites] = useState<Site[]>(worker?.sites ?? []);
-  const [employmentType, setEmploymentType] = useState<"permanent" | "polyvalent">(
-    worker?.employmentType ?? "polyvalent",
+  const [employmentType, setEmploymentType] = useState<"permanent" | "polyvalent" | "">(
+    worker?.employmentType ?? "",
   );
+  const fromHr = Boolean(worker?.hrEmployeeId);
   const [active, setActive] = useState(worker?.active !== false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -287,7 +377,7 @@ function WorkerForm({
         lastName,
         email: email.trim() || undefined,
         sites: sites.length ? sites : undefined,
-        employmentType,
+        employmentType: employmentType || undefined,
       };
       if (worker) await updateWorker({ id: worker._id, ...profile, active });
       else await createWorker(profile);
@@ -302,14 +392,21 @@ function WorkerForm({
   return (
     <Modal open onClose={onClose} title={worker ? "Modifier le salarié" : "Nouveau membre"}>
       <div className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Prénom" required>
-            <Input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="Jean" />
-          </Field>
-          <Field label="Nom" required>
-            <Input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Dupont" />
-          </Field>
-        </div>
+        {fromHr ? (
+          <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3 text-xs text-zinc-400">
+            Identité et recyclerie proviennent de la fiche RH de {firstName} {lastName} : elles
+            se modifient dans Mes Outils · Ressources humaines.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Prénom" required>
+              <Input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="Jean" />
+            </Field>
+            <Field label="Nom" required>
+              <Input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Dupont" />
+            </Field>
+          </div>
+        )}
         <Field label="Adresse email">
           <Input
             type="email"
@@ -318,26 +415,29 @@ function WorkerForm({
             placeholder="jean.dupont@eco-solidaire.fr"
           />
         </Field>
-        <Field label="Recyclerie">
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(SITE_LABELS) as Site[]).map((site) => (
-              <Checkbox
-                key={site}
-                label={SITE_LABELS[site]}
-                variant="inline"
-                checked={sites.includes(site)}
-                onChange={() => toggleSite(site)}
-              />
-            ))}
-          </div>
-        </Field>
+        {fromHr ? null : (
+          <Field label="Recyclerie">
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(SITE_LABELS) as Site[]).map((site) => (
+                <Checkbox
+                  key={site}
+                  label={SITE_LABELS[site]}
+                  variant="inline"
+                  checked={sites.includes(site)}
+                  onChange={() => toggleSite(site)}
+                />
+              ))}
+            </div>
+          </Field>
+        )}
         <Field label="Type de contrat">
           <Select
             value={employmentType}
-            onChange={(event) => setEmploymentType(event.target.value as "permanent" | "polyvalent")}
+            onChange={(event) => setEmploymentType(event.target.value as "permanent" | "polyvalent" | "")}
           >
-            <option value="polyvalent">Agent polyvalent</option>
-            <option value="permanent">Agent permanent</option>
+            <option value="">À définir</option>
+            <option value="polyvalent">Ouvrier polyvalent</option>
+            <option value="permanent">Ouvrier permanent</option>
           </Select>
         </Field>
         {worker ? (

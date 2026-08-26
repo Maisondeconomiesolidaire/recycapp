@@ -3397,7 +3397,11 @@ function AssigneePickerModal({
                   </span>
                   <span className="block truncate text-xs text-zinc-500">
                     {[
-                      worker.employmentType === "permanent" ? "Agent permanent" : "Agent polyvalent",
+                      worker.employmentType === "permanent"
+                        ? "Ouvrier permanent"
+                        : worker.employmentType === "polyvalent"
+                          ? "Ouvrier polyvalent"
+                          : null,
                       worker.sites?.length
                         ? worker.sites.map((site) => SITE_LABELS[site]).join(" · ")
                         : null,

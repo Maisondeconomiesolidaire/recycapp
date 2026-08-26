@@ -59,6 +59,13 @@ function PersonaPicker({ onPick }: { onPick: (name: string) => void }) {
   const personas = useQuery(api.polyvalents.listPersonas, {}) as
     | { _id: string; name: string; role: string | null }[]
     | undefined;
+  // L'équipe suit désormais l'annuaire RH : la liste est trop longue pour être
+  // parcourue à l'œil, on la filtre au clavier.
+  const [search, setSearch] = useState("");
+  const normalized = search.trim().toLocaleLowerCase("fr-FR");
+  const visible = (personas ?? []).filter(
+    (person) => !normalized || person.name.toLocaleLowerCase("fr-FR").includes(normalized),
+  );
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[var(--crm-bg)] p-4">
@@ -70,15 +77,23 @@ function PersonaPicker({ onPick }: { onPick: (name: string) => void }) {
         <p className="mt-1 text-sm text-zinc-400">
           Sélectionnez votre nom avant d'accéder au CRM. Il sera enregistré sur vos modifications.
         </p>
-        <div className="mt-5 max-h-[55vh] space-y-2 overflow-y-auto">
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Rechercher votre nom…"
+          className="mt-4 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        />
+        <div className="mt-3 max-h-[55vh] space-y-2 overflow-y-auto">
           {personas === undefined ? (
             <p className="py-6 text-center text-sm text-zinc-500">Chargement…</p>
-          ) : personas.length === 0 ? (
+          ) : visible.length === 0 ? (
             <p className="py-6 text-center text-sm text-zinc-500">
-              Aucun membre d'équipe. Ajoutez des encadrants dans l'onglet Équipe.
+              {personas.length === 0
+                ? "Aucun membre d'équipe. Les salariés des recycleries 60 et 76 apparaissent depuis les ressources humaines."
+                : "Aucun nom ne correspond à cette recherche."}
             </p>
           ) : (
-            personas.map((person) => (
+            visible.map((person) => (
               <button
                 key={person._id}
                 type="button"
