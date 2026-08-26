@@ -88,16 +88,24 @@ export function Demandes() {
   const requests = useQuery(api.requests.list, {
     type: typeFilter ?? undefined,
   });
-  const team = useQuery(api.team.list, {}) ?? [];
-  const teamNames = new Map(team.map((m) => [m._id as string, m.name]));
+  const workers = useQuery(api.polyvalents.listWorkers, {});
+  const team = useMemo(
+    () =>
+      (workers ?? []).map((worker) => ({
+        _id: worker._id as string,
+        name: `${worker.firstName} ${worker.lastName}`.trim(),
+      })),
+    [workers],
+  );
+  const teamNames = new Map(team.map((m) => [m._id, m.name]));
   const assigneeName = (r: Doc<"requests">) =>
-    r.assignedTo ? teamNames.get(r.assignedTo) : undefined;
+    r.assignedWorkerId ? teamNames.get(r.assignedWorkerId) : undefined;
 
   const normalizedSearch = search.trim().toLocaleLowerCase("fr-FR");
   const displayedRequests = useMemo(
     () =>
       (requests ?? [])
-        .filter((r) => !staffFilter || r.assignedTo === staffFilter)
+        .filter((r) => !staffFilter || r.assignedWorkerId === staffFilter)
         .filter((r) => !siteFilter || r.site === siteFilter)
         .filter((r) => !stepFilter || getDisplayedProcessStep(r) === stepFilter)
         .filter((r) => matchesRequestSearch(r, normalizedSearch, assigneeName(r)))
@@ -920,7 +928,7 @@ function StaffFilter({
       onChange={(e) => onChange(e.target.value || null)}
       className="h-9 w-[180px] rounded-xl bg-[var(--crm-surface-2)] px-3 text-xs font-medium text-zinc-300"
     >
-      <option value="">Tous les encadrants</option>
+      <option value="">Tous les salariés</option>
       {team.map((m) => (
         <option key={m._id} value={m._id}>
           {m.name}

@@ -56,7 +56,7 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
 }
 
 function PersonaPicker({ onPick }: { onPick: (name: string) => void }) {
-  const personas = useQuery(api.team.listPersonas, {}) as
+  const personas = useQuery(api.polyvalents.listPersonas, {}) as
     | { _id: string; name: string; role: string | null }[]
     | undefined;
 

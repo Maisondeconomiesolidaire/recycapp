@@ -24,6 +24,8 @@ import {
   Download,
   Send,
   Link as LinkIcon,
+  Users,
+  Search,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { errorMessage } from "../../lib/convexError";
@@ -69,7 +71,7 @@ import {
 } from "../../lib/constants";
 import { collecteCategoryLabel } from "../public/CollecteCategoryPicker";
 import { STEP } from "../../../convex/processes";
-import { formatDateTime, formatPrice } from "../../lib/format";
+import { formatDateTime, formatPrice, initials } from "../../lib/format";
 import { cn } from "../../lib/cn";
 
 type RequestDoc = NonNullable<ReturnType<typeof useQuery<typeof api.requests.get>>>;
@@ -1414,6 +1416,8 @@ function GestionTab({
   const schedule = useMutation(api.requests.schedule);
   const patch = useMutation(api.requests.patchManagement);
   const team = useQuery(api.polyvalents.listWorkers, {}) ?? [];
+  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const assignedWorker = team.find((worker) => worker._id === request.assignedWorkerId) ?? null;
   const usesVehicle = request.type === "collecte" || request.type === "livraison";
   const availableVehicles =
     useQuery(
@@ -1554,26 +1558,33 @@ function GestionTab({
         {!isBoutique && (
         <div>
           <SectionTitle>Attribuée à</SectionTitle>
-          <Select
-            value={request.assignedWorkerId ?? ""}
-            onChange={(e) =>
-              patch({
-                id: request._id,
-                assignedWorkerId: e.target.value
-                  ? (e.target.value as Id<"polyvalentWorkers">)
-                  : null,
-                actorName: currentUser,
-              })
-            }
+          <button
+            type="button"
+            onClick={() => setAssigneePickerOpen(true)}
+            className="flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-left text-sm text-zinc-200 transition hover:border-brand-500/60"
           >
-            <option value="">Non attribuée</option>
-            {team.map((m) => (
-              <option key={m._id} value={m._id}>
-                {m.firstName} {m.lastName}
-              </option>
-            ))}
-          </Select>
+            <span className="truncate">
+              {assignedWorker
+                ? `${assignedWorker.firstName} ${assignedWorker.lastName}`.trim()
+                : "Non attribuée"}
+            </span>
+            <Users className="h-4 w-4 shrink-0 text-zinc-500" />
+          </button>
           <FieldMeta edit={request.fieldEdits?.assignedWorkerId} />
+          <AssigneePickerModal
+            open={assigneePickerOpen}
+            onClose={() => setAssigneePickerOpen(false)}
+            workers={team}
+            selectedId={request.assignedWorkerId ?? null}
+            onSelect={(workerId) => {
+              void patch({
+                id: request._id,
+                assignedWorkerId: workerId,
+                actorName: currentUser,
+              });
+              setAssigneePickerOpen(false);
+            }}
+          />
         </div>
         )}
       </section>
@@ -3271,5 +3282,135 @@ function AerogommageDetails({
       )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Sélection du salarié attribué à une demande : liste plein écran, filtre par
+ * recyclerie (60 / 76) et recherche par nom.
+ */
+function AssigneePickerModal({
+  open,
+  onClose,
+  workers,
+  selectedId,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  workers: Array<{
+    _id: Id<"polyvalentWorkers">;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    sites?: Site[];
+    employmentType?: "permanent" | "polyvalent";
+    active?: boolean;
+  }>;
+  selectedId: Id<"polyvalentWorkers"> | null;
+  onSelect: (workerId: Id<"polyvalentWorkers"> | null) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState<Site | null>(null);
+
+  const normalized = search.trim().toLocaleLowerCase("fr-FR");
+  const visible = workers
+    .filter((worker) => worker.active !== false)
+    // Un salarié sans recyclerie renseignée reste proposé quel que soit le filtre.
+    .filter((worker) => !siteFilter || !worker.sites?.length || worker.sites.includes(siteFilter))
+    .filter((worker) =>
+      !normalized ||
+      `${worker.firstName} ${worker.lastName} ${worker.email ?? ""}`
+        .toLocaleLowerCase("fr-FR")
+        .includes(normalized),
+    )
+    .sort((a, b) =>
+      `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, "fr"),
+    );
+
+  return (
+    <Modal open={open} onClose={onClose} title="Attribuer la demande" className="max-w-3xl">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {([null, "60", "76"] as Array<Site | null>).map((site) => (
+            <button
+              key={site ?? "all"}
+              type="button"
+              onClick={() => setSiteFilter(site)}
+              className={`rounded-xl px-3 py-1.5 text-xs font-medium transition ${
+                siteFilter === site
+                  ? "bg-brand-500 text-white"
+                  : "bg-[var(--crm-surface-2)] text-zinc-300 hover:bg-[var(--crm-surface-3)]"
+              }`}
+            >
+              {site ? SITE_LABELS[site] : "Toutes les recycleries"}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher un salarié…"
+            className="pl-9"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition ${
+            selectedId === null
+              ? "border-brand-500 bg-brand-500/10 text-zinc-100"
+              : "border-[var(--crm-border)] bg-[var(--crm-surface)] text-zinc-400 hover:border-brand-500/60"
+          }`}
+        >
+          Non attribuée
+        </button>
+
+        {visible.length === 0 ? (
+          <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-6 text-center text-sm text-zinc-500">
+            Aucun salarié ne correspond à cette recherche.
+          </p>
+        ) : (
+          <div className="grid max-h-[50vh] gap-2 overflow-y-auto sm:grid-cols-2">
+            {visible.map((worker) => (
+              <button
+                key={worker._id}
+                type="button"
+                onClick={() => onSelect(worker._id)}
+                className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                  selectedId === worker._id
+                    ? "border-brand-500 bg-brand-500/10"
+                    : "border-[var(--crm-border)] bg-[var(--crm-surface)] hover:border-brand-500/60"
+                }`}
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface-3)] text-xs font-semibold text-zinc-300">
+                  {initials(worker.firstName, worker.lastName)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-zinc-100">
+                    {worker.firstName} {worker.lastName}
+                  </span>
+                  <span className="block truncate text-xs text-zinc-500">
+                    {[
+                      worker.employmentType === "permanent" ? "Agent permanent" : "Agent polyvalent",
+                      worker.sites?.length
+                        ? worker.sites.map((site) => SITE_LABELS[site]).join(" · ")
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }

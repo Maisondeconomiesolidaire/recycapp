@@ -181,7 +181,7 @@ function PlanificationTab() {
   }, []);
 
   const tournees = useQuery(api.sorties.listTournees, { startDate: start, endDate: end });
-  const teamMembers = useQuery(api.team.list, {});
+  const teamMembers = useQuery(api.polyvalents.listWorkers, {});
   const updateStatus = useMutation(api.sorties.updateTourneeStatus);
   const updateStop = useMutation(api.sorties.updateTourneeStop);
   const deleteTournee = useMutation(api.sorties.deleteTournee);
@@ -704,7 +704,7 @@ function TourneeForm({
   teamMembers,
   onClose,
 }: {
-  teamMembers: Array<{ _id: Id<"teamMembers">; name: string }>;
+  teamMembers: Array<{ _id: Id<"polyvalentWorkers">; firstName: string; lastName: string }>;
   onClose: () => void;
 }) {
   const initialDate = new Date().toISOString().split("T")[0];
@@ -796,7 +796,7 @@ function TourneeForm({
       await createTournee({
         label: label.trim(),
         date: new Date(date).getTime(),
-        driverId: driverId ? (driverId as Id<"teamMembers">) : undefined,
+        driverWorkerId: driverId ? (driverId as Id<"polyvalentWorkers">) : undefined,
         fleetVehicleId: fleetVehicleId ? (fleetVehicleId as Id<"vehicles">) : undefined,
         stops: validStops,
         notes: undefined,
@@ -865,7 +865,7 @@ function TourneeForm({
               <option value="">— Non assigné —</option>
               {teamMembers.map((m) => (
                 <option key={m._id} value={m._id}>
-                  {m.name}
+                  {m.firstName} {m.lastName}
                 </option>
               ))}
             </select>

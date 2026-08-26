@@ -46,7 +46,6 @@ export type CrmPageKey =
   | "tournees"
   | "flotte"
   | "reservations"
-  | "equipe"
   | "agents-polyvalents"
   | "admin";
 
