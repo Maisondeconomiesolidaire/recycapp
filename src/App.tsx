@@ -37,7 +37,6 @@ import { Calendrier } from "./pages/crm/Calendrier";
 import { Articles } from "./pages/crm/Articles";
 import { ArticleFiche } from "./pages/crm/ArticleFiche";
 import { Clients } from "./pages/crm/Clients";
-import { Equipe } from "./pages/crm/Equipe";
 import { Taches } from "./pages/crm/AgentsPolyvalents";
 import { Notifications } from "./pages/crm/Notifications";
 import { Arrivages } from "./pages/crm/Arrivages";
@@ -186,7 +185,6 @@ export default function App() {
         <Route path="tournees" element={<RequireCrmPermission page="tournees"><Tournees /></RequireCrmPermission>} />
         <Route path="flotte" element={<RequireCrmPermission page="flotte"><Flotte /></RequireCrmPermission>} />
         <Route path="reservations" element={<RequireCrmPermission page="reservations"><Reservations /></RequireCrmPermission>} />
-        <Route path="equipe" element={<RequireCrmPermission page="equipe"><Equipe /></RequireCrmPermission>} />
         <Route path="taches" element={<RequireCrmPermission page="agents-polyvalents"><Taches /></RequireCrmPermission>} />
         <Route path="agents-polyvalents" element={<Navigate to="/crm/taches" replace />} />
         <Route path="compte" element={<Compte />} />

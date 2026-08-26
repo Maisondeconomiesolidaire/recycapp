@@ -1413,7 +1413,7 @@ function GestionTab({
   const setCollecteType = useMutation(api.requests.setCollecteType);
   const schedule = useMutation(api.requests.schedule);
   const patch = useMutation(api.requests.patchManagement);
-  const team = useQuery(api.team.list, {}) ?? [];
+  const team = useQuery(api.polyvalents.listWorkers, {}) ?? [];
   const usesVehicle = request.type === "collecte" || request.type === "livraison";
   const availableVehicles =
     useQuery(
@@ -1555,12 +1555,12 @@ function GestionTab({
         <div>
           <SectionTitle>Attribuée à</SectionTitle>
           <Select
-            value={request.assignedTo ?? ""}
+            value={request.assignedWorkerId ?? ""}
             onChange={(e) =>
               patch({
                 id: request._id,
-                assignedTo: e.target.value
-                  ? (e.target.value as Id<"teamMembers">)
+                assignedWorkerId: e.target.value
+                  ? (e.target.value as Id<"polyvalentWorkers">)
                   : null,
                 actorName: currentUser,
               })
@@ -1569,11 +1569,11 @@ function GestionTab({
             <option value="">Non attribuée</option>
             {team.map((m) => (
               <option key={m._id} value={m._id}>
-                {m.name}
+                {m.firstName} {m.lastName}
               </option>
             ))}
           </Select>
-          <FieldMeta edit={request.fieldEdits?.assignedTo} />
+          <FieldMeta edit={request.fieldEdits?.assignedWorkerId} />
         </div>
         )}
       </section>

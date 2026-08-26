@@ -12,7 +12,6 @@ import {
   PackageMinus,
   ShoppingCart,
   Truck,
-  UserCog,
   Users,
   Wrench,
   type LucideIcon,
@@ -211,14 +210,6 @@ export const CRM_PAGES: CrmPageDefinition[] = [
     to: "/crm/reservations",
     icon: CalendarClock,
     actions: ["read", "manage"],
-  },
-  {
-    key: "equipe",
-    label: "Agents permanents",
-    description: "Agents permanents (salariés), attribution et informations internes.",
-    to: "/crm/equipe",
-    icon: UserCog,
-    actions: ["read", "create", "update", "delete"],
   },
   {
     key: "agents-polyvalents",
