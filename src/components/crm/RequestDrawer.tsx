@@ -1415,7 +1415,7 @@ function GestionTab({
   const setCollecteType = useMutation(api.requests.setCollecteType);
   const schedule = useMutation(api.requests.schedule);
   const patch = useMutation(api.requests.patchManagement);
-  const team = useQuery(api.polyvalents.listWorkers, {}) ?? [];
+  const team = useQuery(api.polyvalents.listAssignable, {}) ?? [];
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const assignedWorker = team.find((worker) => worker._id === request.assignedWorkerId) ?? null;
   const usesVehicle = request.type === "collecte" || request.type === "livraison";

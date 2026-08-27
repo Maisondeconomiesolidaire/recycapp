@@ -181,7 +181,7 @@ function PlanificationTab() {
   }, []);
 
   const tournees = useQuery(api.sorties.listTournees, { startDate: start, endDate: end });
-  const teamMembers = useQuery(api.polyvalents.listWorkers, {});
+  const teamMembers = useQuery(api.polyvalents.listAssignable, {});
   const updateStatus = useMutation(api.sorties.updateTourneeStatus);
   const updateStop = useMutation(api.sorties.updateTourneeStop);
   const deleteTournee = useMutation(api.sorties.deleteTournee);

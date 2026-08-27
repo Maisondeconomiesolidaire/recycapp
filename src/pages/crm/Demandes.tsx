@@ -88,7 +88,7 @@ export function Demandes() {
   const requests = useQuery(api.requests.list, {
     type: typeFilter ?? undefined,
   });
-  const workers = useQuery(api.polyvalents.listWorkers, {});
+  const workers = useQuery(api.polyvalents.listAssignable, {});
   const team = useMemo(
     () =>
       (workers ?? []).map((worker) => ({
