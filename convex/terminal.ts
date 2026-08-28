@@ -25,7 +25,7 @@
  *    montant verrouillé et l'enregistrement de la commande.
  */
 import { ConvexError, v } from "convex/values";
-import { action, internalQuery, query } from "./_generated/server";
+import { action, internalQuery, mutation, query } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -264,6 +264,85 @@ export const knownCustomer = query({
   },
 });
 
+
+/** Article et son pendant dans le catalogue Stripe, pour l'encaissement. */
+export const articleForCharge = internalQuery({
+  args: { articleId: v.id("articles") },
+  handler: async (ctx, { articleId }) => {
+    const article = await ctx.db.get(articleId);
+    if (!article) return null;
+    return {
+      title: article.title,
+      price: article.price,
+      category: article.category,
+      stripeProductId: article.stripeProductId ?? null,
+      stripePriceId: article.stripePriceId ?? null,
+    };
+  },
+});
+
+
+/**
+ * Recherche de client, sur le nom comme sur l'adresse.
+ *
+ * La caisse ne connaît pas l'email par cœur : demander la saisie exacte d'une
+ * adresse devant un client qui attend est le meilleur moyen de créer un
+ * doublon. On cherche donc dans les deux réservoirs — le fichier client repris
+ * et les demandes passées — et on rend une liste à choisir.
+ */
+export const searchCustomers = query({
+  args: { query: v.string() },
+  handler: async (ctx, { query: rawQuery }) => {
+    await requireStaff(ctx);
+    const normalize = (value: string) =>
+      value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+    const needle = normalize(rawQuery);
+    // Deux caractères ne discriminent rien : on renverrait la moitié du fichier.
+    if (needle.length < 2) return [];
+
+    const found = new Map<
+      string,
+      { firstName: string; lastName: string; email: string; phone: string; source: string }
+    >();
+
+    const add = (
+      customer: { firstName: string; lastName: string; email: string; phone: string },
+      source: string,
+    ) => {
+      const email = customer.email?.trim().toLowerCase() ?? "";
+      // Sans email, on retombe sur le nom : deux homonymes sans adresse
+      // resteraient confondus, mais mieux vaut une entrée que zéro.
+      const key = email || normalize(`${customer.firstName} ${customer.lastName}`);
+      if (!key || found.has(key)) return;
+      const haystack = normalize(
+        `${customer.firstName} ${customer.lastName} ${email} ${customer.phone ?? ""}`,
+      );
+      if (!haystack.includes(needle)) return;
+      found.set(key, {
+        firstName: customer.firstName ?? "",
+        lastName: customer.lastName ?? "",
+        email,
+        phone: customer.phone ?? "",
+        source,
+      });
+    };
+
+    const imported = await ctx.db.query("crmCustomers").take(4000);
+    for (const customer of imported) add(customer, "fichier");
+
+    const requests = await ctx.db.query("requests").order("desc").take(2000);
+    for (const request of requests) add(request.customer, "demande");
+
+    return [...found.values()]
+      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, "fr"))
+      .slice(0, 25);
+  },
+});
+
 /**
  * Prépare l'encaissement : verrouille le montant et ouvre un PaymentIntent
  * `card_present` que le SDK Terminal présentera au lecteur.
@@ -319,6 +398,14 @@ export const startPayment = action({
     }
 
     const amount = Math.round(draft.total * 100);
+    // L'article vendu voyage avec le paiement : sans lui, le Dashboard Stripe
+    // n'affiche qu'un montant, impossible à rapprocher d'un objet. Le
+    // PaymentIntent n'accepte pas de lignes de commande — c'est la description
+    // et les métadonnées qui portent l'information, dont l'identifiant du
+    // produit du catalogue Stripe quand l'article y est synchronisé.
+    const article = await ctx.runQuery(internal.terminal.articleForCharge, {
+      articleId: args.articleId,
+    });
     const intent = await stripeRequest<{ id: string; client_secret: string }>(
       "payment_intents",
       secretKey,
@@ -328,9 +415,16 @@ export const startPayment = action({
         "payment_method_types[0]": "card_present",
         capture_method: "automatic",
         receipt_email: email,
-        description: "Article de la recyclerie",
+        description: article?.title ?? "Article de la recyclerie",
         "metadata[draftId]": draft.draftId,
         "metadata[source]": "recycapp-terminal",
+        "metadata[articleId]": String(args.articleId),
+        ...(article?.title ? { "metadata[articleTitle]": article.title } : {}),
+        ...(article?.category ? { "metadata[articleCategory]": article.category } : {}),
+        ...(article?.stripeProductId
+          ? { "metadata[stripeProductId]": article.stripeProductId }
+          : {}),
+        ...(article?.stripePriceId ? { "metadata[stripePriceId]": article.stripePriceId } : {}),
       },
     );
 
@@ -390,6 +484,10 @@ export const finalizePayment = action({
       },
     );
 
+    // Vente en boutique : le client repart avec l'article, il n'y a pas de
+    // retrait à attendre comme pour une commande en ligne.
+    await ctx.runMutation(internal.requests.completeTerminalSale, { requestId });
+
     // Le compte client est un plus : son échec ne remet pas en cause la vente.
     let accountCreated = false;
     const clerkSecret = process.env.CLERK_SECRET_KEY;
@@ -408,5 +506,70 @@ export const finalizePayment = action({
     }
 
     return { requestId, accountCreated };
+  },
+});
+
+/* ─── Retour d'encaissement sur l'écran du kiosque ─────────────────────────── */
+
+/**
+ * Trace l'état de l'encaissement en cours pour un article.
+ *
+ * Le client regarde la vitrine pendant que l'équipe manipule le lecteur : sans
+ * ce relais, l'écran resterait muet sur ce qui vient de se passer.
+ */
+export const reportKioskPayment = mutation({
+  args: {
+    articleId: v.id("articles"),
+    status: v.union(v.literal("en_cours"), v.literal("payee"), v.literal("refusee")),
+    message: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const existing = await ctx.db
+      .query("kioskTerminalPayments")
+      .withIndex("by_article", (q) => q.eq("articleId", args.articleId))
+      .unique();
+    const record = {
+      articleId: args.articleId,
+      status: args.status,
+      message: args.message?.trim() || undefined,
+      updatedAt: Date.now(),
+    };
+    if (existing) await ctx.db.patch(existing._id, record);
+    else await ctx.db.insert("kioskTerminalPayments", record);
+  },
+});
+
+/**
+ * État de l'encaissement, pour l'écran de la vitrine.
+ *
+ * Public à dessein : le kiosque n'est pas authentifié. La réponse ne porte
+ * qu'un statut et un message d'erreur, jamais de donnée client.
+ *
+ * Une tentative de plus de dix minutes est ignorée : au retour d'un client sur
+ * la fiche le lendemain, un vieux « payé » lui annoncerait une vente imaginaire.
+ */
+export const kioskPaymentStatus = query({
+  args: { articleId: v.id("articles") },
+  handler: async (ctx, { articleId }) => {
+    const payment = await ctx.db
+      .query("kioskTerminalPayments")
+      .withIndex("by_article", (q) => q.eq("articleId", articleId))
+      .unique();
+    if (!payment) return null;
+    if (Date.now() - payment.updatedAt > 10 * 60 * 1000) return null;
+    return { status: payment.status, message: payment.message ?? null, updatedAt: payment.updatedAt };
+  },
+});
+
+/** Efface la trace : le client a pris connaissance du résultat. */
+export const clearKioskPayment = mutation({
+  args: { articleId: v.id("articles") },
+  handler: async (ctx, { articleId }) => {
+    const payment = await ctx.db
+      .query("kioskTerminalPayments")
+      .withIndex("by_article", (q) => q.eq("articleId", articleId))
+      .unique();
+    if (payment) await ctx.db.delete(payment._id);
   },
 });

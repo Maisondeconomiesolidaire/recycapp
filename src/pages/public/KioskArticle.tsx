@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { useQuery } from "convex/react";
-import { ArrowLeft, PackageOpen } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowLeft, CheckCircle2, Loader2, PackageOpen, XCircle } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { FullSpinner } from "../../components/ui/Spinner";
@@ -31,6 +31,13 @@ export function KioskArticle() {
   const [activeImage, setActiveImage] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
+  // Le lecteur est entre les mains de l'équipe : l'écran suit l'encaissement
+  // en direct pour que le client sache où il en est.
+  const payment = useQuery(
+    api.terminal.kioskPaymentStatus,
+    articleId ? { articleId } : "skip",
+  );
+
   if (!articleId) return <KioskShell><NotFound /></KioskShell>;
   if (article === undefined) return <FullSpinner label="Chargement de l'article…" />;
   if (article === null) return <KioskShell><NotFound /></KioskShell>;
@@ -40,8 +47,21 @@ export function KioskArticle() {
   const hasDiscount =
     article.originalPrice !== undefined && article.originalPrice > article.price;
 
+  if (payment && payment.status !== "en_cours") {
+    return <PaymentOutcome articleId={articleId} payment={payment} />;
+  }
+
   return (
     <KioskShell>
+      {payment?.status === "en_cours" ? (
+        <div className="mb-6 flex items-center gap-3 rounded-[24px] border border-amber-200 bg-amber-50 px-6 py-4">
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-amber-700" />
+          <p className="text-lg font-semibold text-amber-900">
+            Paiement en cours sur le terminal…
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
         <section>
           <div className="relative overflow-hidden rounded-[24px] bg-[#f2eee7]">
@@ -215,5 +235,88 @@ function NotFound() {
         Il a peut-être été vendu. Revenez à la vitrine pour en choisir un autre.
       </p>
     </div>
+  );
+}
+
+/**
+ * Résultat de l'encaissement, en plein écran.
+ *
+ * Le client vient de présenter sa carte : il doit lire le verdict sans avoir à
+ * le demander, et savoir quoi faire ensuite.
+ */
+function PaymentOutcome({
+  articleId,
+  payment,
+}: {
+  articleId: Id<"articles">;
+  payment: { status: string; message: string | null };
+}) {
+  const navigate = useNavigate();
+  const clear = useMutation(api.terminal.clearKioskPayment);
+  const paid = payment.status === "payee";
+
+  async function dismiss(destination: string) {
+    // La trace est effacée avant de partir : sans quoi le client suivant
+    // tomberait sur le verdict du précédent.
+    await clear({ articleId }).catch(() => undefined);
+    navigate(destination);
+  }
+
+  return (
+    <KioskShell>
+      <div className="mx-auto flex max-w-2xl flex-col items-center py-20 text-center">
+        <span
+          className={`flex h-24 w-24 items-center justify-center rounded-full ${
+            paid ? "bg-emerald-100" : "bg-red-100"
+          }`}
+        >
+          {paid ? (
+            <CheckCircle2 className="h-14 w-14 text-emerald-600" />
+          ) : (
+            <XCircle className="h-14 w-14 text-red-600" />
+          )}
+        </span>
+
+        <h1 className="mt-8 text-4xl font-black tracking-tight text-zinc-950">
+          {paid ? "Paiement effectué avec succès" : "Paiement refusé"}
+        </h1>
+        <p className="mt-4 text-xl text-zinc-600">
+          {paid
+            ? "Merci de votre achat. Un reçu vous a été envoyé par email."
+            : payment.message || "La carte a été refusée par le terminal."}
+        </p>
+
+        <div className="mt-10 w-full max-w-sm">
+          {paid ? (
+            <button
+              type="button"
+              onClick={() => void dismiss("/kiosk")}
+              className="w-full rounded-2xl px-6 py-5 text-xl font-bold text-white"
+              style={{ background: PRICE_BG }}
+            >
+              Retour à l'accueil
+            </button>
+          ) : (
+            <div className="grid gap-3">
+              <button
+                type="button"
+                onClick={() => void dismiss(`/kiosk/${articleId}`)}
+                className="w-full rounded-2xl px-6 py-5 text-xl font-bold text-white"
+                style={{ background: PRICE_BG }}
+              >
+                Réessayer
+              </button>
+              <button
+                type="button"
+                onClick={() => void dismiss("/kiosk")}
+                className="w-full rounded-2xl border border-zinc-300 px-6 py-4 text-lg font-semibold text-zinc-700"
+              >
+                Retour à l'accueil
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </KioskShell>
   );
 }
