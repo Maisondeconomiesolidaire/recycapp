@@ -16,7 +16,14 @@ import { api } from "../../convex/_generated/api";
  * locale) pour pouvoir être copié tel quel dans chaque dépôt.
  */
 
-export type AppKey = "mesoutils" | "recycapp" | "klyde" | "cycleenbray" | "bennespro" | "pointeuse";
+export type AppKey =
+  | "mesoutils"
+  | "recycapp"
+  | "klyde"
+  | "cycleenbray"
+  | "bennespro"
+  | "pointeuse"
+  | "batire";
 
 type Access = {
   role: string;
@@ -38,13 +45,21 @@ type PortalApp = {
 
 const env = import.meta.env as Record<string, string | undefined>;
 
+/**
+ * URL d'app depuis l'env avec repli : les variables Vercel peuvent exister en
+ * chaîne VIDE ("" ?? repli renvoie ""), ce qui donnait des tuiles href="".
+ */
+function appUrl(key: string, fallback: string): string {
+  return env[key]?.trim() || fallback;
+}
+
 const APPS: PortalApp[] = [
   {
     key: "mesoutils",
     label: "Mes Outils",
     description: "Portail interne : accès aux applications, espace partage et réservations.",
     logoSrc: "/mesoutils-light.png",
-    href: env.VITE_MESOUTILS_URL ?? "https://mesoutils.groupemes.fr",
+    href: appUrl("VITE_MESOUTILS_URL", "https://mesoutils.groupemes.fr"),
     cardBg: "#e6f6ec",
   },
   {
@@ -52,7 +67,7 @@ const APPS: PortalApp[] = [
     label: "Recyclerie",
     description: "CRM de gestion pour les demandes, la boutique, le stock et les clients.",
     logoSrc: "/recyclerie-logo.png",
-    href: env.VITE_RECYCAPP_URL ?? "https://recycapp.groupemes.fr/crm",
+    href: appUrl("VITE_RECYCAPP_URL", "https://recycapp.groupemes.fr/crm"),
     cardBg: "#ffffff",
   },
   {
@@ -60,7 +75,7 @@ const APPS: PortalApp[] = [
     label: "Klyd",
     description: "Boutique textile : stock, mise en ligne et suivi des commandes.",
     logoSrc: "/klyd-logo.png",
-    href: env.VITE_KLYD_URL ?? "https://klyd.groupemes.fr",
+    href: appUrl("VITE_KLYD_URL", "https://klyd.groupemes.fr"),
     cardBg: "#f6eee5",
   },
   {
@@ -68,7 +83,7 @@ const APPS: PortalApp[] = [
     label: "Cycle en Bray",
     description: "Boutique et CRM de gestion pour la Recyclerie 60 et 76.",
     logoSrc: "/cycle-en-bray-logo.webp",
-    href: env.VITE_CYCLEENBRAY_URL ?? "https://cycleenbray.groupemes.fr/crm",
+    href: appUrl("VITE_CYCLEENBRAY_URL", "https://cycleenbray.groupemes.fr/crm"),
     cardBg: "#eef7f1",
   },
   {
@@ -76,15 +91,23 @@ const APPS: PortalApp[] = [
     label: "Bennes & Pro",
     description: "Gestion déchet'lab",
     logoSrc: "/bennespro-logo.png",
-    href: env.VITE_BENNESPRO_URL ?? "https://materiosol.groupemes.fr",
+    href: appUrl("VITE_BENNESPRO_URL", "https://materiosol.groupemes.fr"),
     cardBg: "#a4cebe",
+  },
+  {
+    key: "batire",
+    label: "Bâtire",
+    description: "Matériaux de construction de seconde main : catalogue, dons et ventes.",
+    logoSrc: "/batire-logo.jpg",
+    href: appUrl("VITE_BATIRE_URL", "https://batire.groupemes.fr/crm"),
+    cardBg: "#ffffff",
   },
   {
     key: "pointeuse",
     label: "Pointeuse",
     description: "Suivi des salariés et des chantiers : pointages, projets, dépenses et factures.",
     logoSrc: "/logo-lsdb.png",
-    href: env.VITE_POINTEUSE_URL ?? "https://pointeuselsdb.groupemes.fr",
+    href: appUrl("VITE_POINTEUSE_URL", "https://pointeuselsdb.groupemes.fr"),
     cardBg: "#fff1e5",
   },
 ];
@@ -98,6 +121,7 @@ function appCanAccess(access: Access, key: AppKey): boolean {
   if (key === "cycleenbray") return access.grants.some((g) => g.pageKey.startsWith("cycle:"));
   if (key === "bennespro") return access.grants.some((g) => g.pageKey.startsWith("bennespro:"));
   if (key === "pointeuse") return access.grants.some((g) => g.pageKey.startsWith("pointeuse:"));
+  if (key === "batire") return access.grants.some((g) => g.pageKey.startsWith("batire:"));
   // recycapp : pages sans préfixe d'application (flotte, demandes, tournees…).
   return access.grants.some((g) => !g.pageKey.includes(":"));
 }
