@@ -12,20 +12,30 @@ import { ConvexError, v } from "convex/values";
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
-import { accessAllows, requireCrmPermission, requireUser, formatUserName } from "./lib";
+import {
+  accessAllows,
+  hasCrmPermission,
+  requireCrmPermission,
+  requireUser,
+  formatUserName,
+} from "./lib";
 import { recycappSecretKey, stripeRequest } from "./stripe";
 import { btCondition, btMaterialStatus, btUnit } from "./schema";
 
 const PAGE_MATERIAUX = "batire:materiaux";
 const PAGE_DEMANDES = "batire:demandes";
 
-/** Photos signées : un identifiant de stockage seul ne s'affiche pas. */
+/** Photos et fiche technique signées : un identifiant de stockage ne s'ouvre pas. */
 async function withPhotoUrls(
   ctx: { storage: { getUrl: (id: Id<"_storage">) => Promise<string | null> } },
   material: Doc<"btMaterials">,
 ) {
   const photoUrls = await Promise.all(material.photos.map((id) => ctx.storage.getUrl(id)));
-  return { ...material, photoUrls: photoUrls.filter((url): url is string => Boolean(url)) };
+  return {
+    ...material,
+    photoUrls: photoUrls.filter((url): url is string => Boolean(url)),
+    datasheetUrl: material.datasheet ? await ctx.storage.getUrl(material.datasheet) : null,
+  };
 }
 
 /* ─── Catalogue, côté équipe ───────────────────────────────────────────────── */
@@ -55,6 +65,7 @@ export const listMaterials = query({
             material.modelReference,
             material.material,
             material.qrReference,
+            material.reference,
             material.location,
           ]
             .filter(Boolean)
@@ -103,15 +114,69 @@ const materialFields = {
   location: v.optional(v.string()),
   photos: v.array(v.id("_storage")),
   qrReference: v.optional(v.string()),
+
+  /* Fiche réemploi : tout est facultatif, la fiche reste publiable sans. */
+  reference: v.optional(v.string()),
+  origin: v.optional(v.string()),
+  profiles: v.optional(v.array(v.string())),
+  materials: v.optional(v.array(v.string())),
+  diameterCm: v.optional(v.number()),
+  dimensionUnit: v.optional(v.string()),
+  availableFrom: v.optional(v.number()),
+  availableUntil: v.optional(v.number()),
+  reusePotential: v.optional(v.number()),
+  repurposePotential: v.optional(v.number()),
+  recyclingPotential: v.optional(v.number()),
+  recoveryPotential: v.optional(v.number()),
+  disposalPotential: v.optional(v.number()),
+  assemblyMode: v.optional(v.string()),
+  transportTerms: v.optional(v.string()),
+  packagingTerms: v.optional(v.string()),
+  storageTerms: v.optional(v.string()),
+  accessTerms: v.optional(v.string()),
+  hazardousSubstances: v.optional(v.string()),
+  typology: v.optional(v.string()),
+  wasteCode: v.optional(v.string()),
+  carbonFootprintKg: v.optional(v.number()),
+  landfillCost: v.optional(v.number()),
+  datasheet: v.optional(v.id("_storage")),
+  datasheetName: v.optional(v.string()),
+  internalNote: v.optional(v.string()),
+
   aiConfidence: v.optional(v.number()),
   aiNotes: v.optional(v.string()),
 };
+
+/** Une note d'étoiles vaut 1 à 5, ou rien du tout. */
+function stars(value: unknown) {
+  const parsed = Math.round(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 1) return undefined;
+  return Math.min(5, parsed);
+}
 
 /** Champs normalisés : un prix ou un stock négatif n'a pas de sens. */
 function normalizeMaterial(args: Record<string, unknown>) {
   const price = Math.max(0, Number(args.price) || 0);
   const quantity = Math.max(0, Number(args.quantity) || 0);
-  return { ...args, price, quantity };
+  // Les matières viennent d'une liste à choix multiple ; `material` reste
+  // alimenté en texte, car la recherche, la boutique et l'import Excel le
+  // lisent encore. Deux champs, une seule saisie.
+  const list = Array.isArray(args.materials)
+    ? [...new Set((args.materials as string[]).map((value) => value.trim()).filter(Boolean))]
+    : undefined;
+  const material = list?.length ? list.join(", ") : (args.material as string | undefined);
+  return {
+    ...args,
+    price,
+    quantity,
+    materials: list,
+    material,
+    reusePotential: stars(args.reusePotential),
+    repurposePotential: stars(args.repurposePotential),
+    recyclingPotential: stars(args.recyclingPotential),
+    recoveryPotential: stars(args.recoveryPotential),
+    disposalPotential: stars(args.disposalPotential),
+  };
 }
 
 export const createMaterial = mutation({
@@ -207,6 +272,59 @@ export const removeMaterial = mutation({
 /* ─── Boutique publique et kiosque ─────────────────────────────────────────── */
 
 /**
+ * Fiche telle qu'elle sort côté public.
+ *
+ * Les requêtes de la vitrine ne sont pas authentifiées : ce qu'elles renvoient
+ * est lisible par n'importe qui, affiché ou non par la page. La liste est donc
+ * une liste de ce qu'on EXPOSE, jamais de ce qu'on cache : un champ ajouté
+ * plus tard à la table reste privé tant que personne ne l'inscrit ici.
+ *
+ * Restent en interne tout ce qui sert la traçabilité et le diagnostic —
+ * provenance, profil du donateur, référence interne, potentiels, modalités,
+ * code déchet, coûts, fiche technique, notes. Ces informations disent d'où
+ * vient un lot et par qui il est passé : elles regardent l'équipe, pas
+ * l'acheteur.
+ */
+async function publicMaterial(
+  ctx: { storage: { getUrl: (id: Id<"_storage">) => Promise<string | null> } },
+  material: Doc<"btMaterials">,
+) {
+  const photoUrls = await Promise.all(material.photos.map((id) => ctx.storage.getUrl(id)));
+  return {
+    _id: material._id,
+    title: material.title,
+    description: material.description,
+    category: material.category,
+    family: material.family,
+    subcategory: material.subcategory,
+    condition: material.condition,
+    unit: material.unit,
+    quantity: material.quantity,
+    price: material.price,
+    packaging: material.packaging,
+    lengthCm: material.lengthCm,
+    widthCm: material.widthCm,
+    heightCm: material.heightCm,
+    diameterCm: material.diameterCm,
+    dimensionUnit: material.dimensionUnit,
+    thicknessMm: material.thicknessMm,
+    weightKg: material.weightKg,
+    brand: material.brand,
+    modelReference: material.modelReference,
+    material: material.material,
+    materials: material.materials,
+    color: material.color,
+    standards: material.standards,
+    technicalNotes: material.technicalNotes,
+    depot: material.depot,
+    location: material.location,
+    qrReference: material.qrReference,
+    status: material.status,
+    photoUrls: photoUrls.filter((url): url is string => Boolean(url)),
+  };
+}
+
+/**
  * Catalogue public : ce qui est publié, disponible et chiffré.
  *
  * Aucune authentification — c'est la vitrine. Un matériau réservé ou vendu en
@@ -254,7 +372,7 @@ export const listPublicMaterials = query({
         .includes(search);
     });
 
-    return await Promise.all(filtered.map((material) => withPhotoUrls(ctx, material)));
+    return await Promise.all(filtered.map((material) => publicMaterial(ctx, material)));
   },
 });
 
@@ -263,7 +381,7 @@ export const getPublicMaterial = query({
   handler: async (ctx, { id }) => {
     const material = await ctx.db.get(id);
     if (!material || !material.published || material.price <= 0) return null;
-    return await withPhotoUrls(ctx, material);
+    return await publicMaterial(ctx, material);
   },
 });
 
@@ -571,11 +689,61 @@ export const materialByQr = query({
     if (!code?.materialId) return null;
     const material = await ctx.db.get(code.materialId);
     if (!material) return null;
-    return await withPhotoUrls(ctx, material);
+    // Page publique : n'importe qui peut scanner l'étiquette collée sur le lot.
+    return await publicMaterial(ctx, material);
   },
 });
 
 /* ─── Génération de l'annonce par l'IA ─────────────────────────────────────── */
+
+/**
+ * Matières proposées : le référentiel d'origine, complété de ce que l'équipe a
+ * ajouté. Une seule liste pour tout le monde, triée, sans doublon.
+ */
+export const materialOptions = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, PAGE_MATERIAUX, "read");
+    const added = await ctx.db
+      .query("btOptions")
+      .withIndex("by_kind", (q) => q.eq("kind", "material"))
+      .collect();
+    const all = new Map<string, string>();
+    for (const value of [...BT_MATERIALS, ...added.map((option) => option.value)]) {
+      const trimmed = value.trim();
+      // Clé insensible à la casse : « inox » saisi à la main ne doit pas
+      // doubler « Inox » du référentiel.
+      if (trimmed) all.set(trimmed.toLocaleLowerCase("fr-FR"), trimmed);
+    }
+    return [...all.values()].sort((a, b) => a.localeCompare(b, "fr"));
+  },
+});
+
+/** Ajoute une matière au référentiel commun. Sans effet si elle existe déjà. */
+export const addMaterialOption = mutation({
+  args: { value: v.string() },
+  handler: async (ctx, { value }) => {
+    await requireCrmPermission(ctx, PAGE_MATERIAUX, "update");
+    const identity = await requireUser(ctx);
+    const trimmed = value.trim();
+    if (!trimmed) throw new ConvexError("Indiquez une matière.");
+    if (trimmed.length > 60) throw new ConvexError("Matière trop longue (60 caractères).");
+    const key = trimmed.toLocaleLowerCase("fr-FR");
+    if (BT_MATERIALS.some((known) => known.toLocaleLowerCase("fr-FR") === key)) return trimmed;
+    const existing = await ctx.db
+      .query("btOptions")
+      .withIndex("by_kind", (q) => q.eq("kind", "material"))
+      .collect();
+    if (existing.some((option) => option.value.toLocaleLowerCase("fr-FR") === key)) return trimmed;
+    await ctx.db.insert("btOptions", {
+      kind: "material",
+      value: trimmed,
+      createdBy: formatUserName(identity),
+      createdAt: Date.now(),
+    });
+    return trimmed;
+  },
+});
 
 export const assertCanAnalyze = internalQuery({
   args: {},
@@ -609,6 +777,8 @@ type MaterialAnalysis = {
   brand?: string | null;
   modelReference?: string | null;
   material?: string | null;
+  /** Matières retenues dans le référentiel fermé. */
+  materials?: string[] | null;
   color?: string | null;
   standards?: string | null;
   technicalNotes?: string | null;
@@ -1468,14 +1638,55 @@ export function btSubFamilies(category: string, family: string) {
 }
 
 const UNITS = ["unité", "m²", "m³", "ml", "kg", "tonne", "palette", "sac", "lot"];
-const CONDITIONS = [
-  "Neuf",
-  "Déstockage",
+
+/** Provenance du matériau, telle qu'elle se déclare dans un diagnostic PEMD. */
+export const BT_ORIGINS = [
   "Reconditionné",
-  "Très bon état",
-  "Bon état",
-  "À reconditionner",
+  "Occasion réemploi",
+  "Déstockage neuf",
+  "Recyclé upcyclé",
+  "Surplus de chantier",
 ];
+
+/** Type de demandeur : la structure d'où vient le flux de matériaux. */
+export const BT_PROFILES = [
+  "Artisans, professionnels du BTP, organisations PRO",
+  "Déchèteries publiques",
+  "Distributeurs de matériaux",
+  "Maîtres d'ouvrage, architectes, maîtres d'œuvre",
+  "Entreprises de recyclage",
+  "Recycleries et ressourceries généralistes",
+];
+
+/** Matières proposées d'origine. L'équipe en ajoute d'autres via `btOptions`. */
+export const BT_MATERIALS = [
+  "Bois massif",
+  "Grès cérame",
+  "Céramique",
+  "Métal",
+  "PVC",
+  "Liège",
+  "Acier",
+  "Plastique PEHD",
+  "Plastique",
+  "Aluminium",
+  "Verre",
+  "Inox",
+  "Laine de verre",
+  "Stratifié",
+  "Porcelaine",
+  "Verre trempé",
+  "Bois aggloméré",
+  "Plastique recyclé",
+  "Béton",
+  "Tissu",
+  "Miroir",
+  "Pierre",
+];
+
+/** Unité dans laquelle sont saisies les dimensions. */
+export const BT_DIMENSION_UNITS = ["mm", "cm", "m"];
+const CONDITIONS = ["Neuf", "Très bon", "Bon", "Usagé"];
 
 
 /** Appel OpenAI en JSON strict, partagé par les deux passes du classement. */
@@ -1631,6 +1842,33 @@ function candidateLeaves(query: string, limit = 25, onlyCategory?: string) {
 }
 
 /**
+ * Toutes les feuilles d'une catégorie, les plus proches de la description en
+ * tête.
+ *
+ * Une fois le rayon décidé, il ne reste au pire que 77 sous-familles : le
+ * modèle peut les voir TOUTES. La présélection lexicale ne servait qu'à tenir
+ * dans une liste courte sur les 582 feuilles du catalogue — appliquée à une
+ * seule catégorie, elle ne faisait plus qu'une chose, cacher la bonne réponse
+ * quand la description n'employait pas les mots du référentiel (« placo » pour
+ * « plaque de plâtre »). On garde son classement, on jette sa coupe.
+ */
+function leavesOfCategory(category: string, query: string) {
+  const scored = new Map(
+    candidateLeaves(query, Number.MAX_SAFE_INTEGER, category).map((entry) => [
+      `${entry.leaf.family}›${entry.leaf.subFamily}`,
+      entry.score,
+    ]),
+  );
+  return buildLeafIndex()
+    .filter((leaf) => leaf.category === category)
+    .map((leaf) => ({
+      leaf: { category: leaf.category, family: leaf.family, subFamily: leaf.subFamily },
+      score: scored.get(`${leaf.family}›${leaf.subFamily}`) ?? 0,
+    }))
+    .sort((a, b) => b.score - a.score);
+}
+
+/**
  * Remplit la fiche d'un matériau à partir de ses photos.
  *
  * L'unité de vente est la décision la plus lourde : elle commande le prix et le
@@ -1650,9 +1888,33 @@ export const analyzeMaterialPhotos = action({
     const imageUrls = urls.filter((url): url is string => Boolean(url));
     if (imageUrls.length === 0) throw new ConvexError("Photos introuvables en stockage.");
 
-    const prompt = `Tu es responsable du dépôt de matériaux de construction de seconde main « Bâtire ».
+    // Les précisions de l'équipe sont une observation de terrain : quelqu'un a
+    // eu l'objet en main. Elles priment sur tout ce que le modèle croit voir,
+    // et elles servent aussi bien à décrire qu'à ranger — d'où leur reprise
+    // dans les deux passes de classement plus bas.
+    const notes = extraDetails?.trim() ?? "";
+    const notesBlock = notes
+      ? `PRÉCISIONS DE L'ÉQUIPE — PRIORITÉ ABSOLUE
+« ${notes} »
+Ces mots ont été saisis par la personne qui a l'objet sous les yeux. Ils sont
+vrais. S'ils nomment l'objet, sa matière, ses dimensions ou son état, reprends-
+les tels quels : ils l'emportent sur ta lecture des photos, y compris quand la
+photo semble dire autre chose. Ne les contredis jamais, ne les ignore jamais.
+Ils peuvent être écrits en style télégraphique (mots-clés, abréviations de
+chantier) : c'est normal, interprète-les dans le vocabulaire du bâtiment.
+
+`
+      : "";
+
+    const prompt = `${notesBlock}Tu es responsable du dépôt de matériaux de construction de seconde main « Bâtire ».
 Analyse toutes les photos ensemble : étiquettes, marquages, sections, état, quantité visible, palettes.
 Rédige la fiche d'un professionnel du bâtiment qui vend à d'autres professionnels et à des particuliers avertis : précis, concret, sans emphase commerciale.
+
+MÉTHODE
+- Commence par identifier CE QU'EST l'objet, avant tout autre détail. Un vantail posé contre un mur reste une porte ; un tas de plaques reste des plaques.
+- Ne renseigne un champ que sur une trace réelle : un texte lu sur une étiquette, une graduation, un marquage, une référence, ou une précision de l'équipe.
+- Un doute se solde par null, jamais par une valeur plausible. Une fiche incomplète se complète en dix secondes ; une fiche fausse part en ligne et se vend mal.
+- Signale dans « aiNotes » tout ce que tu as déduit sans le lire, pour qu'un humain le vérifie.
 
 RÈGLES ABSOLUES
 - N'invente JAMAIS une dimension, une norme, une marque, une matière ou une performance : si ce n'est pas lisible sur la photo ou fourni, mets null.
@@ -1681,17 +1943,22 @@ Réponds UNIQUEMENT en JSON valide :
   "weightKg": nombre ou null,
   "brand": "marque lue sur l'étiquette ou null",
   "modelReference": "référence fabricant lue ou null",
-  "material": "bois, béton, acier, PVC, aluminium, plâtre, terre cuite… ou null",
+  "materials": ["les matières constitutives, valeurs EXACTES prises dans cette liste, [] si aucune ne correspond : ${JSON.stringify(BT_MATERIALS)}"],
+  "material": "la matière en toutes lettres si aucune de la liste ne convient, sinon null",
   "color": "couleur dominante ou null",
   "standards": "normes visibles (CE, NF, classe d'emploi…) ou null",
   "technicalNotes": "caractéristiques techniques lues (lambda, section, résistance…) ou null",
   "aiConfidence": nombre entre 0 et 1,
   "aiNotes": "ce qu'un humain doit vérifier avant publication"
-}
-${extraDetails?.trim() ? `\nPrécisions de l'équipe, fiables et prioritaires sur la photo : ${extraDetails.trim()}` : ""}`;
+}${notes ? `\n\nRappel : les précisions de l'équipe ci-dessus priment sur les photos.` : ""}`;
+
+    // Modèle réglable par variable d'environnement : la qualité des fiches en
+    // dépend plus que de tout le reste, et le réglage doit pouvoir suivre les
+    // sorties d'OpenAI sans redéployer les 7 apps.
+    const model = process.env.BATIRE_ANALYSIS_MODEL?.trim() || "gpt-4o";
 
     const result = await callChat<MaterialAnalysis>(apiKey, {
-      model: "gpt-4o",
+      model,
       temperature: 0.2,
       max_tokens: 1400,
       response_format: { type: "json_object" },
@@ -1718,33 +1985,46 @@ ${extraDetails?.trim() ? `\nPrécisions de l'équipe, fiables et prioritaires su
     // même décision dérape (une porte laquée finissait en « Peinture »). La
     // recherche de la feuille se fait ensuite dans cette seule catégorie.
     const label = (result.productLabel ?? result.title ?? "").trim();
+    // Les notes de l'équipe entrent aussi dans le classement : elles nomment
+    // souvent l'objet mieux que la photo (« placo hydro 13mm »), et sans elles
+    // le rangement repartait de la seule lecture du modèle — c'est-à-dire de
+    // l'erreur qu'elles étaient justement censées corriger.
     const description = [
       // Le nom de l'objet compte double : les mots incidents — couleur,
       // marque — ne doivent pas peser autant que sa nature.
       label,
       label,
+      notes,
       (result.productKeywords ?? []).join(" "),
       result.material,
     ]
       .filter(Boolean)
       .join(" ");
+    /** Ce qu'on montre au modèle pour ranger : le nom, puis les mots de l'équipe. */
+    const subject = [label, notes ? `précisions de l'équipe : « ${notes} »` : ""]
+      .filter(Boolean)
+      .join(", ");
 
     let chosenCategory: string | null = null;
-    if (label) {
+    if (subject) {
       const categoryList = BT_CATEGORIES.map((name, index) => `${index + 1}. ${name}`).join("\n");
       const categoryPick = await callChat<{ choice?: number }>(apiKey, {
-        model: "gpt-4o-mini",
+        // Même modèle que l'analyse : le rayon commande tout le rangement qui
+        // suit, une erreur ici ne se rattrape plus en aval.
+        model,
         temperature: 0,
         max_tokens: 40,
         response_format: { type: "json_object" },
         messages: [
           {
             role: "user",
-            content: `Dans quel rayon d'un négoce de matériaux ranger : « ${label} » ?
+            content: `Dans quel rayon d'un négoce de matériaux ranger : ${subject} ?
 
 ${categoryList}
 
-Réponds {"choice": N}. Range l'objet selon CE QU'IL EST, jamais selon sa couleur ni sa finition.`,
+Réponds {"choice": N}. Range l'objet selon CE QU'IL EST, jamais selon sa couleur ni sa finition.${
+              notes ? " Les précisions de l'équipe font foi." : ""
+            }`,
           },
         ],
       }).catch(() => ({ choice: 0 }));
@@ -1754,7 +2034,12 @@ Réponds {"choice": N}. Range l'objet selon CE QU'IL EST, jamais selon sa couleu
       }
     }
 
-    const candidates = candidateLeaves(description, 25, chosenCategory ?? undefined);
+    // Rayon connu : le modèle voit toutes les sous-familles de ce rayon.
+    // Rayon inconnu : on retombe sur une présélection lexicale, seule façon de
+    // ne pas lui présenter les 582 feuilles du catalogue.
+    const candidates = chosenCategory
+      ? leavesOfCategory(chosenCategory, description)
+      : candidateLeaves(description, 25);
     let chosen: Leaf | null = null;
 
     if (candidates.length > 0) {
@@ -1768,29 +2053,33 @@ Réponds {"choice": N}. Range l'objet selon CE QU'IL EST, jamais selon sa couleu
       // Seconde décision, sans image et sans texte libre : le modèle ne peut
       // plus qu'indiquer un numéro, donc plus rien à mal orthographier.
       const pick = await callChat<{ choice?: number }>(apiKey, {
-        model: "gpt-4o-mini",
+        model,
         temperature: 0,
         max_tokens: 60,
         response_format: { type: "json_object" },
         messages: [
           {
             role: "user",
-            content: `Objet : « ${description} »${chosenCategory ? `, rangé dans « ${chosenCategory} »` : ""}.
+            content: `Objet : ${subject || description}${chosenCategory ? `, rangé dans « ${chosenCategory} »` : ""}.
 
 Rangements possibles :
 ${list}
 
-Réponds {"choice": N} avec le numéro le plus juste, ou {"choice": 0} si aucun ne convient.`,
+Réponds {"choice": N} avec le numéro le plus juste, ou {"choice": 0} si aucun ne convient.
+La liste est classée par proximité de vocabulaire, pas par justesse : lis-la en entier avant de choisir.`,
           },
         ],
       }).catch(() => ({ choice: 0 }));
 
       const index = Number(pick?.choice ?? 0);
-      chosen =
-        Number.isInteger(index) && index >= 1 && index <= candidates.length
-          ? candidates[index - 1].leaf
-          : // Filet : la meilleure correspondance lexicale plutôt qu'un vide.
-            candidates[0].leaf;
+      if (Number.isInteger(index) && index >= 1 && index <= candidates.length) {
+        chosen = candidates[index - 1].leaf;
+      } else if (candidates[0].score > 0) {
+        // Filet : la meilleure correspondance lexicale, mais seulement si elle
+        // partage vraiment du vocabulaire avec l'objet. Sinon on s'arrête à la
+        // catégorie — un rangement au hasard coûte plus qu'un champ vide.
+        chosen = candidates[0].leaf;
+      }
     }
 
     if (chosen) {
@@ -1809,7 +2098,22 @@ Réponds {"choice": N} avec le numéro le plus juste, ou {"choice": 0} si aucun 
       result.subcategory = null;
     }
 
-    if (!CONDITIONS.includes(result.condition)) result.condition = "Bon état";
+    // Les matières ne sont retenues que si elles existent au référentiel : la
+    // liste du formulaire est fermée, une valeur inventée n'y serait pas
+    // sélectionnable et disparaîtrait au premier enregistrement.
+    const knownMaterials = new Map(
+      BT_MATERIALS.map((value) => [value.toLocaleLowerCase("fr-FR"), value]),
+    );
+    result.materials = [
+      ...new Set(
+        (result.materials ?? [])
+          .map((value) => knownMaterials.get(String(value).trim().toLocaleLowerCase("fr-FR")))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    if (result.materials.length > 0) result.material = result.materials.join(", ");
+
+    if (!CONDITIONS.includes(result.condition)) result.condition = "Bon";
     if (!UNITS.includes(result.unit)) result.unit = "unité";
     const positive = (value: unknown) => {
       const parsed = Number(value);
@@ -1846,24 +2150,29 @@ export const sendMessage = mutation({
     if (!body) throw new ConvexError("Le message est vide.");
 
     const material = args.materialId ? await ctx.db.get(args.materialId) : null;
-    const access = await ctx.runQuery(api.permissions.myAccess, {});
-    const fromStaff = accessAllows(access, PAGE_DEMANDES, "read");
-
-    if (fromStaff && !args.clientId) {
-      throw new ConvexError("Indiquez le fil auquel répondre.");
-    }
+    // C'est le fil visé qui fait la réponse de l'équipe, pas le rôle de celui
+    // qui écrit : un salarié qui pose une question depuis la boutique écrit sur
+    // SON fil, comme n'importe quel client. Exiger un `clientId` de tout membre
+    // de l'équipe fermait la messagerie publique à tout le personnel.
+    // La permission se lit avec `hasCrmPermission` : passer par la query
+    // publique `permissions.myAccess` fait référencer `api` depuis sa propre
+    // définition, et TypeScript abandonne l'inférence de cette mutation.
+    const fromStaff =
+      Boolean(args.clientId) && (await hasCrmPermission(ctx, PAGE_DEMANDES, "read"));
 
     // Le fil appartient au client : quand l'équipe répond, on reprend ses
-    // coordonnées du fil existant plutôt que celles du salarié.
-    let clientId = args.clientId ?? identity.subject;
+    // coordonnées du fil existant plutôt que celles du salarié. Hors réponse de
+    // l'équipe, on écrit sur son propre fil quoi qu'annonce l'appelant : un
+    // `clientId` reçu d'ailleurs écrirait dans la messagerie d'un tiers.
+    let clientId = identity.subject;
     let clientName = formatUserName(identity);
     let clientEmail = identity.email ?? "";
-    if (fromStaff && args.clientId) {
+    if (fromStaff) {
       const previous = await ctx.db
         .query("btMessages")
         .withIndex("by_client", (q) => q.eq("clientId", args.clientId!))
         .first();
-      clientId = args.clientId;
+      clientId = args.clientId!;
       clientName = previous?.clientName ?? clientName;
       clientEmail = previous?.clientEmail ?? "";
     }
@@ -1940,8 +2249,57 @@ export const listThreads = query({
         if (!message.fromStaff && !message.readByStaff) thread.unread++;
       }
     }
+    // Fiche du matériau discuté, résolue une fois par matériau : la colonne
+    // récapitulative du CRM montre l'objet dont il est question, sans que
+    // l'équipe ait à ouvrir la fiche dans un autre onglet.
+    const materialIds = [
+      ...new Set(
+        [...threads.values()]
+          .map((thread) => thread.materialId)
+          .filter((id): id is Id<"btMaterials"> => Boolean(id))
+          .map((id) => String(id)),
+      ),
+    ] as Array<Id<"btMaterials">>;
+    const materialById = new Map(
+      await Promise.all(
+        materialIds.map(async (id) => {
+          const material = await ctx.db.get(id);
+          if (!material) return [String(id), null] as const;
+          return [
+            String(id),
+            {
+              _id: material._id,
+              title: material.title,
+              reference: material.reference,
+              category: material.category,
+              family: material.family,
+              subcategory: material.subcategory,
+              condition: material.condition,
+              unit: material.unit,
+              price: material.price,
+              quantity: material.quantity,
+              status: material.status,
+              published: material.published ?? false,
+              depot: material.depot,
+              location: material.location,
+              qrReference: material.qrReference,
+              // Une seule photo : la vignette suffit au récapitulatif, et
+              // chaque URL signée de plus est de l'egress payé pour rien.
+              photoUrl: material.photos[0] ? await ctx.storage.getUrl(material.photos[0]) : null,
+            },
+          ] as const;
+        }),
+      ),
+    );
+
     return [...threads.values()].map((thread) => ({
       ...thread,
+      material: thread.materialId ? materialById.get(String(thread.materialId)) ?? null : null,
+      firstAt: thread.messages.reduce(
+        (oldest, message) => Math.min(oldest, message.createdAt),
+        thread.lastAt,
+      ),
+      messageCount: thread.messages.length,
       messages: [...thread.messages].sort((a, b) => a.createdAt - b.createdAt),
     }));
   },
@@ -2020,7 +2378,7 @@ export const importMaterials = mutation({
           ? row.subcategory
           : undefined;
       const unit = units.includes(row.unit ?? "") ? row.unit! : "unité";
-      const condition = conditions.includes(row.condition ?? "") ? row.condition! : "Bon état";
+      const condition = conditions.includes(row.condition ?? "") ? row.condition! : "Bon";
 
       await ctx.db.insert("btMaterials", {
         title,

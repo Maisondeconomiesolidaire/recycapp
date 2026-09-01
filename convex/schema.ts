@@ -225,13 +225,17 @@ export const btUnit = v.union(
 
 export const btCondition = v.union(
   v.literal("Neuf"),
+  v.literal("Très bon"),
+  v.literal("Bon"),
+  v.literal("Usagé"),
+  /** @deprecated Référentiel d'états d'avant la simplification en quatre
+   *  valeurs. Conservé pour les fiches créées avant le changement : retirer
+   *  ces valeurs les rendrait invalides. */
   v.literal("Déstockage"),
   v.literal("Reconditionné"),
   v.literal("Très bon état"),
   v.literal("Bon état"),
   v.literal("À reconditionner"),
-  /** @deprecated Remplacé par « À reconditionner ». Conservé pour les fiches
-   *  créées avant le changement : retirer la valeur les rendrait invalides. */
   v.literal("À rénover"),
 );
 
@@ -760,6 +764,20 @@ export default defineSchema(
     // formulaire d'origine (/collecte, /boutique/panier…). Fixé à la création.
     signupApp: v.optional(v.string()),
     signupPath: v.optional(v.string()),
+    /**
+     * Origine détaillée, capturée AVANT la redirection vers Clerk : `signupPath`
+     * seul est relevé au retour de connexion, souvent sur l'accueil, ce qui
+     * perdait l'écran réellement à l'origine de l'inscription.
+     */
+    // Dernier écran vu en étant déconnecté : le formulaire ou la fiche d'où
+    // part l'inscription.
+    signupEntryPath: v.optional(v.string()),
+    // Première page de la visite : la porte d'entrée sur le site.
+    signupLandingPath: v.optional(v.string()),
+    // Site qui a amené la visite (hors navigation interne).
+    signupReferrer: v.optional(v.string()),
+    // Paramètres de campagne (utm_*) présents à l'arrivée, tels quels.
+    signupUtm: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -1503,6 +1521,18 @@ export default defineSchema(
     partsCost: v.optional(v.number()),
     /** Pièces jointes : photos de la panne, de la réparation, factures… */
     attachments: v.optional(v.array(v.id("_storage"))),
+    /** Nom et type des pièces jointes, dans l'ordre d'`attachments`. Sans eux,
+     *  un PDF ne se distingue pas d'une photo et finit dans une balise `img` ;
+     *  les fiches d'avant les documents n'en ont pas, elles sont des photos. */
+    attachmentMeta: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          name: v.optional(v.string()),
+          contentType: v.optional(v.string()),
+        }),
+      ),
+    ),
     /** Photos de l'état AVANT intervention (constat, panne). */
     beforePhotos: v.optional(v.array(v.id("_storage"))),
     /** Descriptif AVANT intervention : constat, symptômes, état relevé. */
@@ -2631,6 +2661,64 @@ export default defineSchema(
     featured: v.optional(v.boolean()),
     /** Référence du QR code collé sur le matériau. */
     qrReference: v.optional(v.string()),
+
+    /* ── Fiche réemploi ───────────────────────────────────────────────────
+     *
+     * Champs du diagnostic PEMD attendus par les maîtres d'ouvrage et les
+     * plateformes de réemploi. Tous facultatifs : une fiche reste publiable
+     * sans eux, ils se complètent au fil du diagnostic.
+     */
+
+    /** Référence interne du matériau, propre au dépôt. */
+    reference: v.optional(v.string()),
+    /** Provenance : reconditionné, occasion réemploi, surplus de chantier… */
+    origin: v.optional(v.string()),
+    /** Types de structures d'où vient le matériau, ou qu'il vise. */
+    profiles: v.optional(v.array(v.string())),
+    /**
+     * Matières constitutives. `material` garde la version texte : elle est lue
+     * par la recherche, la boutique et l'import Excel existants.
+     */
+    materials: v.optional(v.array(v.string())),
+    diameterCm: v.optional(v.number()),
+    /**
+     * Unité dans laquelle sont exprimées longueur, largeur, hauteur et
+     * diamètre. Absente = centimètres, ce qu'ont toujours voulu dire les
+     * champs `…Cm` des fiches déjà saisies.
+     */
+    dimensionUnit: v.optional(v.string()),
+    /** Fenêtre de disponibilité du lot. */
+    availableFrom: v.optional(v.number()),
+    availableUntil: v.optional(v.number()),
+
+    /* Potentiels du diagnostic, notés de 1 à 5 étoiles. */
+    reusePotential: v.optional(v.number()),
+    repurposePotential: v.optional(v.number()),
+    recyclingPotential: v.optional(v.number()),
+    recoveryPotential: v.optional(v.number()),
+    disposalPotential: v.optional(v.number()),
+
+    /** Comment le matériau est assemblé, et donc démontable. */
+    assemblyMode: v.optional(v.string()),
+    transportTerms: v.optional(v.string()),
+    packagingTerms: v.optional(v.string()),
+    storageTerms: v.optional(v.string()),
+    accessTerms: v.optional(v.string()),
+    /** Amiante, plomb, HAP… ce qui conditionne la reprise. */
+    hazardousSubstances: v.optional(v.string()),
+    typology: v.optional(v.string()),
+    /** Code déchet européen à 6 chiffres. */
+    wasteCode: v.optional(v.string()),
+    /** Bilan carbone en kg CO₂ équivalent. */
+    carbonFootprintKg: v.optional(v.number()),
+    /** Coût de mise en décharge évité, en euros. */
+    landfillCost: v.optional(v.number()),
+    /** Fiche technique jointe (PDF ou document). */
+    datasheet: v.optional(v.id("_storage")),
+    datasheetName: v.optional(v.string()),
+    /** Commentaire d'équipe, jamais publié. */
+    internalNote: v.optional(v.string()),
+
     aiConfidence: v.optional(v.number()),
     aiNotes: v.optional(v.string()),
     createdBy: v.optional(v.string()),
@@ -2642,6 +2730,20 @@ export default defineSchema(
     .index("by_category", ["category"])
     .index("by_qrReference", ["qrReference"])
     .index("by_createdAt", ["createdAt"]),
+
+  /**
+   * Valeurs ajoutées par l'équipe aux listes fermées de Bâtire (matières, pour
+   * l'instant). Une table plutôt qu'un champ libre : une matière saisie par
+   * l'un doit être proposée à tous, sinon la liste diverge d'un poste à
+   * l'autre et le filtrage de la boutique ne veut plus rien dire.
+   */
+  btOptions: defineTable({
+    /** Liste visée : « material » aujourd'hui, d'autres si le besoin vient. */
+    kind: v.string(),
+    value: v.string(),
+    createdBy: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_kind", ["kind"]),
 
   btRequests: defineTable({
     reference: v.string(),

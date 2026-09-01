@@ -51,10 +51,14 @@ import { Messages } from "./pages/crm/Messages";
 import { Documents } from "./pages/crm/Documents";
 import { ConfirmRoot } from "./lib/confirm";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner";
+import { ProfileSync } from "./components/ProfileSync";
 
 export default function App() {
   return (
     <>
+    {/* Hors de toute garde d'authentification : l'origine de l'inscription se
+        constitue pendant la visite déconnectée. */}
+    <ProfileSync app="recycapp" />
     <UpdateAvailableBanner appName="Recycapp" />
     <Routes>
       {/* Vitrine physique : plein écran, sans en-tête ni compte. */}

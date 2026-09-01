@@ -1,22 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { SignedIn, SignedOut, useClerk } from "@clerk/clerk-react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { ChevronDown, LogOut, MessageSquare, Package, Settings, User } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 
 const BRAND = "#f1104f";
-
-/** Crée/rafraîchit le profil Convex à la connexion et rattache les demandes. */
-function ProfileSync() {
-  const syncProfile = useMutation(api.users.syncProfile);
-  useEffect(() => {
-    void syncProfile({
-      source: { app: "recycapp", path: window.location.pathname + window.location.search },
-    });
-  }, [syncProfile]);
-  return null;
-}
 
 export function AccountMenu() {
   const navigate = useNavigate();
@@ -58,7 +47,6 @@ export function AccountMenu() {
       </SignedOut>
 
       <SignedIn>
-        <ProfileSync />
         <div ref={ref} className="relative shrink-0">
           <button
             type="button"
