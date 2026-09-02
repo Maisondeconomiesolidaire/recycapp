@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { PackageOpen, Search, X } from "lucide-react";
+import { PortalButton } from "../../components/PortalButton";
 import { api } from "../../../convex/_generated/api";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -63,6 +64,11 @@ export function Kiosk() {
       <div className="relative z-10">
       <section className="border-b border-black/5">
         <div className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
+          {/* Devant l'écran d'entrée, c'est le seul chemin vers les autres
+              boutiques du groupe. */}
+          <div className="mb-4 flex justify-end">
+            <PortalButton className="h-11 rounded-full border border-white/55 bg-white/85 px-4 text-sm text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] backdrop-blur hover:bg-white" />
+          </div>
           <div className="overflow-hidden rounded-[36px] border border-white/35 bg-white/8 shadow-[0_30px_90px_rgba(24,24,27,0.1)] backdrop-blur-[3px]">
             <img
               src="/hero-new.jpeg"
