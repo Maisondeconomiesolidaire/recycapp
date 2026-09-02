@@ -407,6 +407,8 @@ function Header() {
               </div>
             ) : <div className="flex-1" />}
 
+            <PortalButton className="h-12 shrink-0 gap-2 rounded-full border border-black/8 bg-white px-4 text-sm text-zinc-700 shadow-sm transition hover:-translate-y-0.5 hover:text-brand-600 sm:h-14 sm:px-5" />
+
             {isBoutiqueArea && (
               <Link
                 to="/favoris"
