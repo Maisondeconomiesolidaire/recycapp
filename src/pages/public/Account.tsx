@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useParams } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, useParams } from "react-router-dom";
 import { SignedIn, SignedOut, useClerk, useUser } from "@clerk/clerk-react";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -27,7 +27,6 @@ import { RequestDocumentsPanel } from "../../components/RequestDocumentsPanel";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { AddressAutocomplete } from "../../components/ui/AddressAutocomplete";
 import { LiveDeliveryTracking } from "../../components/public/LiveDeliveryTracking";
-import { AuthPanel } from "../../components/AuthPanel";
 import { useUpload } from "../../lib/useUpload";
 import { COLLECTE_CATEGORY_BY_KEY } from "../../lib/constants";
 
@@ -79,7 +78,7 @@ export function AccountLayout() {
   return (
     <>
       <SignedOut>
-        <AuthPanel redirectUrl="/compte" />
+        <Navigate to="/connexion?redirect_url=%2Fcompte" replace />
       </SignedOut>
 
       <SignedIn>

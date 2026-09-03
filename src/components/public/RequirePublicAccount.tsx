@@ -1,11 +1,12 @@
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
-import { useLocation } from "react-router-dom";
-import { AuthPanel } from "../AuthPanel";
+import { Navigate, useLocation } from "react-router-dom";
 
 /**
- * `title` / `description` restent acceptés pour les appelants existants, mais
- * ne sont plus affichés : le portail partagé porte ses propres titres, et les
- * empiler dans une carte le repliait en version étroite.
+ * Réserve un contenu du portail public aux utilisateurs connectés, en les
+ * envoyant sur la page dédiée `/connexion` — qui les ramène ici ensuite.
+ *
+ * `title` / `description` restent acceptés pour les appelants existants mais ne
+ * servent plus : le portail porte ses propres titres.
  */
 export function RequirePublicAccount({
   children,
@@ -23,7 +24,7 @@ export function RequirePublicAccount({
     <>
       <SignedIn>{children}</SignedIn>
       <SignedOut>
-        <AuthPanel redirectUrl={redirectUrl} />
+        <Navigate to={`/connexion?redirect_url=${encodeURIComponent(redirectUrl)}`} replace />
       </SignedOut>
     </>
   );

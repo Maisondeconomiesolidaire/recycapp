@@ -1,12 +1,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
 import {
   SignedIn,
   SignedOut,
   useUser,
 } from "@clerk/clerk-react";
-import { AuthPanelInner } from "../AuthPanel";
 import { AppSwitcher } from "../AppSwitcher";
 import { HelpButton } from "../HelpButton";
 import {
@@ -393,7 +392,9 @@ function NavBadge({
   return <span aria-hidden="true" />;
 }
 
-/** Le portail partagé occupe toute la page : pas de carte autour. */
+/** Le portail est servi par la page dédiée `/connexion`, qui ramène ici. */
 function SignInScreen() {
-  return <AuthPanelInner />;
+  const location = useLocation();
+  const redirectUrl = `${location.pathname}${location.search}`;
+  return <Navigate to={`/connexion?redirect_url=${encodeURIComponent(redirectUrl)}`} replace />;
 }

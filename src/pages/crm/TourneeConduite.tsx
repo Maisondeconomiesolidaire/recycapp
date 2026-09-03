@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
-import { AuthPanel } from "../../components/AuthPanel";
 import {
   ArrowLeft,
   Check,
@@ -57,7 +56,7 @@ export function TourneeConduite() {
         <DriverMode />
       </SignedIn>
       <SignedOut>
-        <AuthPanel />
+        <Navigate to={`/connexion?redirect_url=${encodeURIComponent(window.location.pathname)}`} replace />
       </SignedOut>
     </>
   );

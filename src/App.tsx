@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PublicLayout } from "./components/public/PublicLayout";
 import { RequirePublicAccount } from "./components/public/RequirePublicAccount";
 import { Boutique } from "./pages/public/Boutique";
@@ -70,6 +70,12 @@ export default function App() {
       <Route path="/acheter/:id" element={<AcheterArticle />} />
 
       {/* Public (light mode) */}
+      {/* Page dédiée de connexion : hors du shell boutique, comme sur Mes
+          Outils et BâtiRe — le portail occupe tout l'écran. */}
+      <Route path="/connexion" element={<AuthPage />} />
+      <Route path="/inscription" element={<AuthPage initialMode="signup" />} />
+      <Route path="/auth" element={<LegacyAuthRedirect />} />
+
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Navigate to="/boutique" replace />} />
         <Route path="/boutique" element={<Boutique />} />
@@ -159,7 +165,6 @@ export default function App() {
         <Route path="/merci" element={<Merci />} />
         <Route path="/conditions" element={<Conditions />} />
         <Route path="/confidentialite" element={<Confidentialite />} />
-        <Route path="/auth" element={<AuthPage />} />
 
         {/* Espace client */}
         <Route path="/compte" element={<AccountLayout />}>
@@ -202,4 +207,11 @@ export default function App() {
       <ConfirmRoot />
     </>
   );
+}
+
+/** Ancien chemin du portail, conservé pour les liens déjà diffusés. */
+function LegacyAuthRedirect() {
+  const location = useLocation();
+  const target = location.hash === "#sign-up" ? "/inscription" : "/connexion";
+  return <Navigate to={`${target}${location.search}`} replace />;
 }
