@@ -57,9 +57,7 @@ export function TourneeConduite() {
         <DriverMode />
       </SignedIn>
       <SignedOut>
-        <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6">
-          <AuthPanel />
-        </div>
+        <AuthPanel />
       </SignedOut>
     </>
   );

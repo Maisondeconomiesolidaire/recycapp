@@ -79,20 +79,7 @@ export function AccountLayout() {
   return (
     <>
       <SignedOut>
-        <div className={`${CONTAINER} flex flex-col items-center gap-5 py-20 text-center`}>
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-500/10">
-            <User className="h-8 w-8 text-brand-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-950">Connectez-vous à votre compte</h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              Suivez vos demandes, échangez avec notre équipe et gérez vos informations.
-            </p>
-          </div>
-          <div className="w-full max-w-sm text-left">
-            <AuthPanel redirectUrl="/compte" />
-          </div>
-        </div>
+        <AuthPanel redirectUrl="/compte" />
       </SignedOut>
 
       <SignedIn>

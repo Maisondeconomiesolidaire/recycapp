@@ -393,22 +393,7 @@ function NavBadge({
   return <span aria-hidden="true" />;
 }
 
+/** Le portail partagé occupe toute la page : pas de carte autour. */
 function SignInScreen() {
-  return (
-    <div className="min-h-screen bg-[var(--crm-bg)] flex flex-col items-center justify-center p-4 gap-8 dark">
-      <div className="text-center text-zinc-100">
-        <img
-          src="/recyclerie-logo.png"
-          alt="Recyclerie"
-          className="mx-auto h-14 w-auto object-contain"
-        />
-        <p className="text-sm text-zinc-500 leading-tight">
-          Espace professionnel
-        </p>
-      </div>
-      <div className="w-full max-w-xl rounded-[28px] border border-[var(--crm-border)] bg-[var(--crm-surface)] p-6 text-center shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:p-8">
-        <AuthPanelInner showLogo={false} theme="dark" />
-      </div>
-    </div>
-  );
+  return <AuthPanelInner />;
 }
