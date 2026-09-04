@@ -122,7 +122,7 @@ export function DateTimePicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-2 flex w-[440px] max-w-[calc(100vw-2rem)] gap-3 rounded-[24px] border border-border bg-card p-4 shadow-[0_24px_60px_rgba(0,0,0,0.3)]">
+        <div className="absolute right-0 top-full z-40 mt-2 flex w-[min(440px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-[24px] border border-border bg-card p-4 shadow-[0_24px_60px_rgba(0,0,0,0.3)] sm:flex-row">
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex items-center justify-between gap-3">
               <button
@@ -178,7 +178,7 @@ export function DateTimePicker({
             </div>
           </div>
 
-          <div className="flex w-[132px] shrink-0 flex-col">
+          <div className="flex w-full shrink-0 flex-col sm:w-[132px]">
             <div className="mb-3 text-center text-sm font-semibold text-foreground">Heure</div>
             <div className="grid grid-cols-2 gap-2">
               <TimeColumn
