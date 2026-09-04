@@ -16,6 +16,9 @@ export function AuthPanel({
   return (
     <AuthSwitch
       appName="Recycapp"
+      welcomeTitle="Bienvenue"
+      signinSubtitle="Connectez-vous pour retrouver votre espace."
+      memberPanelDescription="Retrouvez votre espace et vos démarches en cours."
       logoSrc="/recyclerie-logo.png"
       initialMode={initialMode}
       redirectUrl={redirectUrl}
