@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
   startOfMonth,
@@ -17,6 +24,8 @@ import {
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CalendarCog,
@@ -55,6 +64,7 @@ import {
 } from "../../lib/constants";
 import { cn } from "../../lib/cn";
 import { useUpload } from "../../lib/useUpload";
+import { useAnchoredPopover } from "../../lib/useAnchoredPopover";
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -1096,6 +1106,240 @@ function EventsCalendar({ month }: { month: Date }) {
   );
 }
 
+/** Champs d'un évènement saisis dans une liste déroulante. */
+type EventOptionField =
+  | "animationType"
+  | "structure"
+  | "activity"
+  | "targetAudience";
+
+/**
+ * Options livrées d'origine. Celles ajoutées à la main vivent dans
+ * `recycappCalendarOptions` et complètent ces listes pour toute l'équipe.
+ */
+const DEFAULT_EVENT_OPTIONS: Record<EventOptionField, string[]> = {
+  animationType: [
+    "Atelier réparation",
+    "Atelier rencontre",
+    "Formation",
+    "Vente à thèmes",
+  ],
+  structure: [
+    "Recyclerie",
+    "Maison d'Economie Solidaire",
+    "Alicias",
+    "Pays de bray emploi",
+    "Pays de bray service",
+    "Les sens du bray",
+    "Materiosol",
+  ],
+  activity: [
+    "Repair Café",
+    "Connect en Bray",
+    "Formation",
+    "Cycle en Bray",
+    "Animations autres",
+  ],
+  targetAudience: ["Tout public", "Professionnels", "Particulier"],
+};
+
+/**
+ * Liste déroulante d'un champ d'évènement, avec ajout d'option à la volée.
+ *
+ * Le menu est rendu dans un portail : la modale défile, et une liste posée
+ * dans son flux serait rognée par son cadre. « Nouvelle option » enregistre le
+ * libellé côté serveur : il est ensuite proposé à toute l'équipe.
+ */
+function OptionSelect({
+  field,
+  value,
+  onChange,
+  extraOptions,
+}: {
+  field: EventOptionField;
+  value: string;
+  onChange: (value: string) => void;
+  extraOptions: string[];
+}) {
+  const addOption = useMutation(api.recycappCalendar.addOption);
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const {
+    anchorRef,
+    popoverRef,
+    place,
+    style,
+  } = useAnchoredPopover<HTMLDivElement>(open, {
+    align: "start",
+    matchWidth: true,
+  });
+
+  const options = useMemo(() => {
+    const seen = new Set<string>();
+    const all: string[] = [];
+    for (const label of [
+      ...DEFAULT_EVENT_OPTIONS[field],
+      ...extraOptions,
+      // Une valeur déjà enregistrée reste proposée même si l'option a disparu.
+      ...(value ? [value] : []),
+    ]) {
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push(label);
+    }
+    return all;
+  }, [field, extraOptions, value]);
+
+  useEffect(() => {
+    if (!open) {
+      setCreating(false);
+      setDraft("");
+      return;
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (anchorRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, anchorRef, popoverRef]);
+
+  // Ouvrir la saisie ou allonger la liste change la hauteur du menu.
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, creating, options.length, place]);
+
+  async function create() {
+    const label = draft.trim();
+    if (!label) return;
+    setSaving(true);
+    try {
+      await addOption({ field, label });
+      onChange(label);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div ref={anchorRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          "flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-left text-sm text-[var(--foreground)] transition-colors hover:border-brand-500/50",
+          open && "border-brand-500 ring-2 ring-brand-500/25",
+        )}
+      >
+        <span
+          className={cn("min-w-0 truncate", !value && "text-zinc-500")}
+        >
+          {value || "Sélectionner…"}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-zinc-500 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {open
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={style}
+              className="z-[300] overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-1 shadow-[0_20px_50px_rgba(0,0,0,0.35)]"
+            >
+              <div className="max-h-64 overflow-y-auto">
+                {value ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange("");
+                      setOpen(false);
+                    }}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-zinc-500 hover:bg-[var(--crm-surface-2)]"
+                  >
+                    Aucune valeur
+                  </button>
+                ) : null}
+                {options.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      onChange(option);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[var(--crm-surface-2)]",
+                      option === value && "bg-brand-500/10 text-brand-400",
+                    )}
+                  >
+                    <span className="truncate">{option}</span>
+                    {option === value ? (
+                      <Check className="h-4 w-4 shrink-0" />
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-1 border-t border-[var(--crm-border)] pt-1">
+                {creating ? (
+                  <div className="flex items-center gap-2 p-1">
+                    <input
+                      autoFocus
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void create();
+                        }
+                      }}
+                      placeholder="Libellé de l'option"
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 text-sm text-[var(--foreground)] outline-none focus:border-brand-500"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => void create()}
+                      disabled={saving || !draft.trim()}
+                    >
+                      Ajouter
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCreating(true)}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-brand-500 hover:bg-[var(--crm-surface-2)]"
+                  >
+                    <Plus className="h-4 w-4" /> Nouvelle option
+                  </button>
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
 /** Champs libres d'un évènement, remis à zéro entre deux créations. */
 const EMPTY_EVENT_META = {
   animationType: "",
@@ -1117,6 +1361,26 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [meta, setMeta] = useState(EMPTY_EVENT_META);
   const [saving, setSaving] = useState(false);
+  const customOptions = useQuery(
+    api.recycappCalendar.options,
+    open ? {} : "skip",
+  );
+  const optionsByField = useMemo(() => {
+    const map: Record<EventOptionField, string[]> = {
+      animationType: [],
+      structure: [],
+      activity: [],
+      targetAudience: [],
+    };
+    for (const option of customOptions ?? []) {
+      if (option.field in map) {
+        map[option.field as EventOptionField].push(option.label);
+      }
+    }
+    return map;
+  }, [customOptions]);
+  const setMetaField = (key: keyof typeof EMPTY_EVENT_META, value: string) =>
+    setMeta((current) => ({ ...current, [key]: value }));
   async function save() {
     setSaving(true);
     try {
@@ -1177,21 +1441,29 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               ["animationType", "Type d'animation"],
               ["structure", "Structure MES"],
               ["activity", "Activité"],
+              ["targetAudience", "Public(s) ciblé(s)"],
+            ] as const
+          ).map(([key, label]) => (
+            <Field key={key} label={label}>
+              <OptionSelect
+                field={key}
+                value={meta[key]}
+                onChange={(value) => setMetaField(key, value)}
+                extraOptions={optionsByField[key]}
+              />
+            </Field>
+          ))}
+          {(
+            [
               ["location", "Où ?"],
               ["relatedEvent", "Évènement rattaché"],
-              ["targetAudience", "Public(s) ciblé(s)"],
               ["organizer", "Référent / organisateur"],
             ] as const
           ).map(([key, label]) => (
             <Field key={key} label={label}>
               <input
                 value={meta[key]}
-                onChange={(event) =>
-                  setMeta((current) => ({
-                    ...current,
-                    [key]: event.target.value,
-                  }))
-                }
+                onChange={(event) => setMetaField(key, event.target.value)}
                 className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-[var(--foreground)]"
               />
             </Field>
