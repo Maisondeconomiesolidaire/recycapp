@@ -26,6 +26,7 @@ import { fr } from "date-fns/locale";
 import {
   Check,
   ChevronDown,
+  Search,
   ChevronLeft,
   ChevronRight,
   CalendarCog,
@@ -37,13 +38,14 @@ import {
   TriangleAlert,
   UsersRound,
   CalendarPlus,
+  Users,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Drawer } from "../../components/ui/Drawer";
-import { Checkbox, Field, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -57,12 +59,14 @@ import {
   DEPOT_SITE_LABELS,
   DEPOT_VEHICLE_LABELS,
   REQUEST_TYPES,
+  SITE_LABELS,
   TYPE_COLORS,
   TYPE_LABELS,
   type DepotSite,
   type Site,
 } from "../../lib/constants";
 import { cn } from "../../lib/cn";
+import { initials } from "../../lib/format";
 import { useUpload } from "../../lib/useUpload";
 import { useAnchoredPopover } from "../../lib/useAnchoredPopover";
 
@@ -918,7 +922,6 @@ function EventDetailModal({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingTeam, setEditingTeam] = useState(false);
-  const [draftWorkers, setDraftWorkers] = useState<Id<"polyvalentWorkers">[]>([]);
   const [savingTeam, setSavingTeam] = useState(false);
   const assignable = useQuery(
     api.recycappCalendar.assignableWorkers,
@@ -931,11 +934,11 @@ function EventDetailModal({
     setEditingTeam(false);
   }, [event?._id]);
 
-  async function saveTeam() {
+  async function saveTeam(next: Id<"polyvalentWorkers">[]) {
     if (!event) return;
     setSavingTeam(true);
     try {
-      await setWorkers({ id: event._id, workerIds: draftWorkers });
+      await setWorkers({ id: event._id, workerIds: next });
       setEditingTeam(false);
     } finally {
       setSavingTeam(false);
@@ -1016,44 +1019,14 @@ function EventDetailModal({
               {canUpdate && !editingTeam ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setDraftWorkers(event.workers.map((worker) => worker._id));
-                    setEditingTeam(true);
-                  }}
+                  onClick={() => setEditingTeam(true)}
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-500 hover:underline"
                 >
                   <Pencil className="h-3.5 w-3.5" /> Modifier
                 </button>
               ) : null}
             </div>
-            {editingTeam ? (
-              <div className="space-y-3">
-                <WorkerPicker
-                  workers={assignable}
-                  value={draftWorkers}
-                  onChange={setDraftWorkers}
-                  hours={hours}
-                />
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditingTeam(false)}
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={savingTeam}
-                    onClick={() => void saveTeam()}
-                  >
-                    {savingTeam ? "Enregistrement..." : "Enregistrer"}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <WorkerAllocations workers={event.workers} hours={hours} />
-            )}
+            <WorkerAllocations workers={event.workers} hours={hours} />
           </div>
 
           {attachments.length > 0 ? (
@@ -1108,6 +1081,16 @@ function EventDetailModal({
             ) : null}
             <Button onClick={onClose}>Fermer</Button>
           </div>
+
+          <WorkerPickerModal
+            open={editingTeam}
+            onClose={() => setEditingTeam(false)}
+            workers={assignable}
+            value={event.workers.map((worker) => worker._id)}
+            hours={hours}
+            saving={savingTeam}
+            onValidate={(next) => void saveTeam(next)}
+          />
 
           <ConfirmDialog
             open={confirmOpen}
@@ -1200,67 +1183,212 @@ function allocationPercent(hours: number, weekly: number | null) {
   return Math.round((hours / weekly) * 100);
 }
 
-/** Sélection des salariés mobilisés, avec le temps que cela leur prend. */
-function WorkerPicker({
+/** Case à cocher du sélecteur de salariés (le rendu natif jure avec le CRM). */
+function CheckMark({ checked }: { checked: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+        checked
+          ? "border-brand-500 bg-brand-500 text-white"
+          : "border-[var(--crm-border)] bg-[var(--crm-surface-2)]",
+      )}
+    >
+      {checked ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+    </span>
+  );
+}
+
+/**
+ * Sélecteur des salariés mobilisés, calqué sur « Attribuer la demande » :
+ * filtre par recyclerie, recherche, cartes avec initiales. À la différence
+ * d'une demande, un évènement mobilise plusieurs salariés : les cartes se
+ * cochent, et chacune annonce la part de semaine que l'évènement représente.
+ */
+function WorkerPickerModal({
+  open,
+  onClose,
   workers,
   value,
-  onChange,
+  onValidate,
   hours,
+  saving,
 }: {
+  open: boolean;
+  onClose: () => void;
   workers: AssignableWorker[] | undefined;
   value: Id<"polyvalentWorkers">[];
-  onChange: (next: Id<"polyvalentWorkers">[]) => void;
+  onValidate: (next: Id<"polyvalentWorkers">[]) => void;
   hours: number;
+  saving?: boolean;
 }) {
-  if (workers === undefined) {
-    return (
-      <div className="rounded-2xl border border-[var(--crm-border)] p-4">
-        <FullSpinner label="Chargement de l'équipe..." />
-      </div>
+  const [selected, setSelected] = useState(value);
+  const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState<Site | null>(null);
+
+  // Le modal se rouvre sur une sélection à jour, sans garder un brouillon
+  // abandonné à la fermeture précédente. La dépendance porte sur les
+  // identifiants et non sur le tableau : la fiche évènement en reconstruit un
+  // à chaque rendu, ce qui écraserait les cases cochées à chaque clic.
+  const valueKey = value.join(",");
+  useEffect(() => {
+    if (!open) return;
+    setSelected(valueKey ? (valueKey.split(",") as Id<"polyvalentWorkers">[]) : []);
+    setSearch("");
+  }, [open, valueKey]);
+
+  const normalized = search.trim().toLocaleLowerCase("fr-FR");
+  const visible = (workers ?? [])
+    // Un salarié sans recyclerie renseignée reste proposé quel que soit le filtre.
+    .filter(
+      (worker) =>
+        !siteFilter || !worker.sites?.length || worker.sites.includes(siteFilter),
+    )
+    .filter(
+      (worker) =>
+        !normalized ||
+        `${worker.name} ${worker.email ?? ""}`
+          .toLocaleLowerCase("fr-FR")
+          .includes(normalized),
+    );
+
+  function toggle(workerId: Id<"polyvalentWorkers">) {
+    setSelected((current) =>
+      current.includes(workerId)
+        ? current.filter((id) => id !== workerId)
+        : [...current, workerId],
     );
   }
-  if (workers.length === 0) {
-    return (
-      <p className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-zinc-500">
-        Aucun salarié actif dans l'équipe Recyclerie.
-      </p>
-    );
-  }
+
   return (
-    <div className="max-h-56 space-y-1 overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-2">
-      {workers.map((worker) => {
-        const checked = value.includes(worker._id);
-        const percent = allocationPercent(hours, worker.weeklyHours);
-        return (
-          <label
-            key={worker._id}
-            className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-[var(--crm-surface)]"
-          >
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={() =>
-                onChange(
-                  checked
-                    ? value.filter((id) => id !== worker._id)
-                    : [...value, worker._id],
-                )
-              }
-              className="h-4 w-4 shrink-0 accent-brand-500"
-            />
-            <span className="min-w-0 flex-1 truncate text-[var(--foreground)]">
-              {worker.name}
-            </span>
-            <span className="shrink-0 text-xs tabular-nums text-zinc-500">
-              {worker.weeklyHours
-                ? `${formatHours(worker.weeklyHours)}/sem.`
-                : "durée inconnue"}
-              {percent !== null && hours > 0 ? ` · ${percent} %` : ""}
-            </span>
-          </label>
-        );
-      })}
-    </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Salariés mobilisés"
+      className="max-w-3xl"
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {([null, "60", "76"] as Array<Site | null>).map((site) => (
+            <button
+              key={site ?? "all"}
+              type="button"
+              onClick={() => setSiteFilter(site)}
+              className={cn(
+                "rounded-xl px-3 py-1.5 text-xs font-medium transition",
+                siteFilter === site
+                  ? "bg-brand-500 text-white"
+                  : "bg-[var(--crm-surface-2)] text-zinc-300 hover:bg-[var(--crm-surface-3)]",
+              )}
+            >
+              {site ? SITE_LABELS[site] : "Toutes les recycleries"}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Input
+            autoFocus
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Rechercher un salarié…"
+            className="pl-9"
+          />
+        </div>
+
+        {workers === undefined ? (
+          <FullSpinner label="Chargement de l'équipe..." />
+        ) : visible.length === 0 ? (
+          <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-6 text-center text-sm text-zinc-500">
+            Aucun salarié ne correspond à cette recherche.
+          </p>
+        ) : (
+          <div className="grid max-h-[50vh] gap-2 overflow-y-auto sm:grid-cols-2">
+            {visible.map((worker) => {
+              const checked = selected.includes(worker._id);
+              const percent = allocationPercent(hours, worker.weeklyHours);
+              return (
+                <button
+                  key={worker._id}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={checked}
+                  onClick={() => toggle(worker._id)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition",
+                    checked
+                      ? "border-brand-500 bg-brand-500/10"
+                      : "border-[var(--crm-border)] bg-[var(--crm-surface)] hover:border-brand-500/60",
+                  )}
+                >
+                  <CheckMark checked={checked} />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface-3)] text-xs font-semibold text-zinc-300">
+                    {initials(worker.firstName, worker.lastName)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-zinc-100">
+                      {worker.name}
+                    </span>
+                    <span className="block truncate text-xs text-zinc-500">
+                      {[
+                        worker.employmentType === "permanent"
+                          ? "Ouvrier permanent"
+                          : worker.employmentType === "polyvalent"
+                            ? "Ouvrier polyvalent"
+                            : null,
+                        worker.sites?.length
+                          ? worker.sites
+                              .map((site) => SITE_LABELS[site])
+                              .join(" · ")
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right text-xs tabular-nums text-zinc-500">
+                    <span className="block">
+                      {worker.weeklyHours
+                        ? `${formatHours(worker.weeklyHours)}/sem.`
+                        : "durée inconnue"}
+                    </span>
+                    {percent !== null && hours > 0 ? (
+                      <span className="block font-semibold text-brand-400">
+                        {percent} %
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-zinc-500">
+            {selected.length === 0
+              ? "Aucun salarié sélectionné"
+              : `${selected.length} salarié${selected.length > 1 ? "s" : ""} sélectionné${selected.length > 1 ? "s" : ""}`}
+            {hours > 0 ? ` · évènement de ${formatHours(hours)}` : ""}
+          </p>
+          <div className="flex gap-2">
+            {selected.length > 0 ? (
+              <Button variant="outline" onClick={() => setSelected([])}>
+                Tout décocher
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={onClose}>
+              Annuler
+            </Button>
+            <Button disabled={saving} onClick={() => onValidate(selected)}>
+              {saving ? "Enregistrement..." : "Valider"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -1572,6 +1700,7 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [meta, setMeta] = useState(EMPTY_EVENT_META);
   const [workerIds, setWorkerIds] = useState<Id<"polyvalentWorkers">[]>([]);
+  const [teamPickerOpen, setTeamPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const assignable = useQuery(
     api.recycappCalendar.assignableWorkers,
@@ -1705,12 +1834,21 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </Field>
         </div>
         <Field label="Salariés mobilisés">
-          <WorkerPicker
-            workers={assignable}
-            value={workerIds}
-            onChange={setWorkerIds}
-            hours={hours}
-          />
+          <button
+            type="button"
+            onClick={() => setTeamPickerOpen(true)}
+            className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-left text-sm text-[var(--foreground)] transition hover:border-brand-500/60"
+          >
+            <span className={cn("truncate", workerIds.length === 0 && "text-zinc-500")}>
+              {workerIds.length === 0
+                ? "Aucun salarié"
+                : (assignable ?? [])
+                    .filter((worker) => workerIds.includes(worker._id))
+                    .map((worker) => worker.name)
+                    .join(", ")}
+            </span>
+            <Users className="h-4 w-4 shrink-0 text-zinc-500" />
+          </button>
         </Field>
         <Field label="Pièce jointe">
           <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-brand-400 bg-[var(--crm-surface-2)] px-4 py-4 text-sm font-semibold text-brand-600 transition hover:bg-[var(--crm-surface)]">
@@ -1745,6 +1883,18 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </Button>
         </div>
       </div>
+
+      <WorkerPickerModal
+        open={teamPickerOpen}
+        onClose={() => setTeamPickerOpen(false)}
+        workers={assignable}
+        value={workerIds}
+        hours={hours}
+        onValidate={(next) => {
+          setWorkerIds(next);
+          setTeamPickerOpen(false);
+        }}
+      />
     </Modal>
   );
 }
