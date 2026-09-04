@@ -131,7 +131,7 @@ export function Calendrier() {
         />
       </div>
 
-      {view === "tout" ? <div><RequestsCalendar month={month} /><DepotCalendar month={month} /><EventsCalendar month={month} /></div> : view === "demandes" ? <RequestsCalendar month={month} /> : view === "depots" ? <DepotCalendar month={month} /> : <EventsCalendar month={month} />}
+      {view === "tout" ? <AllCalendar month={month} /> : view === "demandes" ? <RequestsCalendar month={month} /> : view === "depots" ? <DepotCalendar month={month} /> : <EventsCalendar month={month} />}
       <EventModal open={eventOpen} onClose={() => setEventOpen(false)} />
     </div>
   );
@@ -464,6 +464,14 @@ function useMonthDays(month: Date) {
       }),
     [month],
   );
+}
+
+function AllCalendar({ month }: { month: Date }) {
+  const range = useMemo(() => ({ from: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }).getTime(), to: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }).getTime() }), [month]);
+  const requests = useQuery(api.requests.scheduled, range);
+  const depots = useQuery(api.requests.scheduledDepots, range);
+  const events = useQuery((api as any).recycappCalendar.list, range) as Array<{ _id: string; title: string; startAt: number }> | undefined;
+  return <div className="p-4 sm:p-6"><div className="mb-4 flex flex-wrap gap-3 text-xs"><span className="text-zinc-500"><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-cyan-600" />Dépôts</span><span className="text-zinc-500"><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-fuchsia-600" />Évènements</span><span className="text-zinc-500"><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-emerald-600" />Demandes</span></div><div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]"><div className="min-w-[720px]"><WeekdayHeader /><div className="grid grid-cols-7">{useMonthDays(month).map((day) => <DayCell key={day.toISOString()} day={day} inMonth={isSameMonth(day, month)} isSelected={false} onClick={() => {}}>{(requests ?? []).filter((item) => item.scheduledDate && isSameDay(new Date(item.scheduledDate), day)).map((item) => <div key={item._id} className="mb-1 truncate rounded-md bg-emerald-600 px-1.5 py-1 text-[11px] font-medium text-white">{item.customer.lastName} · demande</div>)}{(depots ?? []).filter((item) => item.depot && isSameDay(new Date(item.depot.slotStart), day)).map((item) => <div key={item._id} className="mb-1 truncate rounded-md bg-cyan-600 px-1.5 py-1 text-[11px] font-medium text-white">{format(new Date(item.depot!.slotStart), "HH:mm")} · dépôt</div>)}{(events ?? []).filter((item) => isSameDay(new Date(item.startAt), day)).map((item) => <div key={item._id} className="mb-1 truncate rounded-md bg-fuchsia-600 px-1.5 py-1 text-[11px] font-medium text-white">{format(new Date(item.startAt), "HH:mm")} · {item.title}</div>)}</DayCell>)}</div></div></div></div>;
 }
 
 function EventsCalendar({ month }: { month: Date }) {
