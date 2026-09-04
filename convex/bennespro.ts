@@ -93,6 +93,7 @@ export const createCompany = mutation({
   args: {
     name: v.string(),
     siret: v.optional(v.string()),
+    nafCode: v.optional(v.string()),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
@@ -116,6 +117,7 @@ export const updateCompany = mutation({
     companyId: v.id("bpCompanies"),
     name: v.string(),
     siret: v.optional(v.string()),
+    nafCode: v.optional(v.string()),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
@@ -127,6 +129,52 @@ export const updateCompany = mutation({
   handler: async (ctx, { companyId, ...patch }) => {
     await requireCrmPermission(ctx, "bennespro:entreprises", "update");
     await ctx.db.patch(companyId, { ...patch, name: patch.name.trim() });
+  },
+});
+
+/**
+ * Recherche dans l'API publique de l'Annuaire des entreprises (data.gouv.fr).
+ * L'API est appelée côté serveur pour ne pas exposer le navigateur au rate-limit
+ * et pour fournir le même résultat au CRM comme à l'espace client.
+ */
+export const searchEnterpriseDirectory = action({
+  args: { query: v.optional(v.string()), nafCode: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireUser(ctx);
+    const queryText = args.query?.replace(/\s/g, "").match(/^\d{9}(\d{5})?$/)
+      ? args.query!.replace(/\s/g, "")
+      : args.query?.trim();
+    const nafCode = args.nafCode?.trim().toUpperCase();
+    if (!queryText && !nafCode) throw new Error("Saisissez un nom, un SIREN, un SIRET ou un code NAF.");
+
+    const url = new URL("https://recherche-entreprises.api.gouv.fr/search");
+    if (queryText) url.searchParams.set("q", queryText);
+    if (nafCode) url.searchParams.set("activite_principale", nafCode);
+    url.searchParams.set("per_page", "10");
+    url.searchParams.set("minimal", "true");
+    url.searchParams.set("include", "siege,matching_etablissements");
+    url.searchParams.set("etat_administratif", "A");
+    const response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "BennesPro/1.0 entreprise-directory" } });
+    if (!response.ok) throw new Error("L'Annuaire des entreprises est momentanément indisponible.");
+    const payload = await response.json() as { results?: Array<{
+      siren?: string; nom_complet?: string; activite_principale?: string; etat_administratif?: string;
+      siege?: { siret?: string; adresse?: string; activite_principale?: string } | null;
+      matching_etablissements?: Array<{ siret?: string; adresse?: string; activite_principale?: string }>;
+    }> };
+    return (payload.results ?? [])
+      .filter((result) => result.etat_administratif !== "C")
+      .map((result) => {
+        const establishment = queryText && /^\d{14}$/.test(queryText)
+          ? result.matching_etablissements?.find((item) => item.siret === queryText) ?? result.siege
+          : result.siege;
+        return {
+          name: result.nom_complet ?? "Entreprise sans nom",
+          siren: result.siren ?? "",
+          siret: establishment?.siret ?? "",
+          address: establishment?.adresse ?? "",
+          nafCode: result.activite_principale ?? establishment?.activite_principale ?? "",
+        };
+      });
   },
 });
 
@@ -243,6 +291,7 @@ export const saveMyCompany = mutation({
   args: {
     name: v.string(),
     siret: v.optional(v.string()),
+    nafCode: v.optional(v.string()),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
@@ -325,10 +374,24 @@ export const listMyDocuments = query({
           uploadedByRole: d.uploadedByRole,
           validated: d.validatedAt !== undefined,
           validatedAt: d.validatedAt ?? null,
+          clientConsultedAt: d.clientConsultedAt ?? null,
           createdAt: d.createdAt,
           url: await ctx.storage.getUrl(d.storageId),
         })),
     );
+  },
+});
+
+/** Le client accuse réception d'un document mis à disposition par le CRM. */
+export const markMyDocumentConsulted = mutation({
+  args: { documentId: v.id("bpCompanyDocuments") },
+  handler: async (ctx, { documentId }) => {
+    const { company } = await requireMyCompany(ctx);
+    const doc = await ctx.db.get(documentId);
+    if (!doc || doc.companyId !== company._id || doc.uploadedByRole !== "staff" || doc.sharedWithClientAt === undefined) {
+      throw new Error("Ce document n'est pas disponible.");
+    }
+    if (doc.clientConsultedAt === undefined) await ctx.db.patch(documentId, { clientConsultedAt: Date.now() });
   },
 });
 
@@ -423,6 +486,7 @@ export const listCompanyDocuments = query({
           sharedWithClientAt: d.sharedWithClientAt ?? null,
           validated: d.validatedAt !== undefined,
           validatedAt: d.validatedAt ?? null,
+          clientConsultedAt: d.clientConsultedAt ?? null,
           createdAt: d.createdAt,
           url: await ctx.storage.getUrl(d.storageId),
         })),
@@ -495,8 +559,8 @@ export const addCompanyDocument = mutation({
       note: args.note?.trim() || undefined,
       mimeType: args.mimeType,
       uploadedByRole: "staff",
-      // Non partagé par défaut : le staff décide explicitement via shareCompanyDocument.
-      sharedWithClientAt: undefined,
+      // Les documents ajoutés dans le CRM sont immédiatement à disposition du client.
+      sharedWithClientAt: Date.now(),
       createdBy: identity.email ?? undefined,
       createdAt: Date.now(),
     });
@@ -520,6 +584,82 @@ export const removeCompanyDocument = mutation({
     if (!doc) return;
     await ctx.storage.delete(doc.storageId);
     await ctx.db.delete(documentId);
+  },
+});
+
+/* ─── Documentation générale (CRM ↔ tous les clients) ───────────────────── */
+
+const defaultPublicDocuments = [
+  { key: "dds", name: "DDS — Déchets Diffus Spécifiques", note: "Liste et consignes de tri des déchets diffus spécifiques.", url: "/DDS.pdf" },
+  { key: "dechets-acceptes", name: "Déchets acceptés", note: "Détail des flux de reprise acceptés sur le site.", url: "/dechets-acceptes.pdf" },
+  { key: "velux", name: "Savoir décrypter un vélux", note: "Guide d'identification et de reprise des menuiseries de type vélux.", url: "/savoir-decrypter-un-velux.pdf" },
+] as const;
+
+async function visibleDefaultPublicDocuments(ctx: QueryCtx | MutationCtx) {
+  const hides = await ctx.db.query("bpDefaultPublicDocumentHides").collect();
+  const hidden = new Set(hides.map((item) => item.key));
+  return defaultPublicDocuments.filter((doc) => !hidden.has(doc.key));
+}
+
+export const listPublicDocuments = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireUser(ctx);
+    const company = await ctx.db.query("bpCompanies").withIndex("by_owner", (q) => q.eq("ownerUserId", identity.subject)).first();
+    const docs = await ctx.db.query("bpPublicDocuments").order("desc").collect();
+    const uploaded = await Promise.all(docs.map(async (doc) => {
+      const consultation = company ? await ctx.db.query("bpPublicDocumentConsultations").withIndex("by_document_and_company", (q) => q.eq("documentId", doc._id).eq("companyId", company._id)).first() : null;
+      return { key: doc._id, name: doc.name, note: doc.note ?? null, url: await ctx.storage.getUrl(doc.storageId), consultedAt: consultation?.consultedAt ?? null, uploaded: true as const };
+    }));
+    return [...(await visibleDefaultPublicDocuments(ctx)).map((doc) => ({ ...doc, consultedAt: null, uploaded: false as const })), ...uploaded];
+  },
+});
+
+export const listPublicDocumentsForCrm = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, "bennespro:entreprises", "read");
+    const docs = await ctx.db.query("bpPublicDocuments").order("desc").collect();
+    const uploaded = await Promise.all(docs.map(async (doc) => ({ key: doc._id, name: doc.name, note: doc.note ?? null, url: await ctx.storage.getUrl(doc.storageId), uploaded: true as const })));
+    return [...(await visibleDefaultPublicDocuments(ctx)).map((item) => ({ ...item, uploaded: false as const })), ...uploaded];
+  },
+});
+
+export const addPublicDocument = mutation({
+  args: { storageId: v.id("_storage"), name: v.string(), note: v.optional(v.string()), mimeType: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireCrmPermission(ctx, "bennespro:entreprises", "update");
+    return await ctx.db.insert("bpPublicDocuments", { ...args, name: args.name.trim(), note: args.note?.trim() || undefined, createdAt: Date.now() });
+  },
+});
+
+export const removePublicDocument = mutation({
+  args: { documentId: v.id("bpPublicDocuments") },
+  handler: async (ctx, { documentId }) => {
+    await requireCrmPermission(ctx, "bennespro:entreprises", "delete");
+    const doc = await ctx.db.get(documentId);
+    if (!doc) return;
+    await ctx.storage.delete(doc.storageId);
+    await ctx.db.delete(documentId);
+  },
+});
+
+export const hideDefaultPublicDocument = mutation({
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
+    await requireCrmPermission(ctx, "bennespro:entreprises", "delete");
+    if (!defaultPublicDocuments.some((doc) => doc.key === key)) throw new Error("Document introuvable.");
+    const existing = await ctx.db.query("bpDefaultPublicDocumentHides").withIndex("by_key", (q) => q.eq("key", key)).first();
+    if (!existing) await ctx.db.insert("bpDefaultPublicDocumentHides", { key, hiddenAt: Date.now() });
+  },
+});
+
+export const markPublicDocumentConsulted = mutation({
+  args: { documentId: v.id("bpPublicDocuments") },
+  handler: async (ctx, { documentId }) => {
+    const { company } = await requireMyCompany(ctx);
+    const existing = await ctx.db.query("bpPublicDocumentConsultations").withIndex("by_document_and_company", (q) => q.eq("documentId", documentId).eq("companyId", company._id)).first();
+    if (!existing) await ctx.db.insert("bpPublicDocumentConsultations", { documentId, companyId: company._id, consultedAt: Date.now() });
   },
 });
 

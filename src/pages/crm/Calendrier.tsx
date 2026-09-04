@@ -536,6 +536,29 @@ function useMonthDays(month: Date) {
   );
 }
 
+/** Couleur des évènements internes, commune à la vue « Tout » et à l'onglet. */
+const EVENT_COLOR = "#65a30d";
+
+type CalendarEventList = NonNullable<
+  ReturnType<typeof useQuery<typeof api.recycappCalendar.list>>
+>;
+type CalendarEvent = CalendarEventList[number];
+
+/** Ce qui est prévu un jour donné, tous types confondus. */
+type DayEntries = {
+  requests: Doc<"requests">[];
+  depots: Doc<"requests">[];
+  events: CalendarEvent[];
+};
+
+/**
+ * Vue « Tout » : demandes, dépôts et évènements sur le même mois.
+ *
+ * Chaque pastille ouvre le même détail que dans son onglet dédié (tiroir de
+ * demande pour une demande ou un dépôt, fiche évènement pour un évènement), et
+ * cliquer sur une journée fait glisser le panneau du jour, comme dans les
+ * calendriers « Demandes » et « Dépôts ».
+ */
 function AllCalendar({ month }: { month: Date }) {
   const range = useMemo(
     () => ({
@@ -546,17 +569,53 @@ function AllCalendar({ month }: { month: Date }) {
   );
   const requests = useQuery(api.requests.scheduled, range);
   const depots = useQuery(api.requests.scheduledDepots, range);
-  const events = useQuery((api as any).recycappCalendar.list, range) as
-    | Array<{
-        _id: string;
-        title: string;
-        startAt: number;
-        endAt: number;
-        urls?: string[];
-        attachmentUrls?: Array<string | null>;
-      }>
-    | undefined;
-  const [detail, setDetail] = useState<{ title: string; content: ReactNode } | null>(null);
+  const events = useQuery(api.recycappCalendar.list, range);
+  const days = useMonthDays(month);
+
+  const [openId, setOpenId] = useState<Id<"requests"> | null>(null);
+  const [openEventId, setOpenEventId] =
+    useState<Id<"recycappCalendarEvents"> | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, DayEntries>();
+    const bucket = (time: number) => {
+      const key = format(new Date(time), "yyyy-MM-dd");
+      const existing = map.get(key);
+      if (existing) return existing;
+      const created: DayEntries = { requests: [], depots: [], events: [] };
+      map.set(key, created);
+      return created;
+    };
+    for (const request of requests ?? []) {
+      if (!request.scheduledDate) continue;
+      bucket(request.scheduledDate).requests.push(request);
+    }
+    for (const depot of depots ?? []) {
+      if (!depot.depot) continue;
+      bucket(depot.depot.slotStart).depots.push(depot);
+    }
+    for (const event of events ?? []) bucket(event.startAt).events.push(event);
+    for (const entries of map.values()) {
+      entries.requests.sort(
+        (a, b) => (a.scheduledDate ?? 0) - (b.scheduledDate ?? 0),
+      );
+      entries.depots.sort(
+        (a, b) => (a.depot?.slotStart ?? 0) - (b.depot?.slotStart ?? 0),
+      );
+      entries.events.sort((a, b) => a.startAt - b.startAt);
+    }
+    return map;
+  }, [requests, depots, events]);
+
+  const selectedEntries = selectedDay
+    ? byDay.get(format(selectedDay, "yyyy-MM-dd"))
+    : undefined;
+  // L'évènement ouvert est relu dans la liste : il reste à jour après une
+  // modification et disparaît de lui-même s'il vient d'être supprimé.
+  const openEvent =
+    (events ?? []).find((event) => event._id === openEventId) ?? null;
+
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap gap-3 text-xs">
@@ -570,144 +629,413 @@ function AllCalendar({ month }: { month: Date }) {
           </span>
         ))}
         <span className="text-zinc-500">
-          <i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-orange-600" />
+          <i
+            className="mr-1 inline-block h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: TYPE_COLORS.depot }}
+          />
           Dépôt
         </span>
         <span className="text-zinc-500">
-          <i className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-lime-600" />
+          <i
+            className="mr-1 inline-block h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: EVENT_COLOR }}
+          />
           Évènement
         </span>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
         <div className="min-w-[720px]">
           <WeekdayHeader />
           <div className="grid grid-cols-7">
-            {useMonthDays(month).map((day) => (
-              <DayCell
-                key={day.toISOString()}
-                day={day}
-                inMonth={isSameMonth(day, month)}
-                isSelected={false}
-                onClick={() => {}}
-              >
-                {(requests ?? [])
-                  .filter(
-                    (item) =>
-                      item.scheduledDate &&
-                      isSameDay(new Date(item.scheduledDate), day),
-                  )
-                  .map((item) => (
+            {days.map((day) => {
+              const key = format(day, "yyyy-MM-dd");
+              const entries = byDay.get(key);
+              return (
+                <DayCell
+                  key={key}
+                  day={day}
+                  inMonth={isSameMonth(day, month)}
+                  isSelected={selectedDay ? isSameDay(day, selectedDay) : false}
+                  onClick={() => setSelectedDay(day)}
+                >
+                  {entries?.requests.map((request) => (
                     <button
-                      key={item._id}
-                      onClick={() =>
-                        setDetail({
-                          title: "Demande",
-                          content: (
-                            <>
-                              <p className="font-semibold">
-                                {item.customer.firstName}{" "}
-                                {item.customer.lastName}
-                              </p>
-                              <p>{TYPE_LABELS[item.type]}</p>
-                              <p>{item.customer.phone}</p>
-                            </>
-                          ),
-                        })
-                      }
-                      className="mb-1 w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-white"
-                      style={{ backgroundColor: TYPE_COLORS[item.type] }}
+                      key={request._id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenId(request._id);
+                      }}
+                      className="w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-white hover:opacity-90"
+                      style={{ backgroundColor: TYPE_COLORS[request.type] }}
                     >
-                      {item.customer.lastName} · {TYPE_LABELS[item.type]}
+                      {request.customer.lastName} · {TYPE_LABELS[request.type]}
                     </button>
                   ))}
-                {(depots ?? [])
-                  .filter(
-                    (item) =>
-                      item.depot &&
-                      isSameDay(new Date(item.depot.slotStart), day),
-                  )
-                  .map((item) => (
+                  {entries?.depots.map((depot) => (
                     <button
-                      key={item._id}
-                      onClick={() =>
-                        setDetail({
-                          title: `Dépôt ${item.depot!.site}`,
-                          content: (
-                            <>
-                              <p className="font-semibold">
-                                {item.customer.firstName}{" "}
-                                {item.customer.lastName}
-                              </p>
-                              <p>
-                                Créneau :{" "}
-                                {format(
-                                  new Date(item.depot!.slotStart),
-                                  "HH:mm",
-                                )}{" "}
-                                –{" "}
-                                {format(new Date(item.depot!.slotEnd), "HH:mm")}
-                              </p>
-                            </>
-                          ),
-                        })
-                      }
-                      className="mb-1 w-full truncate rounded-md bg-orange-600 px-1.5 py-1 text-left text-[11px] font-medium text-white"
+                      key={depot._id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenId(depot._id);
+                      }}
+                      className="w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-white hover:opacity-90"
+                      style={{ backgroundColor: TYPE_COLORS.depot }}
                     >
-                      {format(new Date(item.depot!.slotStart), "HH:mm")} · Dépôt{" "}
-                      {item.depot!.site}
+                      {format(new Date(depot.depot!.slotStart), "HH'h'mm")} ·{" "}
+                      {depot.customer.lastName}
                     </button>
                   ))}
-                {(events ?? [])
-                  .filter((item) => isSameDay(new Date(item.startAt), day))
-                  .map((item) => (
+                  {entries?.events.map((item) => (
                     <button
                       key={item._id}
-                      onClick={() =>
-                        setDetail({
-                          title: item.title,
-                          content: (
-                            <>
-                              <p>
-                                {format(
-                                  new Date(item.startAt),
-                                  "EEEE d MMMM HH:mm",
-                                  { locale: fr },
-                                )}{" "}
-                                – {format(new Date(item.endAt), "HH:mm")}
-                              </p>
-                              {item.urls?.map((url) => (
-                                <a
-                                  key={url}
-                                  href={url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block text-brand-600 underline"
-                                >
-                                  {url}
-                                </a>
-                              ))}
-                            </>
-                          ),
-                        })
-                      }
-                      className="mb-1 w-full truncate rounded-md bg-lime-600 px-1.5 py-1 text-left text-[11px] font-medium text-white"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenEventId(item._id);
+                      }}
+                      className="w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-white hover:opacity-90"
+                      style={{ backgroundColor: EVENT_COLOR }}
                     >
-                      {format(new Date(item.startAt), "HH:mm")} · {item.title}
+                      {format(new Date(item.startAt), "HH'h'mm")} · {item.title}
                     </button>
                   ))}
-              </DayCell>
-            ))}
+                </DayCell>
+              );
+            })}
           </div>
         </div>
       </div>
-      <Modal
-        open={!!detail}
-        onClose={() => setDetail(null)}
-        title={detail?.title ?? "Détail"}
+
+      <Drawer
+        open={selectedDay !== null}
+        onClose={() => setSelectedDay(null)}
+        variant="left"
+        title={
+          selectedDay
+            ? format(selectedDay, "EEEE d MMMM yyyy", { locale: fr })
+            : ""
+        }
+        bodyClassName="p-0"
       >
-        {detail?.content}
-      </Modal>
+        {selectedDay ? (
+          <AllDayPanel
+            entries={selectedEntries}
+            onOpenRequest={setOpenId}
+            onOpenEvent={setOpenEventId}
+          />
+        ) : null}
+      </Drawer>
+
+      <RequestDrawer requestId={openId} onClose={() => setOpenId(null)} />
+      <EventDetailModal
+        event={openEvent}
+        onClose={() => setOpenEventId(null)}
+      />
     </div>
+  );
+}
+
+/** Détail d'une journée toutes catégories confondues (panneau latéral). */
+function AllDayPanel({
+  entries,
+  onOpenRequest,
+  onOpenEvent,
+}: {
+  entries?: DayEntries;
+  onOpenRequest: (id: Id<"requests">) => void;
+  onOpenEvent: (id: Id<"recycappCalendarEvents">) => void;
+}) {
+  const total =
+    (entries?.requests.length ?? 0) +
+    (entries?.depots.length ?? 0) +
+    (entries?.events.length ?? 0);
+  if (!entries || total === 0) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={<CalendarPlus className="h-9 w-9" />}
+          title="Rien de prévu ce jour"
+          description="Les demandes planifiées, les dépôts réservés et les évènements de la journée apparaîtront ici."
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-6 p-4">
+      {entries.requests.length > 0 ? (
+        <DaySection title="Demandes" count={entries.requests.length}>
+          {entries.requests.map((request) => (
+            <DayRow
+              key={request._id}
+              color={TYPE_COLORS[request.type]}
+              label={TYPE_LABELS[request.type]}
+              title={`${request.customer.firstName} ${request.customer.lastName}`}
+              subtitle={
+                [request.customer.city, request.customer.phone]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
+              }
+              time={
+                request.scheduledDate
+                  ? format(new Date(request.scheduledDate), "HH'h'mm")
+                  : undefined
+              }
+              onClick={() => onOpenRequest(request._id)}
+            />
+          ))}
+        </DaySection>
+      ) : null}
+
+      {entries.depots.length > 0 ? (
+        <DaySection title="Dépôts" count={entries.depots.length}>
+          {entries.depots.map((depot) => (
+            <DayRow
+              key={depot._id}
+              color={TYPE_COLORS.depot}
+              label="Dépôt"
+              title={`${depot.customer.firstName} ${depot.customer.lastName}`}
+              subtitle={`${DEPOT_SITE_LABELS[depot.depot!.site]} · ${DEPOT_VEHICLE_LABELS[depot.depot!.vehicleType]}`}
+              time={format(new Date(depot.depot!.slotStart), "HH'h'mm")}
+              onClick={() => onOpenRequest(depot._id)}
+            />
+          ))}
+        </DaySection>
+      ) : null}
+
+      {entries.events.length > 0 ? (
+        <DaySection title="Évènements" count={entries.events.length}>
+          {entries.events.map((event) => (
+            <DayRow
+              key={event._id}
+              color={EVENT_COLOR}
+              label={event.animationType || "Évènement"}
+              title={event.title}
+              subtitle={
+                [
+                  event.location,
+                  `${format(new Date(event.startAt), "HH'h'mm")} – ${format(new Date(event.endAt), "HH'h'mm")}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              }
+              time={format(new Date(event.startAt), "HH'h'mm")}
+              onClick={() => onOpenEvent(event._id)}
+            />
+          ))}
+        </DaySection>
+      ) : null}
+    </div>
+  );
+}
+
+function DaySection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        {title} · {count}
+      </h3>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function DayRow({
+  color,
+  label,
+  title,
+  subtitle,
+  time,
+  onClick,
+}: {
+  color: string;
+  label: string;
+  title: string;
+  subtitle?: string;
+  time?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4 text-left transition-colors hover:border-[var(--crm-border-strong)] hover:bg-[var(--crm-surface-2)]"
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+        <span
+          className="text-xs font-semibold uppercase tracking-wide"
+          style={{ color }}
+        >
+          {label}
+        </span>
+        {time ? (
+          <span className="ml-auto text-xs font-bold tabular-nums text-zinc-400">
+            {time}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-sm font-semibold text-zinc-100">{title}</p>
+      {subtitle ? (
+        <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>
+      ) : null}
+    </button>
+  );
+}
+
+/** Fiche d'un évènement interne : détails, pièces jointes, liens, suppression. */
+function EventDetailModal({
+  event,
+  onClose,
+}: {
+  event: CalendarEvent | null;
+  onClose: () => void;
+}) {
+  const access = useCrmAccess();
+  const canDelete = canAccess(access, "calendrier", "delete");
+  const remove = useMutation(api.recycappCalendar.remove);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function destroy() {
+    if (!event) return;
+    setDeleting(true);
+    try {
+      await remove({ id: event._id });
+      setConfirmOpen(false);
+      onClose();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const details = event
+    ? ([
+        ["Type d'animation", event.animationType],
+        ["Structure MES", event.structure],
+        ["Activité", event.activity],
+        ["Où ?", event.location],
+        ["Évènement rattaché", event.relatedEvent],
+        ["Public(s) ciblé(s)", event.targetAudience],
+        ["Référent / organisateur", event.organizer],
+      ] as const).filter(([, value]) => Boolean(value && value.trim()))
+    : [];
+  const attachments = (event?.attachmentUrls ?? []).filter(
+    (url): url is string => Boolean(url),
+  );
+
+  return (
+    <Modal
+      open={event !== null}
+      onClose={onClose}
+      title={event?.title ?? "Évènement"}
+      className="max-w-2xl"
+    >
+      {event ? (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
+            <p className="text-sm font-semibold capitalize text-[var(--foreground)]">
+              {format(new Date(event.startAt), "EEEE d MMMM yyyy", {
+                locale: fr,
+              })}
+            </p>
+            <p className="mt-1 text-sm text-zinc-400">
+              {format(new Date(event.startAt), "HH'h'mm")} –{" "}
+              {format(new Date(event.endAt), "HH'h'mm")}
+              {isSameDay(new Date(event.startAt), new Date(event.endAt))
+                ? ""
+                : ` (jusqu'au ${format(new Date(event.endAt), "d MMMM", { locale: fr })})`}
+            </p>
+          </div>
+
+          {details.length > 0 ? (
+            <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+              {details.map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    {label}
+                  </dt>
+                  <dd className="mt-0.5 text-sm text-[var(--foreground)]">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+
+          {attachments.length > 0 ? (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Pièces jointes
+              </p>
+              <ul className="space-y-1.5">
+                {attachments.map((url, index) => (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 text-sm font-medium text-brand-500 underline underline-offset-2"
+                    >
+                      Ouvrir la pièce jointe {index + 1}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {event.urls.length > 0 ? (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Liens utiles
+              </p>
+              <ul className="space-y-1.5">
+                {event.urls.map((url) => (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all text-sm font-medium text-brand-500 underline underline-offset-2"
+                    >
+                      {url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="flex justify-end gap-2">
+            {canDelete ? (
+              <Button variant="outline" onClick={() => setConfirmOpen(true)}>
+                <Trash2 className="h-4 w-4" /> Supprimer
+              </Button>
+            ) : null}
+            <Button onClick={onClose}>Fermer</Button>
+          </div>
+
+          <ConfirmDialog
+            open={confirmOpen}
+            onClose={() => setConfirmOpen(false)}
+            onConfirm={() => void destroy()}
+            title="Supprimer cet évènement ?"
+            description="L'évènement disparaîtra du calendrier pour toute l'équipe."
+            confirmLabel={deleting ? "Suppression..." : "Supprimer"}
+          />
+        </div>
+      ) : null}
+    </Modal>
   );
 }
 
@@ -719,16 +1047,19 @@ function EventsCalendar({ month }: { month: Date }) {
     }),
     [month],
   );
-  const events = useQuery((api as any).recycappCalendar.list, range) as
-    | Array<{ _id: string; title: string; startAt: number }>
-    | undefined;
+  const events = useQuery(api.recycappCalendar.list, range);
+  const days = useMonthDays(month);
+  const [openEventId, setOpenEventId] =
+    useState<Id<"recycappCalendarEvents"> | null>(null);
+  const openEvent =
+    (events ?? []).find((event) => event._id === openEventId) ?? null;
   return (
     <div className="p-4 sm:p-6">
       <div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
         <div className="min-w-[720px]">
           <WeekdayHeader />
           <div className="grid grid-cols-7">
-            {useMonthDays(month).map((day) => (
+            {days.map((day) => (
               <DayCell
                 key={day.toISOString()}
                 day={day}
@@ -739,36 +1070,68 @@ function EventsCalendar({ month }: { month: Date }) {
                 {(events ?? [])
                   .filter((event) => isSameDay(new Date(event.startAt), day))
                   .map((event) => (
-                    <div
+                    <button
                       key={event._id}
-                      className="mb-1 truncate rounded-md bg-fuchsia-600 px-1.5 py-1 text-[11px] font-medium text-white"
+                      onClick={(clickEvent) => {
+                        clickEvent.stopPropagation();
+                        setOpenEventId(event._id);
+                      }}
+                      className="w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium text-white hover:opacity-90"
+                      style={{ backgroundColor: EVENT_COLOR }}
                     >
-                      {format(new Date(event.startAt), "HH:mm")} · {event.title}
-                    </div>
+                      {format(new Date(event.startAt), "HH'h'mm")} ·{" "}
+                      {event.title}
+                    </button>
                   ))}
               </DayCell>
             ))}
           </div>
         </div>
       </div>
+      <EventDetailModal
+        event={openEvent}
+        onClose={() => setOpenEventId(null)}
+      />
     </div>
   );
 }
 
+/** Champs libres d'un évènement, remis à zéro entre deux créations. */
+const EMPTY_EVENT_META = {
+  animationType: "",
+  structure: "",
+  activity: "",
+  location: "",
+  relatedEvent: "",
+  targetAudience: "",
+  organizer: "",
+};
+
 function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const create = useMutation((api as any).recycappCalendar.create);
+  const create = useMutation(api.recycappCalendar.create);
   const upload = useUpload();
   const [title, setTitle] = useState("");
   const [start, setStart] = useState<number>();
   const [end, setEnd] = useState<number>();
   const [urls, setUrls] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [meta, setMeta] = useState({ animationType: "", structure: "", activity: "", location: "", relatedEvent: "", targetAudience: "", organizer: "" });
+  const [meta, setMeta] = useState(EMPTY_EVENT_META);
+  const [saving, setSaving] = useState(false);
   async function save() {
+    setSaving(true);
+    try {
+      await submit();
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function submit() {
     const attachments = file ? [await upload(file)] : [];
     await create({
       title,
-      ...Object.fromEntries(Object.entries(meta).filter(([, value]) => value.trim())),
+      ...Object.fromEntries(
+        Object.entries(meta).filter(([, value]) => value.trim()),
+      ),
       startAt: start!,
       endAt: end!,
       attachments,
@@ -777,10 +1140,24 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         .map((url) => url.trim())
         .filter(Boolean),
     });
+    reset();
     onClose();
   }
+  function reset() {
+    setTitle("");
+    setStart(undefined);
+    setEnd(undefined);
+    setUrls("");
+    setFile(null);
+    setMeta(EMPTY_EVENT_META);
+  }
   return (
-    <Modal open={open} onClose={onClose} title="Nouvel évènement">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Nouvel évènement"
+      className="max-w-3xl"
+    >
       <div className="space-y-5">
         <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-[var(--foreground)]">
           Planifiez un évènement, joignez ses documents et centralisez les liens
@@ -795,7 +1172,30 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          {([['animationType', "Type d'animation"], ['structure', 'Structure MES'], ['activity', 'Activité'], ['location', 'Où ?'], ['relatedEvent', 'Évènement rattaché'], ['targetAudience', 'Public(s) ciblé(s)'], ['organizer', 'Référent / organisateur']] as const).map(([key, label]) => <Field key={key} label={label}><input value={meta[key]} onChange={(event) => setMeta((current) => ({ ...current, [key]: event.target.value }))} className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-[var(--foreground)]" /></Field>)}
+          {(
+            [
+              ["animationType", "Type d'animation"],
+              ["structure", "Structure MES"],
+              ["activity", "Activité"],
+              ["location", "Où ?"],
+              ["relatedEvent", "Évènement rattaché"],
+              ["targetAudience", "Public(s) ciblé(s)"],
+              ["organizer", "Référent / organisateur"],
+            ] as const
+          ).map(([key, label]) => (
+            <Field key={key} label={label}>
+              <input
+                value={meta[key]}
+                onChange={(event) =>
+                  setMeta((current) => ({
+                    ...current,
+                    [key]: event.target.value,
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-[var(--foreground)]"
+              />
+            </Field>
+          ))}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Date et heure de début" required>
@@ -840,9 +1240,9 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </Button>
           <Button
             onClick={() => void save()}
-            disabled={!title || !start || !end}
+            disabled={saving || !title || !start || !end}
           >
-            Créer l'évènement
+            {saving ? "Création..." : "Créer l'évènement"}
           </Button>
         </div>
       </div>

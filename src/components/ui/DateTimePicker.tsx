@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   addMonths,
   eachDayOfInterval,
@@ -44,6 +52,29 @@ export function DateTimePicker({
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState<Date>(selectedDate ?? new Date());
   const ref = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  // Le calendrier est rendu dans un portail : posé dans le flux, il était
+  // rogné par les modales (`overflow-y-auto`) et sortait de leur cadre.
+  const [position, setPosition] = useState<{ top: number; left: number }>();
+
+  const place = useCallback(() => {
+    const anchor = ref.current?.getBoundingClientRect();
+    if (!anchor) return;
+    const popover = popoverRef.current?.getBoundingClientRect();
+    const width = popover?.width ?? 440;
+    const height = popover?.height ?? 360;
+    const margin = 8;
+    const below = anchor.bottom + margin;
+    const top =
+      below + height > window.innerHeight && anchor.top - margin - height > 0
+        ? anchor.top - margin - height
+        : Math.min(below, Math.max(margin, window.innerHeight - height - margin));
+    const left = Math.min(
+      Math.max(margin, anchor.right - width),
+      Math.max(margin, window.innerWidth - width - margin),
+    );
+    setPosition({ top, left });
+  }, []);
 
   useEffect(() => {
     if (selectedDate) setMonth(selectedDate);
@@ -52,7 +83,10 @@ export function DateTimePicker({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -64,6 +98,25 @@ export function DateTimePicker({
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(undefined);
+      return;
+    }
+    place();
+    // Le champ peut défiler dans une modale : la carte suit son ancre.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, place]);
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, month, value, place]);
 
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(month), { locale: fr, weekStartsOn: 1 });
@@ -121,8 +174,17 @@ export function DateTimePicker({
         ) : null}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 flex w-[min(440px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-[24px] border border-border bg-card p-4 shadow-[0_24px_60px_rgba(0,0,0,0.3)] sm:flex-row">
+      {open &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            style={{
+              top: position?.top ?? -9999,
+              left: position?.left ?? -9999,
+              visibility: position ? "visible" : "hidden",
+            }}
+            className="fixed z-[300] flex w-[min(440px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-[24px] border border-border bg-card p-4 shadow-[0_24px_60px_rgba(0,0,0,0.3)] sm:flex-row"
+          >
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex items-center justify-between gap-3">
               <button
@@ -195,8 +257,9 @@ export function DateTimePicker({
               />
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
