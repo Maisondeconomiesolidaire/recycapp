@@ -27,6 +27,7 @@ import {
   Trash2,
   TriangleAlert,
   UsersRound,
+  CalendarPlus,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
@@ -53,6 +54,7 @@ import {
   type Site,
 } from "../../lib/constants";
 import { cn } from "../../lib/cn";
+import { useUpload } from "../../lib/useUpload";
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -66,7 +68,7 @@ function activityHours(activity: { startAt: number; endAt: number }) {
   return Math.max(0, activity.endAt - activity.startAt) / 3_600_000;
 }
 
-type CalView = "demandes" | "depots";
+type CalView = "tout" | "demandes" | "depots" | "evenements";
 type ActivityList = NonNullable<
   ReturnType<typeof useQuery<typeof api.polyvalents.listActivities>>
 >;
@@ -87,7 +89,8 @@ const RESOURCE_HOUR_HEIGHT = 72;
 const RESOURCE_DAY_HEIGHT = (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * RESOURCE_HOUR_HEIGHT;
 
 export function Calendrier() {
-  const [view, setView] = useState<CalView>("demandes");
+  const [view, setView] = useState<CalView>("tout");
+  const [eventOpen, setEventOpen] = useState(false);
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
 
   return (
@@ -108,6 +111,9 @@ export function Calendrier() {
             <Button variant="secondary" size="sm" onClick={() => setMonth(startOfMonth(new Date()))}>
               Aujourd'hui
             </Button>
+            {view === "tout" || view === "demandes" ? <Button size="sm"><Plus className="h-4 w-4" /> Nouvelle demande</Button> : null}
+            {view === "tout" || view === "depots" ? <Button variant="outline" size="sm"><CalendarCog className="h-4 w-4" /> Gérer les créneaux de dépôt</Button> : null}
+            {view === "tout" || view === "evenements" ? <Button size="sm" onClick={() => setEventOpen(true)}><CalendarPlus className="h-4 w-4" /> Nouvel évènement</Button> : null}
           </div>
         }
       />
@@ -115,17 +121,18 @@ export function Calendrier() {
       <div className="px-4 pt-4 sm:px-6">
         <UnderlineTabs
           items={[
+            { key: "tout", label: "Tout" },
             { key: "demandes", label: "Demandes" },
             { key: "depots", label: "Dépôts" },
+            { key: "evenements", label: "Évènements" },
           ]}
           value={view}
           onChange={setView}
         />
       </div>
 
-      {view === "demandes" ? (
-        <RequestsCalendar month={month} />
-      ) : <DepotCalendar month={month} />}
+      {view === "tout" ? <div><RequestsCalendar month={month} /><DepotCalendar month={month} /><EventsCalendar month={month} /></div> : view === "demandes" ? <RequestsCalendar month={month} /> : view === "depots" ? <DepotCalendar month={month} /> : <EventsCalendar month={month} />}
+      <EventModal open={eventOpen} onClose={() => setEventOpen(false)} />
     </div>
   );
 }
@@ -457,6 +464,19 @@ function useMonthDays(month: Date) {
       }),
     [month],
   );
+}
+
+function EventsCalendar({ month }: { month: Date }) {
+  const range = useMemo(() => ({ from: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }).getTime(), to: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }).getTime() }), [month]);
+  const events = useQuery((api as any).recycappCalendar.list, range) as Array<{ _id: string; title: string; startAt: number }> | undefined;
+  return <div className="p-4 sm:p-6"><div className="overflow-x-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]"><div className="min-w-[720px]"><WeekdayHeader /><div className="grid grid-cols-7">{useMonthDays(month).map((day) => <DayCell key={day.toISOString()} day={day} inMonth={isSameMonth(day, month)} isSelected={false} onClick={() => {}}>{(events ?? []).filter((event) => isSameDay(new Date(event.startAt), day)).map((event) => <div key={event._id} className="mb-1 truncate rounded-md bg-fuchsia-600 px-1.5 py-1 text-[11px] font-medium text-white">{format(new Date(event.startAt), "HH:mm")} · {event.title}</div>)}</DayCell>)}</div></div></div></div>;
+}
+
+function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const create = useMutation((api as any).recycappCalendar.create); const upload = useUpload();
+  const [title, setTitle] = useState(""); const [start, setStart] = useState(""); const [end, setEnd] = useState(""); const [urls, setUrls] = useState(""); const [file, setFile] = useState<File | null>(null);
+  async function save() { const attachments = file ? [await upload(file)] : []; await create({ title, startAt: new Date(start).getTime(), endAt: new Date(end).getTime(), attachments, urls: urls.split(/\n|,/).map((url) => url.trim()).filter(Boolean) }); onClose(); }
+  return <Modal open={open} onClose={onClose} title="Nouvel évènement"><div className="space-y-3"><Field label="Intitulé" required><input value={title} onChange={(e) => setTitle(e.target.value)} className="h-10 w-full rounded-lg border px-3" /></Field><Field label="Début" required><input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 w-full rounded-lg border px-3" /></Field><Field label="Fin" required><input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 w-full rounded-lg border px-3" /></Field><Field label="Pièce jointe"><input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field><Field label="URLs"><textarea value={urls} onChange={(e) => setUrls(e.target.value)} className="min-h-20 w-full rounded-lg border p-3" placeholder="Une URL par ligne" /></Field><div className="flex justify-end"><Button onClick={() => void save()} disabled={!title || !start || !end}>Créer l'évènement</Button></div></div></Modal>;
 }
 
 function RequestsCalendar({ month }: { month: Date }) {

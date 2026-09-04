@@ -2078,6 +2078,8 @@ export default defineSchema(
   bpCompanies: defineTable({
     name: v.string(),
     siret: v.optional(v.string()),
+    /** Code APE / NAF récupéré depuis l'Annuaire des entreprises. */
+    nafCode: v.optional(v.string()),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
@@ -2120,12 +2122,46 @@ export default defineSchema(
     uploadedByRole: v.union(v.literal("client"), v.literal("staff")),
     /** Horodatage de partage au client (docs staff visibles côté client). */
     sharedWithClientAt: v.optional(v.number()),
+    /** Accusé de consultation du document partagé par l'entreprise cliente. */
+    clientConsultedAt: v.optional(v.number()),
     /** Validation par le staff d'un document signé (convention, protocole…). */
     validatedAt: v.optional(v.number()),
     validatedBy: v.optional(v.string()),
     createdBy: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_company", ["companyId"]),
+
+  /** Documents généraux du CRM, publiés dans la documentation de tous les clients. */
+  bpPublicDocuments: defineTable({
+    storageId: v.id("_storage"),
+    name: v.string(),
+    note: v.optional(v.string()),
+    mimeType: v.optional(v.string()),
+    createdAt: v.number(),
+  }),
+
+  /** Évènements internes affichés dans le calendrier CRM Recycapp. */
+  recycappCalendarEvents: defineTable({
+    title: v.string(),
+    startAt: v.number(),
+    endAt: v.number(),
+    attachments: v.array(v.id("_storage")),
+    urls: v.array(v.string()),
+    createdAt: v.number(),
+  }).index("by_startAt", ["startAt"]),
+
+  /** Accusé de consultation d'un document général, partagé par entreprise. */
+  bpPublicDocumentConsultations: defineTable({
+    documentId: v.id("bpPublicDocuments"),
+    companyId: v.id("bpCompanies"),
+    consultedAt: v.number(),
+  }).index("by_document_and_company", ["documentId", "companyId"]),
+
+  /** Masquage des guides historiques depuis le CRM. */
+  bpDefaultPublicDocumentHides: defineTable({
+    key: v.string(),
+    hiddenAt: v.number(),
+  }).index("by_key", ["key"]),
 
   /** Messagerie entre une entreprise cliente et le staff. */
   bpCompanyMessages: defineTable({
