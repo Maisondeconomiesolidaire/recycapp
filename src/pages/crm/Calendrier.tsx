@@ -912,9 +912,35 @@ function EventDetailModal({
 }) {
   const access = useCrmAccess();
   const canDelete = canAccess(access, "calendrier", "delete");
+  const canUpdate = canAccess(access, "calendrier", "update");
   const remove = useMutation(api.recycappCalendar.remove);
+  const setWorkers = useMutation(api.recycappCalendar.setWorkers);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingTeam, setEditingTeam] = useState(false);
+  const [draftWorkers, setDraftWorkers] = useState<Id<"polyvalentWorkers">[]>([]);
+  const [savingTeam, setSavingTeam] = useState(false);
+  const assignable = useQuery(
+    api.recycappCalendar.assignableWorkers,
+    editingTeam ? {} : "skip",
+  );
+  const hours = event ? eventHours(event) : 0;
+
+  // La fiche se rouvre sur un autre évènement : l'édition d'équipe repart à zéro.
+  useEffect(() => {
+    setEditingTeam(false);
+  }, [event?._id]);
+
+  async function saveTeam() {
+    if (!event) return;
+    setSavingTeam(true);
+    try {
+      await setWorkers({ id: event._id, workerIds: draftWorkers });
+      setEditingTeam(false);
+    } finally {
+      setSavingTeam(false);
+    }
+  }
 
   async function destroy() {
     if (!event) return;
@@ -981,6 +1007,54 @@ function EventDetailModal({
               ))}
             </dl>
           ) : null}
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Salariés mobilisés · {formatHours(hours)}
+              </p>
+              {canUpdate && !editingTeam ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftWorkers(event.workers.map((worker) => worker._id));
+                    setEditingTeam(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-500 hover:underline"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Modifier
+                </button>
+              ) : null}
+            </div>
+            {editingTeam ? (
+              <div className="space-y-3">
+                <WorkerPicker
+                  workers={assignable}
+                  value={draftWorkers}
+                  onChange={setDraftWorkers}
+                  hours={hours}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingTeam(false)}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={savingTeam}
+                    onClick={() => void saveTeam()}
+                  >
+                    {savingTeam ? "Enregistrement..." : "Enregistrer"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <WorkerAllocations workers={event.workers} hours={hours} />
+            )}
+          </div>
 
           {attachments.length > 0 ? (
             <div>
@@ -1103,6 +1177,143 @@ function EventsCalendar({ month }: { month: Date }) {
         onClose={() => setOpenEventId(null)}
       />
     </div>
+  );
+}
+
+type AssignableWorker = NonNullable<
+  ReturnType<typeof useQuery<typeof api.recycappCalendar.assignableWorkers>>
+>[number];
+
+/** Durée d'un évènement, en heures. */
+function eventHours(event: { startAt: number; endAt: number }) {
+  return Math.max(0, event.endAt - event.startAt) / 3_600_000;
+}
+
+/**
+ * Part de la semaine d'un salarié que représente l'évènement.
+ *
+ * `null` quand sa durée hebdomadaire est inconnue (ni contrat RH ni planning) :
+ * afficher 0 % laisserait croire à un salarié disponible.
+ */
+function allocationPercent(hours: number, weekly: number | null) {
+  if (!weekly) return null;
+  return Math.round((hours / weekly) * 100);
+}
+
+/** Sélection des salariés mobilisés, avec le temps que cela leur prend. */
+function WorkerPicker({
+  workers,
+  value,
+  onChange,
+  hours,
+}: {
+  workers: AssignableWorker[] | undefined;
+  value: Id<"polyvalentWorkers">[];
+  onChange: (next: Id<"polyvalentWorkers">[]) => void;
+  hours: number;
+}) {
+  if (workers === undefined) {
+    return (
+      <div className="rounded-2xl border border-[var(--crm-border)] p-4">
+        <FullSpinner label="Chargement de l'équipe..." />
+      </div>
+    );
+  }
+  if (workers.length === 0) {
+    return (
+      <p className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-zinc-500">
+        Aucun salarié actif dans l'équipe Recyclerie.
+      </p>
+    );
+  }
+  return (
+    <div className="max-h-56 space-y-1 overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-2">
+      {workers.map((worker) => {
+        const checked = value.includes(worker._id);
+        const percent = allocationPercent(hours, worker.weeklyHours);
+        return (
+          <label
+            key={worker._id}
+            className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-[var(--crm-surface)]"
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() =>
+                onChange(
+                  checked
+                    ? value.filter((id) => id !== worker._id)
+                    : [...value, worker._id],
+                )
+              }
+              className="h-4 w-4 shrink-0 accent-brand-500"
+            />
+            <span className="min-w-0 flex-1 truncate text-[var(--foreground)]">
+              {worker.name}
+            </span>
+            <span className="shrink-0 text-xs tabular-nums text-zinc-500">
+              {worker.weeklyHours
+                ? `${formatHours(worker.weeklyHours)}/sem.`
+                : "durée inconnue"}
+              {percent !== null && hours > 0 ? ` · ${percent} %` : ""}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Temps que l'évènement représente pour chaque salarié affecté. */
+function WorkerAllocations({
+  workers,
+  hours,
+}: {
+  workers: { _id: Id<"polyvalentWorkers">; name: string; weeklyHours: number | null }[];
+  hours: number;
+}) {
+  if (workers.length === 0) {
+    return (
+      <p className="text-sm text-zinc-500">Aucun salarié affecté à ce jour.</p>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {workers.map((worker) => {
+        const percent = allocationPercent(hours, worker.weeklyHours);
+        return (
+          <li
+            key={worker._id}
+            className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate text-sm font-semibold text-[var(--foreground)]">
+                {worker.name}
+              </span>
+              <span className="shrink-0 text-sm font-bold tabular-nums text-brand-500">
+                {percent === null ? "—" : `${percent} %`}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-3 text-xs text-zinc-500">
+              <span>
+                {formatHours(hours)} sur{" "}
+                {worker.weeklyHours
+                  ? `${formatHours(worker.weeklyHours)} par semaine`
+                  : "une durée hebdomadaire inconnue"}
+              </span>
+            </div>
+            {percent !== null ? (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--crm-surface)]">
+                <div
+                  className="h-full rounded-full bg-brand-500"
+                  style={{ width: `${Math.min(100, percent)}%` }}
+                />
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -1360,7 +1571,13 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [urls, setUrls] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [meta, setMeta] = useState(EMPTY_EVENT_META);
+  const [workerIds, setWorkerIds] = useState<Id<"polyvalentWorkers">[]>([]);
   const [saving, setSaving] = useState(false);
+  const assignable = useQuery(
+    api.recycappCalendar.assignableWorkers,
+    open ? {} : "skip",
+  );
+  const hours = start && end ? eventHours({ startAt: start, endAt: end }) : 0;
   const customOptions = useQuery(
     api.recycappCalendar.options,
     open ? {} : "skip",
@@ -1398,6 +1615,7 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
       ),
       startAt: start!,
       endAt: end!,
+      workerIds,
       attachments,
       urls: urls
         .split(/\n|,/)
@@ -1414,6 +1632,7 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     setUrls("");
     setFile(null);
     setMeta(EMPTY_EVENT_META);
+    setWorkerIds([]);
   }
   return (
     <Modal
@@ -1485,6 +1704,14 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             />
           </Field>
         </div>
+        <Field label="Salariés mobilisés">
+          <WorkerPicker
+            workers={assignable}
+            value={workerIds}
+            onChange={setWorkerIds}
+            hours={hours}
+          />
+        </Field>
         <Field label="Pièce jointe">
           <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-brand-400 bg-[var(--crm-surface-2)] px-4 py-4 text-sm font-semibold text-brand-600 transition hover:bg-[var(--crm-surface)]">
             <span>{file ? file.name : "Ajouter un fichier"}</span>
