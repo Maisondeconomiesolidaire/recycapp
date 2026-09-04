@@ -763,10 +763,12 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [end, setEnd] = useState<number>();
   const [urls, setUrls] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [meta, setMeta] = useState({ animationType: "", structure: "", activity: "", location: "", relatedEvent: "", targetAudience: "", organizer: "" });
   async function save() {
     const attachments = file ? [await upload(file)] : [];
     await create({
       title,
+      ...Object.fromEntries(Object.entries(meta).filter(([, value]) => value.trim())),
       startAt: start!,
       endAt: end!,
       attachments,
@@ -792,6 +794,9 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-[var(--foreground)] shadow-sm outline-none focus:border-brand-500"
           />
         </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {([['animationType', "Type d'animation"], ['structure', 'Structure MES'], ['activity', 'Activité'], ['location', 'Où ?'], ['relatedEvent', 'Évènement rattaché'], ['targetAudience', 'Public(s) ciblé(s)'], ['organizer', 'Référent / organisateur']] as const).map(([key, label]) => <Field key={key} label={label}><input value={meta[key]} onChange={(event) => setMeta((current) => ({ ...current, [key]: event.target.value }))} className="h-11 w-full rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 text-[var(--foreground)]" /></Field>)}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Date et heure de début" required>
             <DateTimePicker
