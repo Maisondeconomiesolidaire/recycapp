@@ -53,6 +53,7 @@ import { Modal } from "../../components/ui/Modal";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { RequestDrawer } from "../../components/crm/RequestDrawer";
+import { NewRequestDrawer } from "../../components/crm/NewRequestDrawer";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
 import {
@@ -126,6 +127,8 @@ const RESOURCE_DAY_HEIGHT =
 export function Calendrier() {
   const [view, setView] = useState<CalView>("tout");
   const [eventOpen, setEventOpen] = useState(false);
+  const [newRequestOpen, setNewRequestOpen] = useState(false);
+  const [globalSlotsOpen, setGlobalSlotsOpen] = useState(false);
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
 
   return (
@@ -159,12 +162,12 @@ export function Calendrier() {
               Aujourd'hui
             </Button>
             {view === "tout" || view === "demandes" ? (
-              <Button size="sm">
+              <Button size="sm" onClick={() => setNewRequestOpen(true)}>
                 <Plus className="h-4 w-4" /> Nouvelle demande
               </Button>
             ) : null}
             {view === "tout" || view === "depots" ? (
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => setGlobalSlotsOpen(true)}>
                 <CalendarCog className="h-4 w-4" /> Gérer les créneaux de dépôt
               </Button>
             ) : null}
@@ -200,6 +203,8 @@ export function Calendrier() {
         <EventsCalendar month={month} />
       )}
       <EventModal open={eventOpen} onClose={() => setEventOpen(false)} />
+      <NewRequestDrawer open={newRequestOpen} onClose={() => setNewRequestOpen(false)} />
+      {globalSlotsOpen ? <DepotSlotsModal onClose={() => setGlobalSlotsOpen(false)} /> : null}
     </div>
   );
 }
