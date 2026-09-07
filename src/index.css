@@ -155,6 +155,14 @@ body {
   --color-brand-200: var(--color-brand-700);
   --color-brand-300: var(--color-brand-700);
   /* Insight card icon/text colors: light variants → darker shades for light bg */
+  /* Rouges d'alerte : `text-red-100/200/300/400` visent tous un fond sombre.
+     Sans cette inversion, un bandeau d'annulation ou un message d'erreur
+     s'affiche en rose pâle sur blanc, donc illisible. Les fonds `bg-red-500`
+     et le rouge vif ne sont pas touchés : ils tiennent sur les deux thèmes. */
+  --color-red-100:     oklch(0.30 0.12 25);
+  --color-red-200:     oklch(0.35 0.14 25);
+  --color-red-300:     oklch(0.44 0.17 25);
+  --color-red-400:     oklch(0.52 0.20 25);
   --color-amber-100:   oklch(0.32 0.08 75);
   --color-amber-200:   oklch(0.36 0.10 75);
   --color-amber-300:   oklch(0.48 0.13 72);
