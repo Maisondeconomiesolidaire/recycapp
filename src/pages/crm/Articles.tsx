@@ -29,6 +29,7 @@ import {
   Link as LinkIcon,
   Ticket,
   RefreshCw,
+  ImageDown,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -41,6 +42,7 @@ const CameraScanner = lazy(() =>
   import("../../components/ui/CameraScanner").then((m) => ({ default: m.CameraScanner })),
 );
 import { PageHeader } from "../../components/crm/PageHeader";
+import { ImageRecompressModal } from "../../components/crm/ImageRecompressModal";
 import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -236,6 +238,7 @@ export function Articles() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
   const [qrPoolOpen, setQrPoolOpen] = useState(false);
+  const [recompressOpen, setRecompressOpen] = useState(false);
   const [discountsOpen, setDiscountsOpen] = useState(false);
   const [stripeSyncing, setStripeSyncing] = useState(false);
   const [stripeSyncNote, setStripeSyncNote] = useState("");
@@ -484,6 +487,18 @@ export function Articles() {
               "Générer un bon de réduction pour la boutique en ligne (5 % à 80 %)",
             icon: <Ticket className="h-4 w-4 shrink-0" />,
             onClick: () => setDiscountsOpen(true),
+          },
+        ]
+      : []),
+    ...(canCreate
+      ? [
+          {
+            key: "recompress",
+            label: "Alléger les photos",
+            title:
+              "Recompresser les photos trop lourdes déjà en ligne (économie de bande passante)",
+            icon: <ImageDown className="h-4 w-4 shrink-0" />,
+            onClick: () => setRecompressOpen(true),
           },
         ]
       : []),
@@ -1041,6 +1056,12 @@ export function Articles() {
         open={qrPoolOpen}
         onClose={() => setQrPoolOpen(false)}
         canPrint={canPrint}
+      />
+
+      <ImageRecompressModal
+        open={recompressOpen}
+        onClose={() => setRecompressOpen(false)}
+        articles={articles}
       />
 
       {/* Run IA groupé : génération d'annonce + détourage */}

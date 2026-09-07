@@ -77,9 +77,11 @@ export function ArticleDetail() {
       }).catch(() => null);
 
     void pulse();
+    // 30 s : chaque battement réveille toutes les souscriptions `viewerCount`
+    // de l'article. Le serveur compte un visiteur pendant 45 s, la marge suffit.
     const interval = window.setInterval(() => {
       void pulse();
-    }, 15_000);
+    }, 30_000);
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {

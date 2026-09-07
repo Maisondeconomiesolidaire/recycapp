@@ -7,9 +7,22 @@ import { Id } from "../../convex/_generated/dataModel";
  * prises au téléphone (plusieurs Mo) sont ramenées à ~1600px de côté en WebP,
  * ce qui allège fortement le chargement de la boutique. Les non-images (ou les
  * GIF animés) sont renvoyées telles quelles.
+ *
+ * Le format de sortie est celui que le navigateur a RÉELLEMENT produit, pas
+ * celui demandé : un navigateur sans encodeur WebP renvoie silencieusement du
+ * PNG. Les photos détourées partaient ainsi en PNG de 2 à 3 Mo, annoncées
+ * `image/webp` — 80 Mo pour une seule grille boutique.
  */
 const MAX_DIMENSION = 1600;
 const WEBP_QUALITY = 0.82;
+const JPEG_QUALITY = 0.85;
+
+/** Extension cohérente avec le type réellement produit par le navigateur. */
+const EXTENSIONS: Record<string, string> = {
+  "image/webp": ".webp",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+};
 
 function isHeicImage(file: File) {
   return (
@@ -59,7 +72,6 @@ async function compressImage(file: File): Promise<File> {
   // On garde le JPEG pour les photos issues d'un HEIC (le nom/format restent
   // cohérents), sinon on privilégie le WebP plus léger.
   const outputType = heic ? "image/jpeg" : "image/webp";
-  const outputExt = heic ? ".jpg" : ".webp";
   const outputQuality = heic ? 0.9 : WEBP_QUALITY;
 
   try {
@@ -79,18 +91,32 @@ async function compressImage(file: File): Promise<File> {
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close?.();
 
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, outputType, outputQuality),
-    );
+    const encode = (type: string, quality: number) =>
+      new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, type, quality),
+      );
+
+    let blob = await encode(outputType, outputQuality);
+    // Repli JPEG : sans encodeur WebP, `toBlob` rend un PNG non compressé,
+    // souvent plus lourd que la photo d'origine. Le JPEG, lui, est universel.
+    if (blob && blob.type !== outputType && !heic) {
+      blob = (await encode("image/jpeg", JPEG_QUALITY)) ?? blob;
+    }
     if (!blob) return source;
     // On ne garde la version compressée que si elle est réellement plus légère.
     if (!heic && blob.size >= source.size) return source;
-    return new File([blob], source.name.replace(/\.[^.]+$/, "") + outputExt, {
-      type: outputType,
+    const extension = EXTENSIONS[blob.type] ?? ".img";
+    return new File([blob], source.name.replace(/\.[^.]+$/, "") + extension, {
+      type: blob.type,
     });
   } catch {
     return source;
   }
+}
+
+/** Recompression d'un fichier déjà stocké (rattrapage des photos trop lourdes). */
+export async function optimizeImageFile(file: File) {
+  return await compressImage(file);
 }
 
 /**

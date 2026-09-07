@@ -244,14 +244,18 @@ function Header() {
     location.pathname === "/boutique" ||
     location.pathname.startsWith("/boutique/categorie/");
   const [params, setParams] = useSearchParams();
-  const articles = useQuery(api.articles.listPublic, {});
+  const [query, setQuery] = useState(params.get("q") ?? "");
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Le catalogue ne sert qu'aux suggestions de la barre de recherche : il était
+  // souscrit sur TOUTES les pages publiques, formulaires Collecte et
+  // Aérogommage compris, et réémis à chaque modification d'article.
+  const searchActive = isBoutiqueArea && (searchOpen || query.trim().length > 0);
+  const articles = useQuery(api.articles.listPublic, searchActive ? {} : "skip");
   const cart = useCart();
   const cartArticles = useQuery(
     api.articles.getManyPublic,
     cart.count > 0 ? { ids: cart.ids as Id<"articles">[] } : "skip",
   );
-  const [query, setQuery] = useState(params.get("q") ?? "");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);

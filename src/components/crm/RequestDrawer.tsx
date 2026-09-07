@@ -106,6 +106,14 @@ const LOST_REASON_OPTIONS = [
 
 type LostReasonValue = (typeof LOST_REASON_OPTIONS)[number]["value"];
 
+/** Motif d'annulation en clair, tel qu'affiché en tête du tiroir. */
+function lostReasonLabel(request: RequestDoc) {
+  if (request.lostReason === "devis_refuse") return "Devis refusé";
+  if (request.lostReason === "pas_de_retour_client") return "Pas de retour client";
+  if (request.lostReason === "autre") return request.lostReasonDetails || "Autre";
+  return "Motif non précisé";
+}
+
 export function RequestDrawer({
   requestId,
   onClose,
@@ -267,6 +275,18 @@ export function RequestDrawer({
         </div>
       ) : (
         <div>
+          {/* Une demande annulée s'annonce avant tout le reste : le motif était
+              enfoui dans l'onglet « Demande », sous le commentaire. */}
+          {request.outcome === "perdue" && (
+            <div className="border-b border-red-500/30 bg-red-500/12 px-6 py-5 sm:px-7">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-300">
+                Demande annulée · motif
+              </p>
+              <p className="mt-1.5 text-2xl font-black leading-tight text-red-100">
+                {lostReasonLabel(request)}
+              </p>
+            </div>
+          )}
           {/* Onglets — collés en haut du panneau pendant le défilement. */}
           <div className="sticky top-0 z-20 border-b border-zinc-800 bg-[var(--crm-surface)] px-6 pt-3 sm:px-7">
             <UnderlineTabs
@@ -540,19 +560,6 @@ function DemandeTab({
           <SectionTitle>Commentaire</SectionTitle>
           <p className="text-sm text-zinc-300 whitespace-pre-line rounded-lg bg-[var(--crm-surface-3)] p-3">
             {request.comment}
-          </p>
-        </section>
-      )}
-
-      {request.outcome === "perdue" && request.lostReason && (
-        <section>
-          <SectionTitle>Motif d'annulation</SectionTitle>
-          <p className="rounded-lg bg-[var(--crm-surface-3)] p-3 text-sm text-zinc-300">
-            {request.lostReason === "devis_refuse" && "Devis refusé"}
-            {request.lostReason === "pas_de_retour_client" &&
-              "Pas de retour client"}
-            {request.lostReason === "autre" &&
-              (request.lostReasonDetails || "Autre")}
           </p>
         </section>
       )}
