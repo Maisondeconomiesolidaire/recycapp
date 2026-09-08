@@ -553,7 +553,7 @@ function DemandeTab({
   const [lb, setLb] = useState<number | null>(null);
   const [editingAero, setEditingAero] = useState(false);
 
-  const meta = (
+  const requestMeta = (
     <>
       {request.comment && (
         <section>
@@ -564,32 +564,18 @@ function DemandeTab({
         </section>
       )}
 
-      {request.type !== "livraison" && request.photoUrls.length > 0 && (
-        <section>
-          <SectionTitle>Photos client</SectionTitle>
-          <PhotoGrid urls={request.photoUrls} onOpen={setLb} />
-        </section>
-      )}
-
-      {request.type === "aerogommage" &&
-        ((request.beforePhotoUrls?.length ?? 0) > 0 ||
-          (request.afterPhotoUrls?.length ?? 0) > 0) && (
-        <AerogommageProgressPhotos request={request} canUpdate={false} />
-      )}
-
       <p className="text-xs text-zinc-600">
         Reçue le {formatDateTime(request.createdAt)}
       </p>
-
-      {request.type !== "livraison" && lb !== null && (
-        <Lightbox
-          images={request.photoUrls}
-          startIndex={lb}
-          onClose={() => setLb(null)}
-        />
-      )}
     </>
   );
+
+  const requestPhotos = request.type !== "livraison" && request.photoUrls.length > 0 ? (
+    <section>
+      <SectionTitle>Photos client</SectionTitle>
+      <PhotoGrid urls={request.photoUrls} onOpen={setLb} />
+    </section>
+  ) : null;
 
   if (request.type === "article") {
     const articles = request.articles?.length
@@ -601,7 +587,11 @@ function DemandeTab({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
         <div className="space-y-6">
           <ArticlePaymentSection request={request} />
-          {meta}
+          {requestMeta}
+          {requestPhotos}
+          {lb !== null && (
+            <Lightbox images={request.photoUrls} startIndex={lb} onClose={() => setLb(null)} />
+          )}
         </div>
         <ArticleCart articles={articles} />
       </div>
@@ -610,30 +600,42 @@ function DemandeTab({
 
   if (request.type === "aerogommage") {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-end">
-          {canUpdate && !editingAero && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditingAero(true)}
-            >
-              <Pencil className="h-4 w-4" />
-              Modifier
-            </Button>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
+        <div className="space-y-6">
+          <div className="flex items-center justify-end">
+            {canUpdate && !editingAero && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingAero(true)}
+              >
+                <Pencil className="h-4 w-4" />
+                Modifier
+              </Button>
+            )}
+          </div>
+          {editingAero ? (
+            <AerogommageEditForm
+              request={request}
+              onCancel={() => setEditingAero(false)}
+              onSaved={() => setEditingAero(false)}
+            />
+          ) : (
+            <RequestDetails request={request} canUpdate={canUpdate} />
           )}
+          {requestMeta}
         </div>
-        {editingAero ? (
-          <AerogommageEditForm
-            request={request}
-            onCancel={() => setEditingAero(false)}
-            onSaved={() => setEditingAero(false)}
-          />
-        ) : (
-          <RequestDetails request={request} canUpdate={canUpdate} />
-        )}
-        {meta}
+        <aside className="space-y-6 xl:sticky xl:top-4 xl:self-start">
+          {requestPhotos}
+          {((request.beforePhotoUrls?.length ?? 0) > 0 ||
+            (request.afterPhotoUrls?.length ?? 0) > 0) && (
+            <AerogommageProgressPhotos request={request} canUpdate={false} />
+          )}
+          {lb !== null && (
+            <Lightbox images={request.photoUrls} startIndex={lb} onClose={() => setLb(null)} />
+          )}
+        </aside>
       </div>
     );
   }
@@ -641,7 +643,11 @@ function DemandeTab({
   return (
     <div className="space-y-6">
       <RequestDetails request={request} />
-      {meta}
+      {requestMeta}
+      {requestPhotos}
+      {request.type !== "livraison" && lb !== null && (
+        <Lightbox images={request.photoUrls} startIndex={lb} onClose={() => setLb(null)} />
+      )}
     </div>
   );
 }
@@ -2329,9 +2335,10 @@ function RequestDetails({
     const c = request.collecte;
     const ca = c.collectAddress;
     return (
-      <>
-        {ca && (ca.address || ca.city) && (
-          <section>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
+        <div className="space-y-6">
+          {ca && (ca.address || ca.city) && (
+            <section>
             <SectionTitle>Adresse de collecte</SectionTitle>
             <p className="flex items-start gap-2 text-sm text-zinc-300">
               <MapPin className="h-4 w-4 mt-0.5 text-zinc-500" />
@@ -2345,10 +2352,9 @@ function RequestDetails({
                 )}
               </span>
             </p>
-            <CollecteMap address={ca} />
-          </section>
-        )}
-        <section>
+            </section>
+          )}
+          <section>
           <SectionTitle>Informations</SectionTitle>
           <div className="text-sm">
             <Row
@@ -2374,9 +2380,9 @@ function RequestDetails({
               }
             />
           </div>
-        </section>
+          </section>
 
-        <section>
+          <section>
           <SectionTitle>Conditions du don</SectionTitle>
           <div className="text-sm">
             <Row
@@ -2393,9 +2399,9 @@ function RequestDetails({
               value={yesNo(c.noWaste)}
             />
           </div>
-        </section>
+          </section>
 
-        <section>
+          <section>
           <SectionTitle>Objets</SectionTitle>
           {(c.objectCategories?.length ?? 0) > 0 ? (
             <>
@@ -2433,10 +2439,17 @@ function RequestDetails({
               <Row label="Petits objets" value={joinItems(c.petitsObjets, c.petitsObjetsAutre, c.smallItems)} />
             </div>
           )}
-        </section>
+          </section>
 
-        <CollecteCategoryPhotos request={request} />
-      </>
+          <CollecteCategoryPhotos request={request} />
+        </div>
+        {ca && (ca.address || ca.city) && (
+          <aside className="xl:sticky xl:top-4 xl:self-start">
+            <SectionTitle>Carte de collecte</SectionTitle>
+            <CollecteMap address={ca} />
+          </aside>
+        )}
+      </div>
     );
   }
 
