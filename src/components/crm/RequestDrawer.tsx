@@ -585,7 +585,7 @@ function DemandeTab({
         : [];
     return (
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:pr-4">
+        <div className="hide-scrollbar space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:pr-4">
           <ArticlePaymentSection request={request} />
           {requestMeta}
           {requestPhotos}
@@ -2315,7 +2315,7 @@ function RequestDetails({
     const ca = c.collectAddress;
     return (
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4">
+        <div className="hide-scrollbar space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4">
           {ca && (ca.address || ca.city) && (
             <section>
             <SectionTitle>Adresse de collecte</SectionTitle>
@@ -2382,7 +2382,7 @@ function RequestDetails({
           </section>
 
         </div>
-        <aside className="space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
+        <aside className="hide-scrollbar space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
           <section>
             <SectionTitle>Objets</SectionTitle>
             {(c.objectCategories?.length ?? 0) > 0 ? (
@@ -3150,7 +3150,7 @@ function AerogommageDetails({
   return (
     <>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-5 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4">
+        <div className="hide-scrollbar space-y-5 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4">
           <section>
         <SectionTitle>Transport</SectionTitle>
         <div className="text-sm">
@@ -3213,7 +3213,7 @@ function AerogommageDetails({
           </section>
         </div>
 
-        <aside className="space-y-3 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
+        <aside className="hide-scrollbar space-y-3 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
           {(photos.length > 0 || beforePhotos.length > 0 || afterPhotos.length > 0 || canUpdate) && (
           <>
           <ManagedRequestPhotoBlock
