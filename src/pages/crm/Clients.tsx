@@ -1,6 +1,15 @@
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { Users, Mail, Phone, Search, ChevronRight, MapPin } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import {
+  Users,
+  Mail,
+  Phone,
+  Search,
+  ChevronRight,
+  MapPin,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { PageHeader } from "../../components/crm/PageHeader";
@@ -8,6 +17,12 @@ import { FullSpinner, Spinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Input } from "../../components/ui/Field";
 import { Drawer } from "../../components/ui/Drawer";
+import { Button } from "../../components/ui/Button";
+import { Field } from "../../components/ui/Field";
+import { Modal } from "../../components/ui/Modal";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
+import { canAccess } from "../../lib/crmPermissions";
 import { TypeBadge } from "../../components/crm/TypeBadge";
 import { RequestDrawer } from "../../components/crm/RequestDrawer";
 import { RequestTypeFilter, type RequestTypeFilterValue } from "../../components/crm/RequestTypeFilter";
@@ -177,6 +192,30 @@ function ClientSheet({
   onOpenRequest: (id: Id<"requests">) => void;
 }) {
   const data = useQuery(api.clients.get, email ? { email } : "skip");
+  const access = useCrmAccess();
+  const canUpdate = canAccess(access, "clients", "update");
+  const canDelete = canAccess(access, "clients", "delete");
+  const removeClient = useMutation(api.clients.remove);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function destroy() {
+    if (!email) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await removeClient({ email });
+      setConfirmOpen(false);
+      onClose();
+    } catch (caught) {
+      setConfirmOpen(false);
+      setError(caught instanceof Error ? caught.message : "Suppression impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <Drawer
       open={email !== null}
@@ -191,6 +230,30 @@ function ClientSheet({
         </div>
       ) : (
         <div className="space-y-6">
+          {canUpdate || canDelete ? (
+            <div className="flex flex-wrap gap-2">
+              {canUpdate ? (
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-4 w-4" /> Modifier
+                </Button>
+              ) : null}
+              {canDelete ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4" /> Supprimer
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {error ? (
+            <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
+          ) : null}
+
           <section className="space-y-1.5 text-sm text-zinc-400">
             <a
               href={`mailto:${data.customer.email}`}
@@ -250,8 +313,142 @@ function ClientSheet({
               ))}
             </div>
           </section>
+
+          {editOpen ? (
+            <ClientEditModal
+              email={data.customer.email}
+              customer={data.customer}
+              onClose={() => setEditOpen(false)}
+              onEmailChanged={() => {
+                // L'email sert de clé à la fiche : la garder ouverte sur
+                // l'ancienne adresse afficherait un client introuvable.
+                setEditOpen(false);
+                onClose();
+              }}
+            />
+          ) : null}
+
+          <ConfirmDialog
+            open={confirmOpen}
+            onClose={() => setConfirmOpen(false)}
+            onConfirm={() => void destroy()}
+            title="Supprimer ce client ?"
+            description={
+              data.requests.length > 0
+                ? "Ce client a des demandes : elles doivent être supprimées d'abord, depuis la fiche de chacune."
+                : "La fiche prospect sera définitivement supprimée."
+            }
+            confirmLabel={busy ? "Suppression..." : "Supprimer"}
+          />
         </div>
       )}
     </Drawer>
+  );
+}
+
+/** Édition des coordonnées d'un client. */
+function ClientEditModal({
+  email,
+  customer,
+  onClose,
+  onEmailChanged,
+}: {
+  email: string;
+  customer: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    address?: string;
+    postalCode?: string;
+    city?: string;
+  };
+  onClose: () => void;
+  onEmailChanged: () => void;
+}) {
+  const update = useMutation(api.clients.update);
+  const [form, setForm] = useState({
+    firstName: customer.firstName,
+    lastName: customer.lastName,
+    email: customer.email,
+    phone: customer.phone,
+    address: customer.address ?? "",
+    postalCode: customer.postalCode ?? "",
+    city: customer.city ?? "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setForm({
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      email: customer.email,
+      phone: customer.phone,
+      address: customer.address ?? "",
+      postalCode: customer.postalCode ?? "",
+      city: customer.city ?? "",
+    });
+  }, [customer]);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await update({
+        email,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phone: form.phone,
+        newEmail: form.email,
+        address: form.address || undefined,
+        postalCode: form.postalCode || undefined,
+        city: form.city || undefined,
+      });
+      if (form.email.trim().toLowerCase() !== email.trim().toLowerCase()) onEmailChanged();
+      else onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Enregistrement impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const set = (key: keyof typeof form) => (event: { target: { value: string } }) =>
+    setForm((current) => ({ ...current, [key]: event.target.value }));
+
+  return (
+    <Modal open onClose={onClose} title="Modifier le client" className="max-w-lg">
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Prénom"><Input value={form.firstName} onChange={set("firstName")} /></Field>
+          <Field label="Nom"><Input value={form.lastName} onChange={set("lastName")} /></Field>
+        </div>
+        <Field label="Email" required><Input value={form.email} onChange={set("email")} /></Field>
+        <Field label="Téléphone"><Input value={form.phone} onChange={set("phone")} /></Field>
+        <Field label="Adresse"><Input value={form.address} onChange={set("address")} /></Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Code postal"><Input value={form.postalCode} onChange={set("postalCode")} /></Field>
+          <Field label="Ville"><Input value={form.city} onChange={set("city")} /></Field>
+        </div>
+
+        {/* Les coordonnées vivent dans chaque demande : la correction les suit
+            toutes, sinon l'ancienne valeur reviendrait au prochain calcul. */}
+        <p className="text-xs text-zinc-500">
+          La correction s'applique à toutes les demandes de ce client.
+        </p>
+
+        {error ? (
+          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
+        ) : null}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={() => void submit()} disabled={busy || !form.email.trim()}>
+            {busy ? "Enregistrement..." : "Enregistrer"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
