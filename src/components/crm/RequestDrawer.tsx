@@ -585,7 +585,7 @@ function DemandeTab({
         : [];
     return (
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-6">
+        <div className="space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:pr-4">
           <ArticlePaymentSection request={request} />
           {requestMeta}
           {requestPhotos}
@@ -2315,7 +2315,7 @@ function RequestDetails({
     const ca = c.collectAddress;
     return (
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-6">
+        <div className="space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4">
           {ca && (ca.address || ca.city) && (
             <section>
             <SectionTitle>Adresse de collecte</SectionTitle>
@@ -2381,48 +2381,32 @@ function RequestDetails({
           </div>
           </section>
 
-          <section>
-          <SectionTitle>Objets</SectionTitle>
-          {(c.objectCategories?.length ?? 0) > 0 ? (
-            <>
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-                {c.objectCategories!.map((key) => {
-                  const cat = COLLECTE_CATEGORY_BY_KEY[key];
-                  const label = collecteCategoryLabel(key);
-                  return cat?.image ? (
-                    <img
-                      key={key}
-                      src={cat.image}
-                      alt={label}
-                      title={label}
-                      className="aspect-square w-full rounded-2xl object-cover"
-                    />
-                  ) : (
-                    <div
-                      key={key}
-                      className="flex aspect-square items-center justify-center rounded-2xl bg-[var(--crm-surface-2)] p-2 text-center text-[11px] leading-tight text-zinc-300"
-                    >
-                      {label}
-                    </div>
-                  );
-                })}
-              </div>
-              {c.grosObjetsAutre && (
-                <p className="mt-2 text-sm text-zinc-400">
-                  <span className="text-zinc-500">Autre :</span> {c.grosObjetsAutre}
-                </p>
-              )}
-            </>
-          ) : (
-            <div className="text-sm">
-              <Row label="Gros objets" value={joinItems(c.grosObjets, c.grosObjetsAutre, c.largeItems)} />
-              <Row label="Petits objets" value={joinItems(c.petitsObjets, c.petitsObjetsAutre, c.smallItems)} />
-            </div>
-          )}
-          </section>
-
         </div>
-        <aside className="xl:sticky xl:top-4 xl:self-start">
+        <aside className="space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
+          <section>
+            <SectionTitle>Objets</SectionTitle>
+            {(c.objectCategories?.length ?? 0) > 0 ? (
+              <>
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                  {c.objectCategories!.map((key) => {
+                    const cat = COLLECTE_CATEGORY_BY_KEY[key];
+                    const label = collecteCategoryLabel(key);
+                    return cat?.image ? (
+                      <img key={key} src={cat.image} alt={label} title={label} className="aspect-square w-full rounded-2xl object-cover" />
+                    ) : (
+                      <div key={key} className="flex aspect-square items-center justify-center rounded-2xl bg-[var(--crm-surface-2)] p-2 text-center text-[11px] leading-tight text-zinc-300">{label}</div>
+                    );
+                  })}
+                </div>
+                {c.grosObjetsAutre && <p className="mt-2 text-sm text-zinc-400"><span className="text-zinc-500">Autre :</span> {c.grosObjetsAutre}</p>}
+              </>
+            ) : (
+              <div className="text-sm">
+                <Row label="Gros objets" value={joinItems(c.grosObjets, c.grosObjetsAutre, c.largeItems)} />
+                <Row label="Petits objets" value={joinItems(c.petitsObjets, c.petitsObjetsAutre, c.smallItems)} />
+              </div>
+            )}
+          </section>
           <CollecteCategoryPhotos request={request} />
         </aside>
       </div>
@@ -3166,7 +3150,7 @@ function AerogommageDetails({
   return (
     <>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-5">
+        <div className="space-y-5 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-4">
           <section>
         <SectionTitle>Transport</SectionTitle>
         <div className="text-sm">
@@ -3229,7 +3213,7 @@ function AerogommageDetails({
           </section>
         </div>
 
-        <aside className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+        <aside className="space-y-3 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
           {(photos.length > 0 || beforePhotos.length > 0 || afterPhotos.length > 0 || canUpdate) && (
           <>
           <ManagedRequestPhotoBlock
