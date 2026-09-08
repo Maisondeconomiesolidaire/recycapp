@@ -600,42 +600,21 @@ function DemandeTab({
 
   if (request.type === "aerogommage") {
     return (
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-6">
-          <div className="flex items-center justify-end">
-            {canUpdate && !editingAero && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setEditingAero(true)}
-              >
-                <Pencil className="h-4 w-4" />
-                Modifier
-              </Button>
-            )}
-          </div>
-          {editingAero ? (
-            <AerogommageEditForm
-              request={request}
-              onCancel={() => setEditingAero(false)}
-              onSaved={() => setEditingAero(false)}
-            />
-          ) : (
-            <RequestDetails request={request} canUpdate={canUpdate} />
+      <div className="space-y-6">
+        <div className="flex items-center justify-end">
+          {canUpdate && !editingAero && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditingAero(true)}>
+              <Pencil className="h-4 w-4" />
+              Modifier
+            </Button>
           )}
-          {requestMeta}
         </div>
-        <aside className="space-y-6 xl:sticky xl:top-4 xl:self-start">
-          {requestPhotos}
-          {((request.beforePhotoUrls?.length ?? 0) > 0 ||
-            (request.afterPhotoUrls?.length ?? 0) > 0) && (
-            <AerogommageProgressPhotos request={request} canUpdate={false} />
-          )}
-          {lb !== null && (
-            <Lightbox images={request.photoUrls} startIndex={lb} onClose={() => setLb(null)} />
-          )}
-        </aside>
+        {editingAero ? (
+          <AerogommageEditForm request={request} onCancel={() => setEditingAero(false)} onSaved={() => setEditingAero(false)} />
+        ) : (
+          <RequestDetails request={request} canUpdate={canUpdate} />
+        )}
+        {requestMeta}
       </div>
     );
   }
@@ -2352,6 +2331,7 @@ function RequestDetails({
                 )}
               </span>
             </p>
+            <CollecteMap address={ca} />
             </section>
           )}
           <section>
@@ -2441,14 +2421,10 @@ function RequestDetails({
           )}
           </section>
 
-          <CollecteCategoryPhotos request={request} />
         </div>
-        {ca && (ca.address || ca.city) && (
-          <aside className="xl:sticky xl:top-4 xl:self-start">
-            <SectionTitle>Carte de collecte</SectionTitle>
-            <CollecteMap address={ca} />
-          </aside>
-        )}
+        <aside className="xl:sticky xl:top-4 xl:self-start">
+          <CollecteCategoryPhotos request={request} />
+        </aside>
       </div>
     );
   }
@@ -3188,8 +3164,10 @@ function AerogommageDetails({
   }
 
   return (
-    <div className="space-y-5">
-      <section>
+    <>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
+        <div className="space-y-5">
+          <section>
         <SectionTitle>Transport</SectionTitle>
         <div className="text-sm">
           <Row
@@ -3201,9 +3179,9 @@ function AerogommageDetails({
             value={deliveryAtHome ? `Oui${deliveryCity ? ` · ${deliveryCity}` : ""}` : "Non"}
           />
         </div>
-      </section>
+          </section>
 
-      <section>
+          <section>
         <SectionTitle>Objets à aérogommer ({items.length})</SectionTitle>
       {items.length > 1 && (
         <UnderlineTabs
@@ -3248,11 +3226,12 @@ function AerogommageDetails({
         {a.comment && <Row label="Commentaire" value={a.comment} />}
       </div>
 
-      {(photos.length > 0 ||
-        beforePhotos.length > 0 ||
-        afterPhotos.length > 0 ||
-        canUpdate) && (
-        <div className="mt-3 space-y-3">
+          </section>
+        </div>
+
+        <aside className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+          {(photos.length > 0 || beforePhotos.length > 0 || afterPhotos.length > 0 || canUpdate) && (
+          <>
           <ManagedRequestPhotoBlock
             title="Photos client du meuble"
             urls={photos}
@@ -3290,9 +3269,14 @@ function AerogommageDetails({
             onOpen={(index) => setLb({ images: afterPhotos, index })}
             canUpdate={canUpdate}
           />
-        </div>
-      )}
-
+          </>
+          )}
+          {((request.beforePhotoUrls?.length ?? 0) > 0 ||
+            (request.afterPhotoUrls?.length ?? 0) > 0) && (
+            <AerogommageProgressPhotos request={request} canUpdate={false} />
+          )}
+        </aside>
+      </div>
       {lb !== null && (
         <Lightbox
           images={lb.images}
@@ -3300,8 +3284,7 @@ function AerogommageDetails({
           onClose={() => setLb(null)}
         />
       )}
-      </section>
-    </div>
+    </>
   );
 }
 
