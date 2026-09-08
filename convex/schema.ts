@@ -119,6 +119,45 @@ export const bpCompanyType = v.union(
   v.literal("autre"),
 );
 
+/** App « Bennes & Pro » — spécialité métier des entreprises du bâtiment. */
+export const bpTradeCategory = v.union(
+  v.literal("gros_oeuvre"),
+  v.literal("charpente"),
+  v.literal("couverture"),
+  v.literal("facade"),
+  v.literal("isolation"),
+  v.literal("menuiseries_exterieures"),
+  v.literal("menuiserie_interieure"),
+  v.literal("electricite"),
+  v.literal("photovoltaique"),
+  v.literal("chauffage"),
+  v.literal("pompes_a_chaleur"),
+  v.literal("ventilation"),
+  v.literal("plomberie"),
+  v.literal("salle_de_bains"),
+  v.literal("poeles_cheminees"),
+  v.literal("solaire_thermique"),
+  v.literal("eau_chaude_sanitaire"),
+  v.literal("platrerie"),
+  v.literal("peinture"),
+  v.literal("sols"),
+  v.literal("cuisine"),
+  v.literal("amenagement_interieur"),
+  v.literal("accessibilite_adaptation"),
+  v.literal("ascenseurs"),
+  v.literal("etancheite"),
+  v.literal("humidite"),
+  v.literal("traitement_du_bois"),
+  v.literal("amenagement_exterieur"),
+  v.literal("terrassement_vrd"),
+  v.literal("piscine"),
+  v.literal("construction"),
+  v.literal("renovation_generale"),
+  v.literal("maitrise_oeuvre"),
+  v.literal("architecture"),
+  v.literal("etudes_diagnostics"),
+);
+
 /** App « Bennes & Pro » — unités de mesure. */
 export const bpUnit = v.union(
   v.literal("kg"),
@@ -1820,6 +1859,54 @@ export default defineSchema(
    * restent ainsi totalement séparés, tout en partageant le même déploiement
    * Convex / la même base de données.
    */
+  /**
+   * Chiffre d'affaires du magasin, saisi à la main.
+   *
+   * Les ventes en boutique physique ne passent par aucun outil : elles sont
+   * relevées par semaine et par recyclerie, et complètent les ventes en ligne
+   * dans les rapports. Une semaine est identifiée par son rang dans le mois
+   * (1 à 4), qui est la maille de relevé de l'équipe — pas la semaine ISO.
+   */
+  klydeStoreRevenues: defineTable({
+    site: v.union(v.literal("60"), v.literal("76")),
+    year: v.number(),
+    /** Mois, de 0 (janvier) à 11 (décembre), comme `Date#getMonth`. */
+    month: v.number(),
+    /** Rang de la semaine dans le mois, de 1 à 4. */
+    week: v.number(),
+    amount: v.number(),
+    note: v.optional(v.string()),
+    createdByClerkId: v.string(),
+    createdByName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_period", ["year", "month"])
+    .index("by_site_and_period", ["site", "year", "month", "week"]),
+
+  /**
+   * Clients Klyd saisis à la main.
+   *
+   * L'essentiel des clients se déduit des emails Vinted, qui portent le nom et
+   * l'adresse de facturation de l'acheteur. Cette table ne stocke que ce qui
+   * n'en vient pas : une vente de la main à la main, un contact pris en
+   * boutique, ou un complément (téléphone, note) sur un acheteur connu.
+   */
+  klydeCustomers: defineTable({
+    name: v.string(),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    /** Pseudo Vinted, quand il permet de rapprocher le contact d'un acheteur. */
+    vintedPseudo: v.optional(v.string()),
+    note: v.optional(v.string()),
+    outlet: v.optional(v.union(v.literal("klyd"), v.literal("mobifrip"))),
+    createdByClerkId: v.string(),
+    createdByName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  }).index("by_email", ["email"]),
+
   klydeItems: defineTable({
     photos: v.array(v.id("_storage")),
     title: v.string(),
@@ -1856,12 +1943,14 @@ export default defineSchema(
     // Nombre de fois où l'annonce Vinted a été prolongée après l'alerte de 3 semaines.
     vintedExtensionCount: v.optional(v.number()),
     vintedLastExtendedAt: v.optional(v.number()),
-    /**
-     * Date d'encaissement, posée au passage en « gagné ». Les rapports de
-     * vente se groupent par mois : sans cette date, un article vendu ne peut
-     * être rattaché qu'à `updatedAt`, que la moindre retouche déplace.
-     */
+    /** Date historique d'encaissement, conservée pour les anciens articles. */
     soldAt: v.optional(v.number()),
+    /**
+     * Date à laquelle l'article est enregistré « Vendu » dans le workflow.
+     * Les rapports se basent sur cette étape, et non sur la confirmation
+     * ultérieure « Gagné ».
+     */
+    saleRecordedAt: v.optional(v.number()),
     // Décision prise lorsqu'un article sort de Stock B.
     stockBDisposition: v.optional(v.union(
       v.literal("vente_exceptionnelle"),
@@ -2080,6 +2169,10 @@ export default defineSchema(
     siret: v.optional(v.string()),
     /** Code APE / NAF récupéré depuis l'Annuaire des entreprises. */
     nafCode: v.optional(v.string()),
+    /** Intitulé officiel de l'activité principale correspondant au code NAF. */
+    activityLabel: v.optional(v.string()),
+    /** Catégorie métier utilisée par Bennes & Pro. */
+    tradeCategory: v.optional(bpTradeCategory),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
@@ -2153,6 +2246,12 @@ export default defineSchema(
     completed: v.optional(v.boolean()),
     /** Salariés mobilisés sur l'évènement (équipe Recyclerie). */
     workerIds: v.optional(v.array(v.id("polyvalentWorkers"))),
+    /**
+     * Visible dans l'espace partagé de Mes Outils. Absent vaut partagé : les
+     * évènements du calendrier Recyclerie y figurent tous par défaut, et le
+     * bouton de la fiche sert à en retirer un plutôt qu'à les ajouter un à un.
+     */
+    sharedInMesOutils: v.optional(v.boolean()),
     startAt: v.number(),
     endAt: v.number(),
     attachments: v.array(v.id("_storage")),

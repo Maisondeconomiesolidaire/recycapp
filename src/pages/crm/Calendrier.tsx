@@ -27,6 +27,7 @@ import {
   Check,
   ChevronDown,
   Search,
+  Share2,
   ChevronLeft,
   ChevronRight,
   CalendarCog,
@@ -924,6 +925,8 @@ function EventDetailModal({
   const canUpdate = canAccess(access, "calendrier", "update");
   const remove = useMutation(api.recycappCalendar.remove);
   const setWorkers = useMutation(api.recycappCalendar.setWorkers);
+  const setShared = useMutation(api.recycappCalendar.setShared);
+  const [sharing, setSharing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingTeam, setEditingTeam] = useState(false);
@@ -1077,6 +1080,41 @@ function EventDetailModal({
               </ul>
             </div>
           ) : null}
+
+          {/* Absent vaut partagé : l'évènement figure dans l'espace partagé de
+              Mes Outils tant qu'on ne l'en retire pas. */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[var(--foreground)]">
+                {event.sharedInMesOutils === false
+                  ? "Non partagé dans Mes Outils"
+                  : "Partagé dans Mes Outils"}
+              </p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                L'évènement apparaît au calendrier de l'espace partagé, lu directement
+                ici — aucune copie à tenir à jour.
+              </p>
+            </div>
+            {canUpdate ? (
+              <Button
+                variant={event.sharedInMesOutils === false ? "primary" : "outline"}
+                size="sm"
+                disabled={sharing}
+                onClick={() => {
+                  setSharing(true);
+                  void setShared({
+                    id: event._id,
+                    shared: event.sharedInMesOutils === false,
+                  }).finally(() => setSharing(false));
+                }}
+              >
+                <Share2 className="h-4 w-4" />
+                {event.sharedInMesOutils === false
+                  ? "Partager dans Mes Outils"
+                  : "Ne plus partager"}
+              </Button>
+            ) : null}
+          </div>
 
           <div className="flex justify-end gap-2">
             {canDelete ? (

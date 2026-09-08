@@ -15,7 +15,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
 import { accessAllows, livePhotosByClerkId, requireCrmPermission, requireUser } from "./lib";
 import { bytesToBase64, resendSend, storageImageUrl, type EmailAttachment } from "./emails";
-import { bpBilling, bpCompanyType, bpMaterial, bpUnit } from "./schema";
+import { bpBilling, bpCompanyType, bpMaterial, bpTradeCategory, bpUnit } from "./schema";
 import { resolveActingProfile } from "./bennesproProfiles";
 
 /* ─── Entreprises ─────────────────────────────────────────────────────────── */
@@ -94,6 +94,8 @@ export const createCompany = mutation({
     name: v.string(),
     siret: v.optional(v.string()),
     nafCode: v.optional(v.string()),
+    activityLabel: v.optional(v.string()),
+    tradeCategory: v.optional(bpTradeCategory),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
@@ -118,6 +120,8 @@ export const updateCompany = mutation({
     name: v.string(),
     siret: v.optional(v.string()),
     nafCode: v.optional(v.string()),
+    activityLabel: v.optional(v.string()),
+    tradeCategory: v.optional(bpTradeCategory),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
@@ -161,20 +165,156 @@ export const searchEnterpriseDirectory = action({
       siege?: { siret?: string; adresse?: string; activite_principale?: string } | null;
       matching_etablissements?: Array<{ siret?: string; adresse?: string; activite_principale?: string }>;
     }> };
-    return (payload.results ?? [])
+    return await Promise.all((payload.results ?? [])
       .filter((result) => result.etat_administratif !== "C")
-      .map((result) => {
+      .map(async (result) => {
         const establishment = queryText && /^\d{14}$/.test(queryText)
           ? result.matching_etablissements?.find((item) => item.siret === queryText) ?? result.siege
           : result.siege;
+        const resultNafCode = result.activite_principale ?? establishment?.activite_principale ?? "";
         return {
           name: result.nom_complet ?? "Entreprise sans nom",
           siren: result.siren ?? "",
           siret: establishment?.siret ?? "",
           address: establishment?.adresse ?? "",
-          nafCode: result.activite_principale ?? establishment?.activite_principale ?? "",
+          nafCode: resultNafCode,
+          activityLabel: await nafActivityLabel(resultNafCode),
+          tradeCategory: tradeCategoryForNaf(resultNafCode),
         };
-      });
+      }));
+  },
+});
+
+/** Intitulé NAF Rév. 2 publié par l'Insee pour un code APE donné. */
+async function nafActivityLabel(nafCode: string): Promise<string> {
+  const normalized = nafCode.trim().toUpperCase();
+  if (!/^\d{2}\.\d{2}[A-Z]$/.test(normalized)) return "";
+  try {
+    const response = await fetch(
+      `https://www.insee.fr/fr/metadonnees/nafr2/sousClasse/${encodeURIComponent(normalized)}`,
+      { headers: { Accept: "text/html", "User-Agent": "BennesPro/1.0 company-activity" } },
+    );
+    if (!response.ok) return "";
+    const title = (await response.text()).match(/<title>[^<]*?-[^-<]+-(.*?)\s*\|\s*Insee<\/title>/i)?.[1];
+    return title?.replace(/&amp;/g, "&").replace(/&#39;/g, "'").trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+const TRADE_CATEGORY_BY_NAF: Record<string, Infer<typeof bpTradeCategory>> = {
+  "41.20A": "construction",
+  "41.20B": "construction",
+  "43.11Z": "gros_oeuvre",
+  "43.12A": "terrassement_vrd",
+  "43.12B": "terrassement_vrd",
+  "43.13Z": "gros_oeuvre",
+  "43.21A": "electricite",
+  "43.22A": "plomberie",
+  "43.22B": "chauffage",
+  "43.29A": "isolation",
+  "43.31Z": "platrerie",
+  "43.32B": "menuiseries_exterieures",
+  "43.33Z": "sols",
+  "43.34Z": "peinture",
+  "43.91A": "charpente",
+  "43.91B": "couverture",
+  "43.99C": "gros_oeuvre",
+};
+
+function tradeCategoryForNaf(nafCode: string): Infer<typeof bpTradeCategory> | undefined {
+  return TRADE_CATEGORY_BY_NAF[nafCode.trim().toUpperCase()];
+}
+
+/** Liste bornée des entreprises à enrichir, réservée à l'action de backfill. */
+export const companiesForActivityBackfill = internalQuery({
+  args: {},
+  handler: async (ctx) =>
+    (await ctx.db.query("bpCompanies").order("desc").take(500))
+      .filter((company) => Boolean(company.siret?.replace(/\s/g, ""))),
+});
+
+/** Enregistre uniquement les données d'activité officiellement retrouvées. */
+export const saveCompanyActivity = internalMutation({
+  args: {
+    companyId: v.id("bpCompanies"),
+    nafCode: v.string(),
+    activityLabel: v.string(),
+    tradeCategory: v.optional(bpTradeCategory),
+  },
+  handler: async (ctx, { companyId, nafCode, activityLabel, tradeCategory }) => {
+    await ctx.db.patch(companyId, {
+      nafCode,
+      ...(activityLabel ? { activityLabel } : {}),
+      ...(tradeCategory ? { tradeCategory } : {}),
+    });
+  },
+});
+
+/**
+ * Enrichit les entreprises existantes à partir de leur SIRET via l'Annuaire
+ * des entreprises, puis associe au code NAF son libellé officiel Insee.
+ */
+export const backfillCompanyActivities = action({
+  args: {},
+  handler: async (ctx) => {
+    const access: {
+      isAdmin?: boolean;
+      bootstrapMode?: boolean;
+      grants: Array<{ pageKey: string; actions: string[] }>;
+    } = await ctx.runQuery(api.permissions.myAccess, {});
+    if (!accessAllows(access, "bennespro:entreprises", "update")) {
+      throw new Error("Accès insuffisant.");
+    }
+
+    const companies: Array<Doc<"bpCompanies">> = await ctx.runQuery(
+      internal.bennespro.companiesForActivityBackfill,
+      {},
+    );
+    let updated = 0;
+    let notFound = 0;
+    for (const company of companies) {
+      const siret = company.siret?.replace(/\s/g, "") ?? "";
+      if (!/^\d{14}$/.test(siret)) {
+        notFound += 1;
+        continue;
+      }
+      try {
+        const response = await fetch(
+          `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(siret)}&per_page=1&minimal=true&include=siege,matching_etablissements&etat_administratif=A`,
+          { headers: { Accept: "application/json", "User-Agent": "BennesPro/1.0 company-activity-backfill" } },
+        );
+        if (!response.ok) {
+          notFound += 1;
+          continue;
+        }
+        const payload = await response.json() as {
+          results?: Array<{
+            activite_principale?: string;
+            siege?: { siret?: string; activite_principale?: string } | null;
+            matching_etablissements?: Array<{ siret?: string; activite_principale?: string }>;
+          }>;
+        };
+        const result = payload.results?.[0];
+        const establishment = result?.matching_etablissements?.find((item) => item.siret === siret) ?? result?.siege;
+        const nafCode = establishment?.activite_principale ?? result?.activite_principale ?? "";
+        if (!nafCode) {
+          notFound += 1;
+          continue;
+        }
+        const activityLabel = await nafActivityLabel(nafCode);
+        await ctx.runMutation(internal.bennespro.saveCompanyActivity, {
+          companyId: company._id,
+          nafCode,
+          activityLabel,
+          tradeCategory: tradeCategoryForNaf(nafCode),
+        });
+        updated += 1;
+      } catch {
+        notFound += 1;
+      }
+    }
+    return { processed: companies.length, updated, notFound };
   },
 });
 
@@ -292,6 +432,8 @@ export const saveMyCompany = mutation({
     name: v.string(),
     siret: v.optional(v.string()),
     nafCode: v.optional(v.string()),
+    activityLabel: v.optional(v.string()),
+    tradeCategory: v.optional(bpTradeCategory),
     address: v.optional(v.string()),
     contactName: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
