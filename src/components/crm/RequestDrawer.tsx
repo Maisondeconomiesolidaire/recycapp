@@ -622,7 +622,7 @@ function DemandeTab({
   return (
     <div className="space-y-6">
       <RequestDetails request={request} />
-      {requestMeta}
+      {request.type !== "collecte" && requestMeta}
       {requestPhotos}
       {request.type !== "livraison" && lb !== null && (
         <Lightbox images={request.photoUrls} startIndex={lb} onClose={() => setLb(null)} />
@@ -2380,6 +2380,19 @@ function RequestDetails({
             />
           </div>
           </section>
+
+          {request.comment && (
+            <section>
+              <SectionTitle>Commentaire</SectionTitle>
+              <p className="whitespace-pre-line rounded-lg bg-[var(--crm-surface-3)] p-3 text-sm text-zinc-300">
+                {request.comment}
+              </p>
+            </section>
+          )}
+
+          <p className="text-xs text-zinc-600">
+            Reçue le {formatDateTime(request.createdAt)}
+          </p>
 
         </div>
         <aside className="hide-scrollbar space-y-6 xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-2">
