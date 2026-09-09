@@ -885,11 +885,16 @@ function TourneeForm({
               <option key={vehicle._id} value={vehicle._id}>
                 {vehicle.name}
                 {vehicle.plate ? ` · ${vehicle.plate}` : ""}
+                {vehicle.collecteCount > 0
+                  ? ` — ${vehicle.collecteCount} collecte${vehicle.collecteCount > 1 ? "s" : ""} ce jour`
+                  : ""}
               </option>
             ))}
           </select>
           <p className="mt-1 text-[11px] text-zinc-600">
-            Seuls les véhicules disponibles à cette date sont proposés.
+            Un véhicule déjà sur des collectes reste proposé : le nombre est
+            indiqué. Seuls ceux en tournée, réservés ou en maintenance sont
+            écartés.
           </p>
         </div>
       </div>

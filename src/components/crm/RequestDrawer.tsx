@@ -1418,6 +1418,7 @@ function GestionTab({
         ? {
             date: request.scheduledDate,
             includeVehicleId: request.assignedVehicle ?? undefined,
+            excludeRequestId: request._id,
           }
         : "skip",
     ) ?? [];
@@ -1598,10 +1599,15 @@ function GestionTab({
               }
             >
               <option value="">Aucun véhicule</option>
+              {/* Un véhicule reste proposé même s'il a déjà des collectes ce
+                  jour-là : le nombre est annoncé, il n'écarte plus le choix. */}
               {availableVehicles.map((vehicle) => (
                 <option key={vehicle._id} value={vehicle._id}>
                   {vehicle.name}
                   {vehicle.plate ? ` · ${vehicle.plate}` : ""}
+                  {vehicle.collecteCount > 0
+                    ? ` — ${vehicle.collecteCount} collecte${vehicle.collecteCount > 1 ? "s" : ""} ce jour`
+                    : ""}
                 </option>
               ))}
             </Select>

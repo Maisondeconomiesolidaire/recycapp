@@ -330,16 +330,26 @@ export function ScheduleCalendarModal({
                     {dayVehicles.length > 0 && (
                       <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5">
                         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-400">
-                          Véhicules déjà pris ce jour
+                          Véhicules déjà engagés ce jour
                         </p>
                         <div className="flex flex-wrap gap-1.5">
-                          {dayVehicles.map((veh, i) => (
+                          {/* Un véhicule peut revenir plusieurs fois : on compte
+                              ses engagements au lieu de répéter son nom. */}
+                          {[...new Map(
+                            dayVehicles.map((veh) => [
+                              veh.vehicleName,
+                              dayVehicles.filter(
+                                (other) => other.vehicleName === veh.vehicleName,
+                              ).length,
+                            ]),
+                          )].map(([vehicleName, count]) => (
                             <span
-                              key={`${veh.vehicleName}-${i}`}
+                              key={vehicleName}
                               className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300"
                             >
                               <Truck className="h-3 w-3" />
-                              {veh.vehicleName}
+                              {vehicleName}
+                              {count > 1 ? ` · ${count}` : ""}
                             </span>
                           ))}
                         </div>
@@ -353,7 +363,8 @@ export function ScheduleCalendarModal({
                       <p className="text-xs text-zinc-500">Chargement…</p>
                     ) : availableVehicles.length === 0 ? (
                       <p className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3 text-xs text-zinc-500">
-                        Aucun véhicule disponible ce jour.
+                        Aucun véhicule disponible ce jour (tournée, réservation
+                        ou maintenance).
                       </p>
                     ) : (
                       <div className="space-y-2">
@@ -405,6 +416,15 @@ export function ScheduleCalendarModal({
                                   {KIND_LABELS[veh.kind] ?? veh.kind}
                                   {veh.plate ? ` · ${veh.plate}` : ""}
                                 </p>
+                                {/* Un véhicule enchaîne plusieurs collectes :
+                                    le nombre éclaire le choix, il ne l'interdit
+                                    plus. */}
+                                {veh.collecteCount > 0 ? (
+                                  <p className="truncate text-[11px] font-semibold text-amber-400">
+                                    {veh.collecteCount} collecte
+                                    {veh.collecteCount > 1 ? "s" : ""} ce jour
+                                  </p>
+                                ) : null}
                               </div>
                               {active && (
                                 <Check className="h-4 w-4 shrink-0 text-brand-400" />
