@@ -69,7 +69,6 @@ export function Taches() {
     <div className="pb-16">
       <PageHeader
         title="Gestion"
-        subtitle={`${SITE_LABELS[GESTION_SITE]} — planifiez les tâches, gérez l’équipe et suivez les disponibilités.`}
       />
 
       <div className="px-4 py-4 sm:px-6">

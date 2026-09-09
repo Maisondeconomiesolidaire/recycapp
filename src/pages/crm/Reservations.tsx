@@ -68,7 +68,7 @@ export function Reservations() {
 
   return (
     <div>
-      <PageHeader title="Réservations" subtitle="Demandes pour les véhicules mis à disposition de la Recyclerie." />
+      <PageHeader title="Réservations" />
 
       <div className="p-4 sm:p-6">
         {reservations === undefined ? (
