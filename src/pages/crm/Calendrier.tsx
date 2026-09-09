@@ -930,6 +930,7 @@ function EventDetailModal({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingTeam, setEditingTeam] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(false);
   const [savingTeam, setSavingTeam] = useState(false);
   const assignable = useQuery(
     api.recycappCalendar.assignableWorkers,
@@ -940,6 +941,7 @@ function EventDetailModal({
   // La fiche se rouvre sur un autre évènement : l'édition d'équipe repart à zéro.
   useEffect(() => {
     setEditingTeam(false);
+    setEditingEvent(false);
   }, [event?._id]);
 
   async function saveTeam(next: Id<"polyvalentWorkers">[]) {
@@ -989,6 +991,13 @@ function EventDetailModal({
     >
       {event ? (
         <div className="space-y-5">
+          {canUpdate ? (
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setEditingEvent(true)}>
+                <Pencil className="h-4 w-4" /> Modifier l'évènement
+              </Button>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
             <p className="text-sm font-semibold capitalize text-[var(--foreground)]">
               {format(new Date(event.startAt), "EEEE d MMMM yyyy", {
@@ -1133,6 +1142,12 @@ function EventDetailModal({
             hours={hours}
             saving={savingTeam}
             onValidate={(next) => void saveTeam(next)}
+          />
+
+          <EventModal
+            open={editingEvent}
+            event={event}
+            onClose={() => setEditingEvent(false)}
           />
 
           <ConfirmDialog
@@ -1733,8 +1748,17 @@ const EMPTY_EVENT_META = {
   organizer: "",
 };
 
-function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function EventModal({
+  open,
+  onClose,
+  event = null,
+}: {
+  open: boolean;
+  onClose: () => void;
+  event?: CalendarEvent | null;
+}) {
   const create = useMutation(api.recycappCalendar.create);
+  const update = useMutation(api.recycappCalendar.update);
   const upload = useUpload();
   const [title, setTitle] = useState("");
   const [start, setStart] = useState<number>();
@@ -1770,6 +1794,25 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   }, [customOptions]);
   const setMetaField = (key: keyof typeof EMPTY_EVENT_META, value: string) =>
     setMeta((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(event?.title ?? "");
+    setStart(event?.startAt);
+    setEnd(event?.endAt);
+    setUrls(event?.urls.join("\n") ?? "");
+    setFile(null);
+    setMeta({
+      animationType: event?.animationType ?? "",
+      structure: event?.structure ?? "",
+      activity: event?.activity ?? "",
+      location: event?.location ?? "",
+      relatedEvent: event?.relatedEvent ?? "",
+      targetAudience: event?.targetAudience ?? "",
+      organizer: event?.organizer ?? "",
+    });
+    setWorkerIds(event?.workerIds ?? []);
+  }, [open, event]);
   async function save() {
     setSaving(true);
     try {
@@ -1779,8 +1822,11 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     }
   }
   async function submit() {
-    const attachments = file ? [await upload(file)] : [];
-    await create({
+    const attachments = [
+      ...(event?.attachments ?? []),
+      ...(file ? [await upload(file)] : []),
+    ];
+    const values = {
       title,
       ...Object.fromEntries(
         Object.entries(meta).filter(([, value]) => value.trim()),
@@ -1793,7 +1839,9 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         .split(/\n|,/)
         .map((url) => url.trim())
         .filter(Boolean),
-    });
+    };
+    if (event) await update({ id: event._id, ...values });
+    else await create(values);
     reset();
     onClose();
   }
@@ -1810,13 +1858,14 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Nouvel évènement"
+      title={event ? "Modifier l'évènement" : "Nouvel évènement"}
       className="max-w-3xl"
     >
       <div className="space-y-5">
         <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4 text-sm text-[var(--foreground)]">
-          Planifiez un évènement, joignez ses documents et centralisez les liens
-          utiles.
+          {event
+            ? "Modifiez les informations, les documents et les liens de cet évènement."
+            : "Planifiez un évènement, joignez ses documents et centralisez les liens utiles."}
         </div>
         <Field label="Intitulé" required>
           <input
@@ -1894,6 +1943,11 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </button>
         </Field>
         <Field label="Pièce jointe">
+          {event?.attachmentUrls.filter((url): url is string => Boolean(url)).length ? (
+            <p className="mb-2 text-xs text-zinc-500">
+              Les pièces jointes existantes sont conservées. Vous pouvez ajouter un fichier.
+            </p>
+          ) : null}
           <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-brand-400 bg-[var(--crm-surface-2)] px-4 py-4 text-sm font-semibold text-brand-600 transition hover:bg-[var(--crm-surface)]">
             <span>{file ? file.name : "Ajouter un fichier"}</span>
             <span className="rounded-lg bg-[var(--crm-surface)] px-3 py-1.5 text-xs shadow-sm">
@@ -1922,7 +1976,7 @@ function EventModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             onClick={() => void save()}
             disabled={saving || !title || !start || !end}
           >
-            {saving ? "Création..." : "Créer l'évènement"}
+            {saving ? "Enregistrement..." : event ? "Enregistrer les modifications" : "Créer l'évènement"}
           </Button>
         </div>
       </div>
