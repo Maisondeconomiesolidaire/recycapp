@@ -1665,6 +1665,52 @@ export default defineSchema(
     .index("by_authorClerkId", ["authorClerkId"])
     .index("by_start", ["start"]),
 
+  /**
+   * Pages Facebook sur lesquelles Mes Outils peut publier.
+   *
+   * Le jeton de Page est un secret durable : il vit ici, dans le déploiement,
+   * et n'est jamais renvoyé au navigateur — seuls l'identifiant et le nom le
+   * sont. Même logique que la boîte Gmail de Klyd.
+   */
+  socialFacebookPages: defineTable({
+    pageId: v.string(),
+    name: v.string(),
+    accessToken: v.string(),
+    active: v.boolean(),
+    /**
+     * Compte Instagram professionnel rattaché à la Page. Instagram ne se
+     * publie qu'à travers la Page qui le porte : sans ce rattachement, le
+     * compte n'existe pas pour l'API.
+     */
+    instagramId: v.optional(v.string()),
+    instagramUsername: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  }).index("by_pageId", ["pageId"]),
+
+  /** Publications Facebook émises depuis Mes Outils, pour le suivi. */
+  socialFacebookPosts: defineTable({
+    eventId: v.optional(v.id("events")),
+    /** Évènement du calendrier Recyclerie, quand la publication vient de là. */
+    recycappEventId: v.optional(v.id("recycappCalendarEvents")),
+    /** Réseau de publication ; absent vaut Facebook (posts antérieurs). */
+    network: v.optional(v.union(v.literal("facebook"), v.literal("instagram"))),
+    /** Page Facebook, ou compte Instagram selon le réseau. */
+    pageId: v.string(),
+    pageName: v.string(),
+    /** Identifiant du post renvoyé par le réseau. */
+    postId: v.string(),
+    message: v.string(),
+    /** Date de publication programmée, absente pour une publication immédiate. */
+    scheduledFor: v.optional(v.number()),
+    withPhoto: v.boolean(),
+    authorClerkId: v.string(),
+    authorName: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_event", ["eventId"])
+    .index("by_recycappEvent", ["recycappEventId"]),
+
   /** Espace partage — bons plans internes (prêt, don, vente, échange). */
   dealPosts: defineTable({
     authorClerkId: v.string(),
@@ -3100,6 +3146,8 @@ export default defineSchema(
     address: v.optional(v.string()),
     postalCode: v.optional(v.string()),
     city: v.optional(v.string()),
+    /** Email de bienvenue envoyé : il n'a de sens qu'une fois. */
+    welcomeEmailSentAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_clerkId", ["clerkId"]),

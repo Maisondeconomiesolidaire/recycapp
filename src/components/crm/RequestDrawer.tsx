@@ -1444,26 +1444,23 @@ function GestionTab({
     request.type === "velo" ||
     (request.type === "collecte" &&
       (request.collecteType === "C2" || request.collecteType === "C3"));
-  const isC1 = request.type === "collecte" && request.collecteType === "C1";
 
+  // La date conditionne l'étape pour tout process qui la contient, quel que
+  // soit le type : l'énumérer type par type laissait passer la livraison.
+  if (!request.scheduledDate && request.processSteps.includes(STEP.prestaPlanifiee)) {
+    stepBlockers[STEP.prestaPlanifiee] =
+      "Programmez une date avant de cocher cette étape.";
+  }
   if (isFullProcess) {
     if (request.type !== "collecte" && !request.estimatedHours)
       stepBlockers[STEP.devisEdite] =
         "Renseignez les heures estimées (champ « Temps estimé ») avant de cocher cette étape.";
-    if (!request.scheduledDate)
-      stepBlockers[STEP.prestaPlanifiee] =
-        "Programmez une date avant de cocher cette étape.";
     if (request.type !== "collecte" && !request.actualHours)
       stepBlockers[STEP.prestaTerminee] =
         "Renseignez les heures réelles (champ « Temps réel passé ») avant de cocher cette étape.";
     if (!request.quoteAmount)
       stepBlockers[STEP.factureEditee] =
         "Renseignez le montant du devis avant de cocher cette étape.";
-  }
-  if (isC1) {
-    if (!request.scheduledDate)
-      stepBlockers[STEP.prestaPlanifiee] =
-        "Programmez une date avant de cocher cette étape.";
   }
   return (
     <fieldset
