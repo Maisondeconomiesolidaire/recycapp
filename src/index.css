@@ -440,7 +440,7 @@ body {
 .auth-switch-container {
   position: relative;
   width: min(100%, 1100px);
-  height: 700px;
+  height: max(700px, var(--auth-content-height, 700px));
   overflow: hidden;
   border-radius: 1.5rem;
   background: var(--auth-card-bg, #fff);
@@ -572,6 +572,11 @@ body {
   .sign-up-mode .auth-switch-form { left: auto; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .auth-switch-container::before, .auth-switch-form, .auth-switch-panel-content {
+    transition: none;
+  }
+}
 /* <<< AUTH-PORTAL <<< */
 
 /* >>> CLICKABLE-CURSOR >>> */
