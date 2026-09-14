@@ -249,7 +249,7 @@ function DepotCalendar({ month }: { month: Date }) {
   const byDay = useMemo(() => {
     const map = new Map<string, Doc<"requests">[]>();
     for (const depot of depots ?? []) {
-      if (!depot.depot) continue;
+      if (depot.outcome === "perdue" || !depot.depot) continue;
       const key = format(new Date(depot.depot.slotStart), "yyyy-MM-dd");
       const list = map.get(key) ?? [];
       list.push(depot);
@@ -608,11 +608,11 @@ function AllCalendar({ month }: { month: Date }) {
       return created;
     };
     for (const request of requests ?? []) {
-      if (!request.scheduledDate) continue;
+      if (request.outcome === "perdue" || !request.scheduledDate) continue;
       bucket(request.scheduledDate).requests.push(request);
     }
     for (const depot of depots ?? []) {
-      if (!depot.depot) continue;
+      if (depot.outcome === "perdue" || !depot.depot) continue;
       bucket(depot.depot.slotStart).depots.push(depot);
     }
     for (const event of events ?? []) bucket(event.startAt).events.push(event);
@@ -2012,7 +2012,7 @@ function RequestsCalendar({ month }: { month: Date }) {
   const byDay = useMemo(() => {
     const map = new Map<string, Doc<"requests">[]>();
     for (const r of requests ?? []) {
-      if (!r.scheduledDate) continue;
+      if (r.outcome === "perdue" || !r.scheduledDate) continue;
       const key = format(new Date(r.scheduledDate), "yyyy-MM-dd");
       const arr = map.get(key) ?? [];
       arr.push(r);
