@@ -14,6 +14,13 @@ const TYPE_LABELS: Record<string, string> = {
   livraison: "Livraison",
 };
 
+/**
+ * Colonne collée en haut de l'écran, haute d'un écran moins les marges de la
+ * page. Elle défile toute seule ; en dessous de `lg` les colonnes reprennent
+ * le flux normal, l'écran étant trop étroit pour les afficher côte à côte.
+ */
+const PANE = "lg:sticky lg:top-8 lg:h-[calc(100svh-4rem)] lg:self-start";
+
 function formatAgo(ts: number) {
   const diff = Math.max(0, Date.now() - ts);
   const min = Math.round(diff / 60000);
@@ -52,10 +59,13 @@ export function Messages() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr] xl:grid-cols-[320px_1fr_320px]">
+      {/* Chaque colonne tient dans la hauteur de l'écran et défile pour son
+          propre compte : la liste des conversations est longue, le fil l'est
+          aussi, et faire défiler l'un ne doit pas emporter les autres. */}
+      <div className="grid items-start gap-4 lg:grid-cols-[320px_1fr] xl:grid-cols-[320px_1fr_320px]">
         {/* Conversation list */}
-        <div className={`${selected ? "hidden lg:block" : "block"}`}>
-          <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
+        <div className={`${selected ? "hidden lg:block" : "block"} ${PANE}`}>
+          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] lg:h-full lg:overflow-y-auto">
             {conversations === undefined ? (
               <div className="flex items-center gap-2 px-5 py-8 text-sm text-zinc-500">
                 <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
@@ -123,9 +133,9 @@ export function Messages() {
         </div>
 
         {/* Thread */}
-        <div className={`${selected ? "block" : "hidden lg:block"}`}>
+        <div className={`${selected ? "block" : "hidden lg:block"} ${PANE}`}>
           {selected && context ? (
-            <div className="flex h-[70vh] flex-col">
+            <div className="flex h-[70vh] flex-col lg:h-full">
               {/* Barre minimale (mobile/lg) : le détail client est dans la colonne récap (xl). */}
               <div className="mb-3 flex items-center gap-2 xl:hidden">
                 <button
@@ -147,7 +157,7 @@ export function Messages() {
               </div>
             </div>
           ) : (
-            <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-surface)]">
+            <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-surface)] lg:h-full">
               <div className="text-center">
                 <MessageSquare className="mx-auto h-10 w-10 text-zinc-600" />
                 <p className="mt-3 text-sm text-zinc-500">
@@ -159,11 +169,11 @@ export function Messages() {
         </div>
 
         {/* Recap column */}
-        <div className="hidden xl:block">
+        <div className={`hidden xl:block ${PANE}`}>
           {selected && context ? (
             <RequestRecap context={context} onViewRequest={() => navigate(`/crm/demandes?open=${selected}`)} />
           ) : (
-            <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 text-center text-sm text-zinc-500">
+            <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 text-center text-sm text-zinc-500">
               Le récapitulatif de la demande s'affichera ici.
             </div>
           )}
@@ -221,7 +231,7 @@ const OUTCOME_LABELS: Record<string, string> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function RequestRecap({ context, onViewRequest }: { context: any; onViewRequest: () => void }) {
   return (
-    <div className="flex h-[70vh] flex-col gap-4 overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+    <div className="flex h-full max-h-[70vh] flex-col gap-4 overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5 xl:max-h-none">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
           Récapitulatif
