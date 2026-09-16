@@ -106,6 +106,12 @@ function normalizePrice(value?: number | null) {
   return Math.max(0, Math.round(value * 100) / 100);
 }
 
+/** Les vues Vinted sont un compteur entier, relevé manuellement à la vente. */
+function normalizeViewsAtSale(value?: number | null) {
+  if (value == null || Number.isNaN(value)) return undefined;
+  return Math.max(0, Math.floor(value));
+}
+
 function normalizeQuantity(value?: number) {
   if (!value || Number.isNaN(value) || value < 1) return 1;
   return Math.floor(value);
@@ -641,6 +647,7 @@ export const create = mutation({
     material: v.optional(v.string()),
     price: v.optional(v.number()),
     actualSalePrice: v.optional(v.number()),
+    viewsAtSale: v.optional(v.number()),
     parcelSize: v.optional(v.string()),
     gender: v.optional(v.string()),
     style: v.optional(v.string()),
@@ -687,6 +694,7 @@ export const create = mutation({
       material: cleanOptional(args.material),
       price: normalizePrice(args.price),
       actualSalePrice: normalizePrice(args.actualSalePrice),
+      viewsAtSale: normalizeViewsAtSale(args.viewsAtSale),
       parcelSize: cleanOptional(args.parcelSize),
       gender: cleanOptional(args.gender),
       style: cleanOptional(args.style),
@@ -803,6 +811,20 @@ export const setActualSalePrice = mutation({
   },
 });
 
+/** Compteur Vinted relevé à la vente, modifiable même une fois l'article gagné. */
+export const setViewsAtSale = mutation({
+  args: { id: v.id("klydeItems"), viewsAtSale: v.optional(v.number()) },
+  handler: async (ctx, { id, viewsAtSale }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    await ctx.db.patch(id, {
+      viewsAtSale: normalizeViewsAtSale(viewsAtSale),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 /** Décision après trois semaines sur Vinted : retrait vers Stock B. */
 /**
  * Remise en vente à la boutique physique.
@@ -908,6 +930,7 @@ export const update = mutation({
     material: v.optional(v.string()),
     price: v.optional(v.number()),
     actualSalePrice: v.optional(v.number()),
+    viewsAtSale: v.optional(v.number()),
     parcelSize: v.optional(v.string()),
     gender: v.optional(v.string()),
     style: v.optional(v.string()),
@@ -947,6 +970,7 @@ export const update = mutation({
       material: cleanOptional(args.material),
       price: normalizePrice(args.price),
       actualSalePrice: normalizePrice(args.actualSalePrice),
+      viewsAtSale: normalizeViewsAtSale(args.viewsAtSale),
       parcelSize: cleanOptional(args.parcelSize),
       gender: cleanOptional(args.gender),
       style: cleanOptional(args.style),
