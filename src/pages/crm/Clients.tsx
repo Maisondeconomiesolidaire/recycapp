@@ -53,6 +53,11 @@ export function Clients() {
     <div>
       <PageHeader
         title="Clients"
+        subtitle={
+          clients === undefined
+            ? "Chargement du nombre de clients…"
+            : `${clients.length} client${clients.length === 1 ? "" : "s"}`
+        }
         actions={
           <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
