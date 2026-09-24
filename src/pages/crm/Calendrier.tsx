@@ -2215,6 +2215,11 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const [weekStart, setWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   );
+  const [calendarView, setCalendarView] = useState<"week" | "day">("week");
+  const [calendarDay, setCalendarDay] = useState(() => {
+    const today = startOfDay(new Date());
+    return today.getDay() === 0 ? addDays(today, 1) : today;
+  });
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
   const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
 
@@ -2222,14 +2227,11 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
   }, [canCreate, ensurePlannerTasks, siteFilter]);
 
-  const days = useMemo(
-    () =>
-      eachDayOfInterval({
-        start: weekStart,
-        end: endOfWeek(weekStart, { weekStartsOn: 1 }),
-      }),
-    [weekStart],
-  );
+  const days = useMemo(() => {
+    if (calendarView === "day") return [calendarDay];
+    // La recyclerie ne planifie pas le dimanche : la vue semaine s'arrête au samedi.
+    return eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 5) });
+  }, [calendarDay, calendarView, weekStart]);
 
   // Une activité s'affiche sur chaque jour compris entre sa date de début et sa
   // date de fin (créneaux multi-jours inclus).
@@ -2301,8 +2303,32 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     );
   }
 
-  const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+  const weekEnd = addDays(weekStart, 5);
   const weekLabel = `${format(weekStart, "d MMM", { locale: fr })} – ${format(weekEnd, "d MMM yyyy", { locale: fr })}`;
+  const calendarLabel =
+    calendarView === "day"
+      ? format(calendarDay, "EEEE d MMMM yyyy", { locale: fr })
+      : weekLabel;
+  const gridTemplate =
+    calendarView === "day"
+      ? "grid-cols-[56px_minmax(300px,1fr)]"
+      : "grid-cols-[56px_repeat(6,minmax(132px,1fr))]";
+
+  function moveCalendar(direction: -1 | 1) {
+    if (calendarView === "week") {
+      setWeekStart(addDays(weekStart, direction * 7));
+      return;
+    }
+    let next = addDays(calendarDay, direction);
+    if (next.getDay() === 0) next = addDays(next, direction);
+    setCalendarDay(next);
+  }
+
+  function goToCurrentWeek() {
+    const today = startOfDay(new Date());
+    setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
+    setCalendarDay(today.getDay() === 0 ? addDays(today, 1) : today);
+  }
 
   return (
     // Le planning occupe la hauteur de l'écran : une semaine chargée se lit
@@ -2374,35 +2400,62 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setWeekStart(addDays(weekStart, -7))}
+          onClick={() => moveCalendar(-1)}
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="min-w-[170px] text-center text-sm font-semibold capitalize">
-          {weekLabel}
+          {calendarLabel}
         </span>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setWeekStart(addDays(weekStart, 7))}
+          onClick={() => moveCalendar(1)}
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
         <Button
           variant="secondary"
           size="sm"
-          onClick={() =>
-            setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))
-          }
+          onClick={goToCurrentWeek}
         >
           Cette semaine
         </Button>
-        {canCreate ? <Button size="sm" onClick={() => tasks[0] && setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(weekStart, 13), endAt: dayAtHour(weekStart, 17) })}><Plus className="h-4 w-4" />Nouvelle tâche</Button> : null}
+        <div className="ml-auto inline-flex rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface)] p-0.5">
+          <button
+            type="button"
+            onClick={() => setCalendarView("week")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+              calendarView === "week"
+                ? "bg-brand-600 text-white shadow-sm"
+                : "text-[var(--foreground)] hover:bg-[var(--crm-surface-2)]",
+            )}
+          >
+            Semaine
+          </button>
+          <button
+            type="button"
+            onClick={() => setCalendarView("day")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+              calendarView === "day"
+                ? "bg-brand-600 text-white shadow-sm"
+                : "text-[var(--foreground)] hover:bg-[var(--crm-surface-2)]",
+            )}
+          >
+            Jour
+          </button>
+        </div>
+        {canCreate ? <Button size="sm" onClick={() => {
+          const taskDay = calendarView === "day" ? calendarDay : weekStart;
+          if (tasks[0]) setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(taskDay, 13), endAt: dayAtHour(taskDay, 17) });
+        }}><Plus className="h-4 w-4" />Nouvelle tâche</Button> : null}
       </div>
 
       <div className="thin-scroll min-h-0 flex-1 overflow-x-scroll overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
-        <div className="min-w-[980px]">
-          <div className="sticky top-0 z-20 grid grid-cols-[56px_repeat(7,minmax(132px,1fr))] border-b border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-sm">
+        <div className={cn(calendarView === "day" ? "min-w-[420px]" : "min-w-[860px]")}>
+          <div className={cn("sticky top-0 z-20 grid border-b border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-sm", gridTemplate)}>
             <div className="border-r border-[var(--crm-border)]" />
             {days.map((day) => {
               const key = format(day, "yyyy-MM-dd");
@@ -2425,7 +2478,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                       "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs",
                       today
                         ? "bg-brand-600 font-semibold text-white"
-                        : "text-zinc-300",
+                        : "text-[var(--foreground)]",
                     )}
                   >
                     {format(day, "d")}
@@ -2437,7 +2490,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
               );
             })}
           </div>
-          <div className="grid grid-cols-[56px_repeat(7,minmax(132px,1fr))]">
+          <div className={cn("grid", gridTemplate)}>
             <div
               className="relative border-r border-[var(--crm-border)]"
               style={{ height: RESOURCE_DAY_HEIGHT }}
@@ -2527,7 +2580,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                         }}
                         className={cn(
                           "absolute overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-medium shadow-sm transition",
-                          activity.taskName.toLocaleLowerCase("fr").includes("caisse") ? "border-violet-400/50 bg-violet-500/25 text-violet-100 hover:bg-violet-500/40" : "border-emerald-400/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/40",
+                          activity.taskName.toLocaleLowerCase("fr").includes("caisse")
+                            ? "border-violet-800 bg-violet-700 text-white hover:bg-violet-800"
+                            : "border-emerald-800 bg-emerald-700 text-white hover:bg-emerald-800",
                           foregroundActivityId === String(activity._id) && "ring-2 ring-brand-300",
                         )}
                         style={{
@@ -2550,12 +2605,12 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                             </span>
                           ) : null}
                         </p>
-                        <p className="flex items-center gap-1 truncate text-current/80">
+                        <p className="flex items-center gap-1 truncate text-white/90">
                           {activity.workerId ? <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/25 text-[8px] font-extrabold text-white">{activity.workerName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("")}</span> : null}
                           {activity.workerName}
                         </p>
                         {segment.height >= 46 ? (
-                          <p className="mt-0.5 text-[10px] font-normal text-current/70">
+                          <p className="mt-0.5 text-[10px] font-normal text-white/80">
                             {segment.timeLabel}
                           </p>
                         ) : null}
