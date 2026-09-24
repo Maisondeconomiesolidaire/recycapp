@@ -2224,7 +2224,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   });
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
   const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
-  const [activityToEdit, setActivityToEdit] = useState<Activity | null>(null);
+  const [activityToEdit, setActivityToEdit] = useState<DisplayActivity | null>(null);
   const [resizePreview, setResizePreview] = useState<{
     id: string;
     endAt: number;
@@ -2579,29 +2579,43 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                   data-resource-day="true"
                   onClick={() => setSelectedDay(day)}
                   onDragOver={(event) => {
-                    if (canCreate) event.preventDefault();
+                    if (canCreate || canUpdate) event.preventDefault();
                   }}
                   onDrop={(event) => {
+                    const activityId = event.dataTransfer.getData(
+                      "application/x-recycapp-activity",
+                    ) as Id<"polyvalentActivities">;
                     const taskId = event.dataTransfer.getData(
                       "application/x-recycapp-task",
                     ) as Id<"polyvalentTasks">;
-                    if (!canCreate || !taskId) return;
                     event.preventDefault();
                     const bounds = event.currentTarget.getBoundingClientRect();
-                    const hour = Math.max(
-                      RESOURCE_DAY_START_HOUR,
+                    const halfHours = Math.max(
+                      0,
                       Math.min(
-                        RESOURCE_DAY_END_HOUR - 1,
-                        RESOURCE_DAY_START_HOUR +
-                          Math.floor(
-                            (event.clientY - bounds.top) / RESOURCE_HOUR_HEIGHT,
-                          ),
+                        (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * 2 - 1,
+                        Math.floor((event.clientY - bounds.top) / (RESOURCE_HOUR_HEIGHT / 2)),
                       ),
                     );
+                    const startAt = dayAtHour(day, RESOURCE_DAY_START_HOUR) + halfHours * 30 * 60_000;
+                    if (activityId && canUpdate) {
+                      const activity = (activities ?? []).find((item) => item._id === activityId);
+                      if (!activity) return;
+                      const duration = activity.endAt - activity.startAt;
+                      void updateActivity({
+                        id: activity._id,
+                        taskId: activity.taskId,
+                        workerId: activity.workerId ?? undefined,
+                        startAt,
+                        endAt: startAt + duration,
+                      });
+                      return;
+                    }
+                    if (!canCreate || !taskId) return;
                     setDroppedTask({
                       taskId,
-                      startAt: dayAtHour(day, hour),
-                      endAt: dayAtHour(day, hour + 1),
+                      startAt,
+                      endAt: startAt + 60 * 60_000,
                     });
                     setSelectedDay(day);
                   }}
@@ -2636,10 +2650,19 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                       <button
                         key={activity._id}
                         type="button"
+                        draggable={isStoredActivity(activity) && canUpdate}
+                        onDragStart={(event) => {
+                          if (!isStoredActivity(activity)) return;
+                          event.dataTransfer.setData(
+                            "application/x-recycapp-activity",
+                            String(activity._id),
+                          );
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
                         onClick={(event) => {
                           event.stopPropagation();
                           setForegroundActivityId(String(activity._id));
-                          if (isStoredActivity(activity) && canUpdate) setActivityToEdit(activity);
+                          setActivityToEdit(activity);
                         }}
                         className={cn(
                           "group absolute overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-medium shadow-sm transition",
@@ -2731,6 +2754,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           key={activityToEdit._id}
           activity={activityToEdit}
           workers={workers ?? []}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
           onClose={() => setActivityToEdit(null)}
         />
       ) : null}
@@ -2793,28 +2818,44 @@ function isStoredActivity(activity: DisplayActivity): activity is Activity {
 function ActivityWorkerModal({
   activity,
   workers,
+  canCreate,
+  canUpdate,
   onClose,
 }: {
-  activity: Activity;
+  activity: DisplayActivity;
   workers: WorkerList;
+  canCreate: boolean;
+  canUpdate: boolean;
   onClose: () => void;
 }) {
   const updateActivity = useMutation(api.polyvalents.updateActivity);
+  const createActivity = useMutation(api.polyvalents.createActivity);
   const [workerId, setWorkerId] = useState<Id<"polyvalentWorkers"> | "">(
-    activity.workerId ?? "",
+    "",
   );
+  const [addingWorker, setAddingWorker] = useState(false);
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    if (!workerId) return;
     setSaving(true);
     try {
-      await updateActivity({
-        id: activity._id,
-        taskId: activity.taskId,
-        workerId: workerId || undefined,
-        startAt: activity.startAt,
-        endAt: activity.endAt,
-      });
+      if (isStoredActivity(activity) && !activity.workerId) {
+        await updateActivity({
+          id: activity._id,
+          taskId: activity.taskId,
+          workerId,
+          startAt: activity.startAt,
+          endAt: activity.endAt,
+        });
+      } else {
+        await createActivity({
+          taskId: activity.taskId,
+          workerId,
+          startAt: activity.startAt,
+          endAt: activity.endAt,
+        });
+      }
       onClose();
     } finally {
       setSaving(false);
@@ -2822,28 +2863,30 @@ function ActivityWorkerModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Affecter un salarié" className="max-w-md">
+    <Modal open onClose={onClose} title="Récapitulatif de la tâche" className="max-w-md">
       <div className="space-y-4">
-        <Field label="Salarié">
-          <Select
-            value={workerId}
-            onChange={(event) =>
-              setWorkerId(event.target.value as Id<"polyvalentWorkers">)
-            }
-          >
-            <option value="">Aucun salarié affecté</option>
-            {workers.map((worker) => (
-              <option key={worker._id} value={worker._id}>
-                {worker.firstName} {worker.lastName}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="flex justify-end gap-2">
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
+          <p className="font-semibold text-[var(--foreground)]">{activity.taskName}</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            {format(new Date(activity.startAt), "EEEE d MMMM · HH:mm", { locale: fr })} – {format(new Date(activity.endAt), "HH:mm", { locale: fr })}
+          </p>
+          <p className="mt-2 text-sm text-[var(--foreground)]">
+            Salarié affecté : <span className="font-semibold">{activity.workerName}</span>
+          </p>
+        </div>
+        {addingWorker ? (
+          <Field label="Ajouter un salarié">
+            <Select value={workerId} onChange={(event) => setWorkerId(event.target.value as Id<"polyvalentWorkers">)}>
+              <option value="">Choisir un salarié</option>
+              {workers.map((worker) => <option key={worker._id} value={worker._id}>{worker.firstName} {worker.lastName}</option>)}
+            </Select>
+          </Field>
+        ) : null}
+        <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Annuler</Button>
-          <Button onClick={() => void save()} disabled={saving}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </Button>
+          {!addingWorker && canCreate ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Ajouter un salarié</Button> : null}
+          {addingWorker ? <Button onClick={() => void save()} disabled={saving || !workerId}>{saving ? "Enregistrement…" : "Ajouter"}</Button> : null}
+          {!addingWorker && !activity.workerId && isStoredActivity(activity) && canUpdate ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Affecter un salarié</Button> : null}
         </div>
       </div>
     </Modal>
@@ -3320,11 +3363,11 @@ function availabilityLabel(
   day: Date,
 ) {
   const weekday = day.getDay() || 7;
-  const slot = schedules
+  const slots = schedules
     .find((schedule) => schedule.workerId === workerId)
-    ?.availability.find((item) => item.weekday === weekday);
-  return slot
-    ? ` — disponible ${slot.start}–${slot.end}`
+    ?.availability.filter((item) => item.weekday === weekday);
+  return slots?.length
+    ? ` — disponible ${slots.map((slot) => `${slot.start}–${slot.end}`).join(" · ")}`
     : " — aucun horaire renseigné";
 }
 

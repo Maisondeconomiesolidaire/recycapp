@@ -32,19 +32,17 @@ function formatWeeklyHours(monthlyHours: number) {
   return `${Number.isInteger(weekly) ? weekly : weekly.toFixed(1).replace(".", ",")} h`;
 }
 
-const LUNCH_BREAK_HOURS = 1.5;
-
 function timeToMinutes(value: string) {
   const [hours, minutes] = value.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
-/** Les heures de l'équipe viennent désormais de ses créneaux renseignés,
- * auxquels on retire la pause déjeuner de 1 h 30 chaque jour travaillé. */
+/** Les heures de l'équipe sont la somme des créneaux manuellement renseignés
+ * pour le matin et l'après-midi. */
 function scheduledWeeklyHours(schedule: { start: string; end: string }[]) {
   return schedule.reduce((total, slot) => {
     const worked = (timeToMinutes(slot.end) - timeToMinutes(slot.start)) / 60;
-    return total + Math.max(0, worked - LUNCH_BREAK_HOURS);
+    return total + Math.max(0, worked);
   }, 0);
 }
 
@@ -316,7 +314,7 @@ function WorkersTab({
                       <span className="text-zinc-400">{EMPLOYMENT_TYPE_LABELS[worker.employmentType ?? "none"]}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400" title="Calculé à partir des horaires renseignés, pause de 1 h 30 déduite chaque jour">
+                  <td className="px-4 py-3 text-zinc-400" title="Calculé automatiquement à partir des créneaux matin et après-midi renseignés">
                     {weeklyHoursByWorker.has(worker._id)
                       ? formatHours(weeklyHoursByWorker.get(worker._id) ?? 0)
                       : "—"}
@@ -586,16 +584,37 @@ function WorkerScheduleEditor({
   onClose: () => void;
 }) {
   const setSchedule = useMutation(api.polyvalents.setWorkerSchedule);
-  const initial = Object.fromEntries(schedule.map((slot) => [slot.weekday, { start: slot.start, end: slot.end }]));
-  const [slots, setSlots] = useState<Record<number, { start: string; end: string }>>(initial);
+  type DaySlots = {
+    morning: { start: string; end: string };
+    afternoon: { start: string; end: string };
+  };
+  const initial = schedule.reduce<Record<number, DaySlots>>((result, slot) => {
+    const current = result[slot.weekday] ?? {
+      morning: { start: "09:00", end: "12:00" },
+      afternoon: { start: "13:30", end: "17:00" },
+    };
+    if (!result[slot.weekday]) current.morning = { start: slot.start, end: slot.end };
+    else current.afternoon = { start: slot.start, end: slot.end };
+    result[slot.weekday] = current;
+    return result;
+  }, {});
+  const [slots, setSlots] = useState<Record<number, DaySlots>>(initial);
   const [saving, setSaving] = useState(false);
   const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-  const weeklyHours = scheduledWeeklyHours(Object.values(slots));
+  const weeklyHours = scheduledWeeklyHours(
+    Object.values(slots).flatMap((day) => [day.morning, day.afternoon]),
+  );
 
   async function save() {
     setSaving(true);
     try {
-      await setSchedule({ workerId: worker._id, availability: Object.entries(slots).map(([weekday, time]) => ({ weekday: Number(weekday), ...time })) });
+      await setSchedule({
+        workerId: worker._id,
+        availability: Object.entries(slots).flatMap(([weekday, day]) => [
+          { weekday: Number(weekday), ...day.morning },
+          { weekday: Number(weekday), ...day.afternoon },
+        ]),
+      });
       onClose();
     } finally { setSaving(false); }
   }
@@ -608,14 +627,14 @@ function WorkerScheduleEditor({
             {formatHours(weeklyHours)} par semaine
           </p>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Calcul automatique : 1 h 30 de pause déjeuner est déduite chaque jour coché.
+            Calcul automatique à partir des créneaux renseignés pour le matin et l’après-midi.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {days.map((label, index) => {
             const weekday = index + 1; const value = slots[weekday];
             return (
-              <div key={weekday} className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--crm-border)] p-3 text-sm">
+              <div key={weekday} className="grid grid-cols-2 gap-3 rounded-lg border border-[var(--crm-border)] p-3 text-sm">
                 <div className="col-span-2">
                   <Checkbox
                     label={label}
@@ -624,19 +643,23 @@ function WorkerScheduleEditor({
                     onChange={() => setSlots((current) => {
                       const next = { ...current };
                       if (next[weekday]) delete next[weekday];
-                      else next[weekday] = { start: "09:00", end: "17:00" };
+                      else next[weekday] = {
+                        morning: { start: "09:00", end: "12:00" },
+                        afternoon: { start: "13:30", end: "17:00" },
+                      };
                       return next;
                     })}
                   />
                 </div>
-                <label className="grid gap-1 text-xs text-zinc-500">
-                  Début
-                  <input type="time" disabled={!value} value={value?.start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { end: "17:00" }), start: event.target.value } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
-                </label>
-                <label className="grid gap-1 text-xs text-zinc-500">
-                  Fin
-                  <input type="time" disabled={!value} value={value?.end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { start: "09:00" }), end: event.target.value } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
-                </label>
+                {(["morning", "afternoon"] as const).map((period) => (
+                  <div key={period} className="col-span-2 grid grid-cols-[72px_1fr_1fr] items-center gap-2">
+                    <span className="text-xs font-medium text-[var(--foreground)]">
+                      {period === "morning" ? "Matin" : "Après-midi"}
+                    </span>
+                    <input type="time" disabled={!value} value={value?.[period].start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { morning: { start: "09:00", end: "12:00" }, afternoon: { start: "13:30", end: "17:00" } }), [period]: { ...(current[weekday]?.[period] ?? { end: "17:00" }), start: event.target.value } } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
+                    <input type="time" disabled={!value} value={value?.[period].end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { morning: { start: "09:00", end: "12:00" }, afternoon: { start: "13:30", end: "17:00" } }), [period]: { ...(current[weekday]?.[period] ?? { start: "09:00" }), end: event.target.value } } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
+                  </div>
+                ))}
               </div>
             );
           })}
