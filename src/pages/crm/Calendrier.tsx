@@ -2216,6 +2216,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   );
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
+  const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
 
   useEffect(() => {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
@@ -2461,6 +2462,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             {days.map((day) => {
               const key = format(day, "yyyy-MM-dd");
               const items = byDay.get(key) ?? [];
+              const positionedItems = layoutOverlappingActivities(items, day);
               const isSelected = selectedDay
                 ? isSameDay(day, selectedDay)
                 : false;
@@ -2516,9 +2518,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                       />
                     ),
                   )}
-                  {items.map((activity) => {
-                    const segment = resourceActivitySegment(activity, day);
-                    if (!segment) return null;
+                  {positionedItems.map(({ activity, segment, column, columns }) => {
                     return (
                       <button
                         key={activity._id}
@@ -2526,9 +2526,19 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedDay(day);
+                          setForegroundActivityId(String(activity._id));
                         }}
-                        className="absolute left-1 right-1 z-10 overflow-hidden rounded-md border border-brand-400/40 bg-brand-500/25 px-1.5 py-1 text-left text-[11px] font-medium text-brand-100 shadow-sm transition hover:bg-brand-500/40"
-                        style={{ top: segment.top, height: segment.height }}
+                        className={cn(
+                          "absolute overflow-hidden rounded-md border border-brand-400/40 bg-brand-500/25 px-1.5 py-1 text-left text-[11px] font-medium text-brand-100 shadow-sm transition hover:bg-brand-500/40",
+                          foregroundActivityId === String(activity._id) && "ring-2 ring-brand-300",
+                        )}
+                        style={{
+                          top: segment.top,
+                          height: segment.height,
+                          left: `calc(${(column / columns) * 100}% + 4px)`,
+                          width: `calc(${100 / columns}% - 8px)`,
+                          zIndex: foregroundActivityId === String(activity._id) ? 30 : 10 + column,
+                        }}
                         title={`${activity.workerName} — ${activity.taskName} · ${segment.timeLabel}`}
                       >
                         <p className="flex items-center gap-1 truncate font-semibold">
@@ -2608,6 +2618,25 @@ function resourceActivitySegment(activity: DisplayActivity, day: Date) {
     height: Math.max(26, ((end - start) / 3_600_000) * RESOURCE_HOUR_HEIGHT),
     timeLabel: `${format(new Date(visibleStart), "HH:mm")} – ${format(new Date(visibleEnd), "HH:mm")}`,
   };
+}
+
+/** Même principe que Google Calendar : les créneaux qui se chevauchent se
+ * répartissent en colonnes afin de rester tous accessibles simultanément. */
+function layoutOverlappingActivities(items: DisplayActivity[], day: Date) {
+  const rows = items
+    .map((activity) => ({ activity, segment: resourceActivitySegment(activity, day) }))
+    .filter((row): row is { activity: DisplayActivity; segment: NonNullable<ReturnType<typeof resourceActivitySegment>> } => row.segment !== null)
+    .sort((left, right) => left.activity.startAt - right.activity.startAt || left.activity.endAt - right.activity.endAt);
+  const columnEnds: number[] = [];
+  const result = rows.map((row) => {
+    let column = columnEnds.findIndex((end) => end <= row.activity.startAt);
+    if (column < 0) { column = columnEnds.length; columnEnds.push(row.activity.endAt); }
+    else columnEnds[column] = row.activity.endAt;
+    return { ...row, column };
+  });
+  // Une allocation globale par journée conserve chaque événement visible même
+  // dans un groupe de collisions partiellement chevauchant.
+  return result.map((row) => ({ ...row, columns: Math.max(1, columnEnds.length) }));
 }
 
 function dayAtHour(day: Date, hour: number) {
