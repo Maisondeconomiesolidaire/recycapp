@@ -2,9 +2,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -38,7 +36,6 @@ import {
   Pencil,
   Plus,
   Trash2,
-  TriangleAlert,
   UsersRound,
   CalendarPlus,
   Users,
@@ -74,6 +71,7 @@ import { initials } from "../../lib/format";
 import { useUpload } from "../../lib/useUpload";
 import { useAnchoredPopover } from "../../lib/useAnchoredPopover";
 import { EventCalendar } from "../../components/reui/event-calendar/event-calendar";
+import { PLANNER_FRENCH } from "../../components/reui/event-calendar/planner-french";
 import { EventCalendarContent } from "../../components/reui/event-calendar/event-calendar-content";
 import { EventCalendarNav, EventCalendarToolbar } from "../../components/reui/event-calendar/event-calendar-nav";
 import type {
@@ -136,9 +134,6 @@ type DisplayActivity = Pick<
 
 const RESOURCE_DAY_START_HOUR = 8;
 const RESOURCE_DAY_END_HOUR = 18;
-const RESOURCE_HOUR_HEIGHT = 72;
-const RESOURCE_DAY_HEIGHT =
-  (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * RESOURCE_HOUR_HEIGHT;
 
 export function Calendrier() {
   const [view, setView] = useState<CalView>("tout");
@@ -2204,8 +2199,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     api.polyvalents.listRecurrences,
     canRead ? {} : "skip",
   );
-  const removeRecurrence = useMutation(api.polyvalents.deleteRecurrence);
-  const updateActivity = useMutation(api.polyvalents.updateActivity);
+  const updatePlannerTiming = useMutation(api.polyvalents.updatePlannerTiming);
   const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
 
   // Le filtre principal de la page restreint tout le planning à une recyclerie :
@@ -2243,11 +2237,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
   const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
   const [activityToEdit, setActivityToEdit] = useState<DisplayActivity | null>(null);
-  const [resizePreview, setResizePreview] = useState<{
-    id: string;
-    endAt: number;
-  } | null>(null);
-  const suppressEventClickRef = useRef(false);
+  const [timingError, setTimingError] = useState<string | null>(null);
+  const [pendingTiming, setPendingTiming] = useState<Record<string, { start: Date; end: Date }>>({});
 
   useEffect(() => {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
@@ -2343,12 +2334,13 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         start: new Date(activity.startAt),
         end: new Date(activity.endAt),
         color: isCaisse ? "#7c3aed" : "#059669",
-        draggable: isStoredActivity(activity),
-        resizable: isStoredActivity(activity),
+        draggable: canUpdate,
+        resizable: canUpdate,
+        zIndex: foregroundActivityId === String(activity._id) ? 50 : undefined,
         data: { activity, activities: group, assignedWorkers, requiredWorkers },
       } satisfies ReuiCalendarEvent<PlannerEventData>;
     });
-  }, [byDay, taskById]);
+  }, [byDay, taskById, canUpdate, foregroundActivityId]);
 
   if (!canRead) {
     return (
@@ -2361,142 +2353,16 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     );
   }
 
-  const weekEnd = addDays(weekStart, 5);
-  const weekLabel = `${format(weekStart, "d MMM", { locale: fr })} – ${format(weekEnd, "d MMM yyyy", { locale: fr })}`;
-  const calendarLabel =
-    calendarView === "day"
-      ? format(calendarDay, "EEEE d MMMM yyyy", { locale: fr })
-      : weekLabel;
-  const gridTemplate =
-    calendarView === "day"
-      ? "grid-cols-[56px_minmax(300px,1fr)]"
-      : "grid-cols-[56px_repeat(6,minmax(132px,1fr))]";
-
-  function moveCalendar(direction: -1 | 1) {
-    if (calendarView === "week") {
-      setWeekStart(addDays(weekStart, direction * 7));
-      return;
-    }
-    let next = addDays(calendarDay, direction);
-    if (next.getDay() === 0) next = addDays(next, direction);
-    setCalendarDay(next);
-  }
-
-  function goToCurrentWeek() {
-    const today = startOfDay(new Date());
-    setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
-    setCalendarDay(today.getDay() === 0 ? addDays(today, 1) : today);
-  }
-
-  function startResize(
-    activity: Activity,
-    day: Date,
-    event: ReactPointerEvent<HTMLSpanElement>,
-  ) {
-    if (!canUpdate) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const column = event.currentTarget.closest("[data-resource-day]");
-    if (!(column instanceof HTMLElement)) return;
-    const bounds = column.getBoundingClientRect();
-    const gridStart = dayAtHour(day, RESOURCE_DAY_START_HOUR);
-    const gridEnd = dayAtHour(day, RESOURCE_DAY_END_HOUR);
-    let nextEnd = activity.endAt;
-
-    const updatePreview = (clientY: number) => {
-      const halfHours = Math.round(
-        (clientY - bounds.top) / (RESOURCE_HOUR_HEIGHT / 2),
-      );
-      nextEnd = Math.min(
-        gridEnd,
-        Math.max(activity.startAt + 30 * 60_000, gridStart + halfHours * 30 * 60_000),
-      );
-      setResizePreview({ id: String(activity._id), endAt: nextEnd });
-    };
-    updatePreview(event.clientY);
-
-    const onPointerMove = (moveEvent: PointerEvent) => updatePreview(moveEvent.clientY);
-    const onPointerUp = () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      setResizePreview(null);
-      if (nextEnd !== activity.endAt) {
-        void updateActivity({
-          id: activity._id,
-          taskId: activity.taskId,
-          workerId: activity.workerId ?? undefined,
-          startAt: activity.startAt,
-          endAt: nextEnd,
-        });
-      }
-    };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp, { once: true });
-  }
-
-  /** Déplacement au pointeur, y compris sur écran tactile : évite les limites
-   * du drag HTML natif dans une grille qui défile. */
-  function startMove(
-    activity: DisplayActivity,
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) {
-    if (!isStoredActivity(activity) || !canUpdate) return;
-    const originX = event.clientX;
-    const originY = event.clientY;
-    let moved = false;
-    let targetStart = activity.startAt;
-    event.currentTarget.setPointerCapture(event.pointerId);
-
-    const onPointerMove = (moveEvent: PointerEvent) => {
-      if (Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < 7) return;
-      moved = true;
-      const target = document
-        .elementFromPoint(moveEvent.clientX, moveEvent.clientY)
-        ?.closest<HTMLElement>("[data-resource-day]");
-      const date = target?.dataset.resourceDate;
-      if (!target || !date) return;
-      const bounds = target.getBoundingClientRect();
-      const halfHours = Math.max(
-        0,
-        Math.min(
-          (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * 2 - 1,
-          Math.floor((moveEvent.clientY - bounds.top) / (RESOURCE_HOUR_HEIGHT / 2)),
-        ),
-      );
-      targetStart = dayAtHour(new Date(`${date}T12:00:00`), RESOURCE_DAY_START_HOUR) + halfHours * 30 * 60_000;
-    };
-    const onPointerUp = () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      suppressEventClickRef.current = moved;
-      if (!moved || targetStart === activity.startAt) return;
-      const duration = activity.endAt - activity.startAt;
-      void updateActivity({
-        id: activity._id,
-        taskId: activity.taskId,
-        workerId: activity.workerId ?? undefined,
-        startAt: targetStart,
-        endAt: targetStart + duration,
-      });
-    };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp, { once: true });
-  }
-
-  // Le moteur ReUI est le même que celui de la maquette fournie : il gère les
-  // collisions, le déplacement et les poignées de redimensionnement au pointeur.
-  // Le calendrier précédent reste plus bas temporairement pour conserver le
-  // panneau de création et les modales métier déjà branchées.
   return (
     <>
       <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col p-4 sm:p-6">
         <EventCalendar<PlannerEventData>
-          events={plannerEvents}
+          events={plannerEvents.map((event) => ({ ...event, ...pendingTiming[event.id] }))}
           view={calendarView}
           date={calendarView === "week" ? weekStart : calendarDay}
           views={["week", "day"]}
           locale={fr}
+          timeZone="Europe/Paris"
           weekStartsOn={1}
           weekendDays={[0]}
           viewSettings={{ weekends: false, nowIndicator: true }}
@@ -2504,11 +2370,14 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           dayEndHour={RESOURCE_DAY_END_HOUR}
           slotDuration={30}
           snapDuration={30}
+          i18n={PLANNER_FRENCH}
           interactions={{ drag: canUpdate, resize: canUpdate, selectSlot: canCreate }}
           className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] text-[var(--foreground)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
           classNames={{
-            event: "text-[var(--foreground)]",
+            event: "items-start py-3 text-[var(--foreground)]",
             content: "min-h-0",
+            resizeHandle: "!h-3 !opacity-100 z-30",
+            resizeGrip: "!w-6",
           }}
           onViewChange={(nextView) => {
             if (nextView === "week" || nextView === "day") setCalendarView(nextView);
@@ -2528,6 +2397,11 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
               endAt: slot.end?.getTime() ?? slot.date.getTime() + 60 * 60_000,
             });
           }}
+          onSelectSlot={(slot) => {
+            if (!canCreate || !tasks[0]) return;
+            setSelectedDay(startOfDay(slot.start));
+            setDroppedTask({ taskId: tasks[0]._id, startAt: slot.start.getTime(), endAt: slot.end.getTime() });
+          }}
           onEventClick={(occurrence) => {
             setForegroundActivityId(String(occurrence.event.data?.activity._id));
             setActivityToEdit(occurrence.event.data?.activity ?? null);
@@ -2535,20 +2409,24 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           onEventUpdate={(update: EventCalendarProposedUpdate<PlannerEventData>) => {
             const eventData = update.event.data;
             const activity = eventData?.activity;
-            if (!eventData || !activity || !isStoredActivity(activity) || !canUpdate) return false;
-            void Promise.all(
-              eventData.activities
-                .filter(isStoredActivity)
-                .map((item) =>
-                  updateActivity({
-                    id: item._id,
-                    taskId: item.taskId,
-                    workerId: item.workerId ?? undefined,
-                    startAt: update.start.getTime(),
-                    endAt: update.end.getTime(),
-                  }),
-                ),
-            );
+            if (!eventData || !activity || !canUpdate || pendingTiming[update.event.id]) return false;
+            setTimingError(null);
+            setPendingTiming((current) => ({ ...current, [update.event.id]: { start: update.start, end: update.end } }));
+            void updatePlannerTiming({
+              activityIds: eventData.activities.filter(isStoredActivity).map((item) => item._id),
+              recurrenceIds: eventData.activities.flatMap((item) => item.recurrenceId ? [item.recurrenceId] : []),
+              originalStartAt: activity.startAt,
+              startAt: update.start.getTime(),
+              endAt: update.end.getTime(),
+            }).catch((error: unknown) => {
+              setTimingError(error instanceof Error ? error.message : "Impossible d’enregistrer le créneau.");
+            }).finally(() => {
+              setPendingTiming((current) => {
+                const next = { ...current };
+                delete next[update.event.id];
+                return next;
+              });
+            });
             return true;
           }}
           renderEvent={({ occurrence }) => {
@@ -2577,6 +2455,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                   ) : null}
                   <span className="truncate">{worker}</span>
                 </span>
+                <span className="text-[10px] tabular-nums opacity-80">
+                  {format(occurrence.start, "HH:mm")} – {format(occurrence.end, "HH:mm")}
+                </span>
               </span>
             );
           }}
@@ -2598,6 +2479,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             ) : null}
           </div>
           <EventCalendarToolbar className="hidden" />
+          {timingError ? <p role="alert" className="px-4 py-2 text-red-600 dark:text-red-400">{timingError}</p> : null}
+          <p className="px-4 py-1 text-xs text-muted-foreground">Glissez une tâche pour la déplacer, ou ses bords pour modifier sa durée. Une tâche récurrente modifie le créneau hebdomadaire.</p>
           <EventCalendarContent />
         </EventCalendar>
       </div>
@@ -2629,436 +2512,6 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     </>
   );
 
-  return (
-    // Le planning occupe la hauteur de l'écran : une semaine chargée se lit
-    // d'un coup d'œil, sans faire défiler la page.
-    <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col gap-3 p-4 sm:p-6">
-      {/* Les tâches restent visibles au-dessus du calendrier : on les dépose
-          simplement sur une journée pour préparer une affectation. */}
-      <div className="hidden shrink-0 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Tâches à planifier
-          </h3>
-          <span className="text-xs text-zinc-500">
-            Glissez une tâche sur un jour du planning.
-          </span>
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {(tasks ?? []).map((task) => {
-            return (
-              <div
-                key={task._id}
-                draggable={canCreate}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData(
-                    "application/x-recycapp-task",
-                    String(task._id),
-                  );
-                  event.dataTransfer.effectAllowed = "copy";
-                }}
-                className="flex shrink-0 cursor-grab items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm active:cursor-grabbing"
-              >
-                <ListChecks className="h-4 w-4" />
-                <span>{task.name}</span>
-              </div>
-            );
-          })}
-          {tasks?.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              Créez d’abord une tâche dans l’onglet « Tâches ».
-            </p>
-          ) : null}
-        </div>
-        {(recurrences?.length ?? 0) > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--crm-border)] pt-3">
-            {recurrences?.map((recurrence) => (
-              <div
-                key={recurrence._id}
-                className="flex items-center gap-2 rounded-lg bg-[var(--crm-surface-2)] px-2 py-1.5 text-xs"
-              >
-                <span>Récurrente : {recurrence.taskName}</span>
-                {canDelete ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void removeRecurrence({ id: recurrence._id })
-                    }
-                    className="font-semibold text-red-400 hover:underline"
-                  >
-                    Annuler
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-      {/* ── Semaine ─────────────────────────────────────────────────────── */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => moveCalendar(-1)}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="min-w-[170px] text-center text-sm font-semibold capitalize">
-          {calendarLabel}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => moveCalendar(1)}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={goToCurrentWeek}
-        >
-          Cette semaine
-        </Button>
-        <div className="ml-auto inline-flex rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface)] p-0.5">
-          <button
-            type="button"
-            onClick={() => setCalendarView("week")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-              calendarView === "week"
-                ? "bg-brand-600 text-white shadow-sm"
-                : "text-[var(--foreground)] hover:bg-[var(--crm-surface-2)]",
-            )}
-          >
-            Semaine
-          </button>
-          <button
-            type="button"
-            onClick={() => setCalendarView("day")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-              calendarView === "day"
-                ? "bg-brand-600 text-white shadow-sm"
-                : "text-[var(--foreground)] hover:bg-[var(--crm-surface-2)]",
-            )}
-          >
-            Jour
-          </button>
-        </div>
-        {canCreate ? <Button size="sm" onClick={() => {
-          const taskDay = calendarView === "day" ? calendarDay : weekStart;
-          if (tasks[0]) {
-            setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(taskDay, 13), endAt: dayAtHour(taskDay, 17) });
-            setSelectedDay(taskDay);
-          }
-        }}><Plus className="h-4 w-4" />Nouvelle tâche</Button> : null}
-      </div>
-
-      <div className="thin-scroll min-h-0 flex-1 overflow-x-scroll overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
-        <div className={cn(calendarView === "day" ? "min-w-[420px]" : "min-w-[860px]")}>
-          <div className={cn("sticky top-0 z-20 grid border-b border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-sm", gridTemplate)}>
-            <div className="border-r border-[var(--crm-border)]" />
-            {days.map((day) => {
-              const key = format(day, "yyyy-MM-dd");
-              const isSelected = selectedDay
-                ? isSameDay(day, selectedDay)
-                : false;
-              const today = isToday(day);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSelectedDay(day)}
-                  className={cn(
-                    "flex min-h-14 items-center justify-center gap-2 border-r border-[var(--crm-border)] px-2 py-2 text-left last:border-r-0",
-                    isSelected && "bg-brand-500/8",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs",
-                      today
-                        ? "bg-brand-600 font-semibold text-white"
-                        : "text-[var(--foreground)]",
-                    )}
-                  >
-                    {format(day, "d")}
-                  </span>
-                  <span className="text-xs font-semibold capitalize text-zinc-500">
-                    {format(day, "EEEE", { locale: fr })}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div className={cn("grid", gridTemplate)}>
-            <div
-              className="relative border-r border-[var(--crm-border)]"
-              style={{ height: RESOURCE_DAY_HEIGHT }}
-            >
-              {Array.from(
-                { length: RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR + 1 },
-                (_, index) => {
-                  const hour = RESOURCE_DAY_START_HOUR + index;
-                  return (
-                    <span
-                      key={hour}
-                      className="absolute -top-2 right-2 text-[10px] font-medium text-zinc-500"
-                      style={{ top: index * RESOURCE_HOUR_HEIGHT }}
-                    >{`${String(hour).padStart(2, "0")}:00`}</span>
-                  );
-                },
-              )}
-            </div>
-            {days.map((day) => {
-              const key = format(day, "yyyy-MM-dd");
-              const items = byDay.get(key) ?? [];
-              const positionedItems = layoutOverlappingActivities(items, day);
-              const isSelected = selectedDay
-                ? isSameDay(day, selectedDay)
-                : false;
-              return (
-                <div
-                  key={key}
-                  data-resource-day="true"
-                  data-resource-date={key}
-                  onClick={() => setSelectedDay(day)}
-                  onDragOver={(event) => {
-                    if (canCreate || canUpdate) event.preventDefault();
-                  }}
-                  onDrop={(event) => {
-                    const activityId = event.dataTransfer.getData(
-                      "application/x-recycapp-activity",
-                    ) as Id<"polyvalentActivities">;
-                    const taskId = event.dataTransfer.getData(
-                      "application/x-recycapp-task",
-                    ) as Id<"polyvalentTasks">;
-                    event.preventDefault();
-                    const bounds = event.currentTarget.getBoundingClientRect();
-                    const halfHours = Math.max(
-                      0,
-                      Math.min(
-                        (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * 2 - 1,
-                        Math.floor((event.clientY - bounds.top) / (RESOURCE_HOUR_HEIGHT / 2)),
-                      ),
-                    );
-                    const startAt = dayAtHour(day, RESOURCE_DAY_START_HOUR) + halfHours * 30 * 60_000;
-                    if (activityId && canUpdate) {
-                      const activity = (activities ?? []).find((item) => item._id === activityId);
-                      if (!activity) return;
-                      const duration = activity.endAt - activity.startAt;
-                      void updateActivity({
-                        id: activity._id,
-                        taskId: activity.taskId,
-                        workerId: activity.workerId ?? undefined,
-                        startAt,
-                        endAt: startAt + duration,
-                      });
-                      return;
-                    }
-                    if (!canCreate || !taskId) return;
-                    setDroppedTask({
-                      taskId,
-                      startAt,
-                      endAt: startAt + 60 * 60_000,
-                    });
-                    setSelectedDay(day);
-                  }}
-                  className={cn(
-                    "relative cursor-pointer border-r border-[var(--crm-border)] transition-colors last:border-r-0",
-                    isSelected
-                      ? "bg-brand-500/8 ring-1 ring-inset ring-brand-500/30"
-                      : "hover:bg-[var(--crm-surface-2)]",
-                  )}
-                  style={{ height: RESOURCE_DAY_HEIGHT }}
-                >
-                  {Array.from(
-                    {
-                      length:
-                        RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR + 1,
-                    },
-                    (_, index) => (
-                      <div
-                        key={index}
-                        className="absolute left-0 right-0 border-t border-[var(--crm-border)]"
-                        style={{ top: index * RESOURCE_HOUR_HEIGHT }}
-                      />
-                    ),
-                  )}
-                  {positionedItems.map(({ activity, segment, column, columns }) => {
-                    const requiredWorkers = taskById.get(String(activity.taskId))?.requiredWorkers ?? 1;
-                    const assignedWorkers = items.filter(
-                      (item) =>
-                        item.taskId === activity.taskId &&
-                        item.startAt === activity.startAt &&
-                        item.endAt === activity.endAt &&
-                        Boolean(item.workerId),
-                    ).length;
-                    const resizedActivity =
-                      resizePreview?.id === String(activity._id)
-                        ? { ...activity, endAt: resizePreview.endAt }
-                        : activity;
-                    const resizedSegment = resourceActivitySegment(resizedActivity, day) ?? segment;
-                    return (
-                      <button
-                        key={activity._id}
-                        type="button"
-                        onPointerDown={(event) => startMove(activity, event)}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (suppressEventClickRef.current) {
-                            suppressEventClickRef.current = false;
-                            return;
-                          }
-                          setForegroundActivityId(String(activity._id));
-                          setActivityToEdit(activity);
-                        }}
-                        className={cn(
-                          "group absolute overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-medium shadow-sm transition",
-                          activity.taskName.toLocaleLowerCase("fr").includes("caisse")
-                            ? "border-violet-800 bg-violet-700 text-white hover:bg-violet-800"
-                            : "border-emerald-800 bg-emerald-700 text-white hover:bg-emerald-800",
-                          foregroundActivityId === String(activity._id) && "ring-2 ring-brand-300",
-                        )}
-                        style={{
-                          top: resizedSegment.top,
-                          height: resizedSegment.height,
-                          left: `calc(${(column / columns) * 100}% + 4px)`,
-                          width: `calc(${100 / columns}% - 8px)`,
-                          zIndex: foregroundActivityId === String(activity._id) ? 30 : 10 + column,
-                        }}
-                        title={`${activity.workerName} — ${activity.taskName} · ${resizedSegment.timeLabel}`}
-                      >
-                        <p className="flex items-center gap-1 truncate font-semibold">
-                          <span className="truncate">{activity.taskName}</span>
-                          <span className="ml-auto shrink-0 rounded-full bg-black/20 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                            {assignedWorkers}/{requiredWorkers}
-                          </span>
-                          {!activity.workerId ? (
-                            <span
-                              title="Aucun salarié affecté"
-                              aria-label="Aucun salarié affecté"
-                            >
-                              <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-300" />
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="flex items-center gap-1 truncate text-white/90">
-                          {activity.workerId ? <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/25 text-[8px] font-extrabold text-white">{activity.workerName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("")}</span> : null}
-                          {activity.workerName}
-                        </p>
-                        {resizedSegment.height >= 46 ? (
-                          <p className="mt-0.5 text-[10px] font-normal text-white/80">
-                            {resizedSegment.timeLabel}
-                          </p>
-                        ) : null}
-                        {isStoredActivity(activity) && canUpdate ? (
-                          <span
-                            role="presentation"
-                            onClick={(event) => event.stopPropagation()}
-                            onPointerDown={(event) => startResize(activity, day, event)}
-                            className="absolute inset-x-0 bottom-0 h-4 cursor-ns-resize border-t-2 border-white/70 bg-white/20 opacity-80 transition-colors hover:bg-white/40"
-                            title="Glissez pour modifier la durée"
-                          />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <Drawer
-        open={selectedDay !== null}
-        onClose={() => {
-          setSelectedDay(null);
-          setActivityToEdit(null);
-        }}
-        variant="side"
-        title={
-          selectedDay
-            ? format(selectedDay as Date, "EEEE d MMMM yyyy", { locale: fr })
-            : ""
-        }
-        bodyClassName="p-0"
-        panelClassName="max-w-4xl"
-      >
-        {selectedDay ? (
-          <ResourceDayPanel
-            day={selectedDay as Date}
-            activities={selectedDayActivities}
-            workers={workers ?? []}
-            tasks={tasks ?? []}
-            schedules={schedules ?? []}
-            canCreate={canCreate}
-            canUpdate={canUpdate}
-            canDelete={canDelete}
-            droppedTask={droppedTask}
-            onDroppedTaskConsumed={() => setDroppedTask(null)}
-          />
-        ) : null}
-      </Drawer>
-      {activityToEdit ? (
-        <ActivityWorkerModal
-          key={(activityToEdit as DisplayActivity)._id}
-          activity={activityToEdit as DisplayActivity}
-          workers={workers ?? []}
-          assignedActivities={(activities ?? []).filter(
-            (item) =>
-              item.taskId === (activityToEdit as DisplayActivity).taskId &&
-              item.startAt === (activityToEdit as DisplayActivity).startAt &&
-              item.endAt === (activityToEdit as DisplayActivity).endAt,
-          )}
-          requiredWorkers={taskById.get(String((activityToEdit as DisplayActivity).taskId))?.requiredWorkers ?? 1}
-          canCreate={canCreate}
-          canUpdate={canUpdate}
-          onClose={() => setActivityToEdit(null)}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-/** Portion d'une activité visible sur une journée, calée sur la grille horaire. */
-function resourceActivitySegment(activity: DisplayActivity, day: Date) {
-  const dayStart = startOfDay(day).getTime();
-  const dayEnd = addDays(startOfDay(day), 1).getTime();
-  const visibleStart = Math.max(activity.startAt, dayStart);
-  const visibleEnd = Math.min(activity.endAt, dayEnd);
-  if (visibleEnd <= visibleStart) return null;
-  const gridStart = dayAtHour(day, RESOURCE_DAY_START_HOUR);
-  const gridEnd = dayAtHour(day, RESOURCE_DAY_END_HOUR);
-  const start = Math.max(visibleStart, gridStart);
-  const end = Math.min(visibleEnd, gridEnd);
-  if (end <= start) return null;
-  return {
-    top: ((start - gridStart) / 3_600_000) * RESOURCE_HOUR_HEIGHT,
-    height: Math.max(26, ((end - start) / 3_600_000) * RESOURCE_HOUR_HEIGHT),
-    timeLabel: `${format(new Date(visibleStart), "HH:mm")} – ${format(new Date(visibleEnd), "HH:mm")}`,
-  };
-}
-
-/** Même principe que Google Calendar : les créneaux qui se chevauchent se
- * répartissent en colonnes afin de rester tous accessibles simultanément. */
-function layoutOverlappingActivities(items: DisplayActivity[], day: Date) {
-  const rows = items
-    .map((activity) => ({ activity, segment: resourceActivitySegment(activity, day) }))
-    .filter((row): row is { activity: DisplayActivity; segment: NonNullable<ReturnType<typeof resourceActivitySegment>> } => row.segment !== null)
-    .sort((left, right) => left.activity.startAt - right.activity.startAt || left.activity.endAt - right.activity.endAt);
-  const columnEnds: number[] = [];
-  const result = rows.map((row) => {
-    let column = columnEnds.findIndex((end) => end <= row.activity.startAt);
-    if (column < 0) { column = columnEnds.length; columnEnds.push(row.activity.endAt); }
-    else columnEnds[column] = row.activity.endAt;
-    return { ...row, column };
-  });
-  // Une allocation globale par journée conserve chaque événement visible même
-  // dans un groupe de collisions partiellement chevauchant.
-  return result.map((row) => ({ ...row, columns: Math.max(1, columnEnds.length) }));
 }
 
 function dayAtHour(day: Date, hour: number) {
