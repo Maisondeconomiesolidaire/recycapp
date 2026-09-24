@@ -2345,6 +2345,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     if (!canUpdate) return;
     event.preventDefault();
     event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
     const column = event.currentTarget.closest("[data-resource-day]");
     if (!(column instanceof HTMLElement)) return;
     const bounds = column.getBoundingClientRect();
@@ -2502,7 +2503,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         </div>
         {canCreate ? <Button size="sm" onClick={() => {
           const taskDay = calendarView === "day" ? calendarDay : weekStart;
-          if (tasks[0]) setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(taskDay, 13), endAt: dayAtHour(taskDay, 17) });
+          if (tasks[0]) {
+            setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(taskDay, 13), endAt: dayAtHour(taskDay, 17) });
+            setSelectedDay(taskDay);
+          }
         }}><Plus className="h-4 w-4" />Nouvelle tâche</Button> : null}
       </div>
 
@@ -2572,7 +2576,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
               return (
                 <div
                   key={key}
-                  data-resource-day
+                  data-resource-day="true"
                   onClick={() => setSelectedDay(day)}
                   onDragOver={(event) => {
                     if (canCreate) event.preventDefault();
@@ -2634,7 +2638,6 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          setSelectedDay(day);
                           setForegroundActivityId(String(activity._id));
                           if (isStoredActivity(activity) && canUpdate) setActivityToEdit(activity);
                         }}
@@ -2679,7 +2682,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                             role="presentation"
                             onClick={(event) => event.stopPropagation()}
                             onPointerDown={(event) => startResize(activity, day, event)}
-                            className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize bg-white/20 opacity-0 transition-opacity hover:bg-white/40 group-hover:opacity-100"
+                            className="absolute inset-x-0 bottom-0 h-4 cursor-ns-resize border-t-2 border-white/70 bg-white/20 opacity-80 transition-colors hover:bg-white/40"
                             title="Glissez pour modifier la durée"
                           />
                         ) : null}
@@ -2720,11 +2723,17 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             canDelete={canDelete}
             droppedTask={droppedTask}
             onDroppedTaskConsumed={() => setDroppedTask(null)}
-            activityToEdit={activityToEdit}
-            onActivityToEditConsumed={() => setActivityToEdit(null)}
           />
         ) : null}
       </Drawer>
+      {activityToEdit ? (
+        <ActivityWorkerModal
+          key={activityToEdit._id}
+          activity={activityToEdit}
+          workers={workers ?? []}
+          onClose={() => setActivityToEdit(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2779,6 +2788,68 @@ function isStoredActivity(activity: DisplayActivity): activity is Activity {
   return !activity.recurrenceId;
 }
 
+/** Édition rapide depuis la grille : l'évènement porte déjà sa tâche et son
+ * créneau, il ne reste qu'à lui affecter (ou retirer) un salarié. */
+function ActivityWorkerModal({
+  activity,
+  workers,
+  onClose,
+}: {
+  activity: Activity;
+  workers: WorkerList;
+  onClose: () => void;
+}) {
+  const updateActivity = useMutation(api.polyvalents.updateActivity);
+  const [workerId, setWorkerId] = useState<Id<"polyvalentWorkers"> | "">(
+    activity.workerId ?? "",
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await updateActivity({
+        id: activity._id,
+        taskId: activity.taskId,
+        workerId: workerId || undefined,
+        startAt: activity.startAt,
+        endAt: activity.endAt,
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Affecter un salarié" className="max-w-md">
+      <div className="space-y-4">
+        <Field label="Salarié">
+          <Select
+            value={workerId}
+            onChange={(event) =>
+              setWorkerId(event.target.value as Id<"polyvalentWorkers">)
+            }
+          >
+            <option value="">Aucun salarié affecté</option>
+            {workers.map((worker) => (
+              <option key={worker._id} value={worker._id}>
+                {worker.firstName} {worker.lastName}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={() => void save()} disabled={saving}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function ResourceDayPanel({
   day,
   activities,
@@ -2790,8 +2861,6 @@ function ResourceDayPanel({
   canDelete,
   droppedTask,
   onDroppedTaskConsumed,
-  activityToEdit,
-  onActivityToEditConsumed,
 }: {
   day: Date;
   activities: Activity[];
@@ -2803,8 +2872,6 @@ function ResourceDayPanel({
   canDelete: boolean;
   droppedTask: DroppedTask | null;
   onDroppedTaskConsumed: () => void;
-  activityToEdit: Activity | null;
-  onActivityToEditConsumed: () => void;
 }) {
   const createActivity = useMutation(api.polyvalents.createActivity);
   const createActivities = useMutation(api.polyvalents.createActivities);
@@ -2845,12 +2912,6 @@ function ResourceDayPanel({
     setFormOpen(true);
     onDroppedTaskConsumed();
   }, [droppedTask, onDroppedTaskConsumed]);
-
-  useEffect(() => {
-    if (!activityToEdit) return;
-    openEdit(activityToEdit);
-    onActivityToEditConsumed();
-  }, [activityToEdit, onActivityToEditConsumed]);
 
   function openCreate() {
     setEditing(null);

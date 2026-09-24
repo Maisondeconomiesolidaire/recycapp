@@ -32,6 +32,26 @@ function formatWeeklyHours(monthlyHours: number) {
   return `${Number.isInteger(weekly) ? weekly : weekly.toFixed(1).replace(".", ",")} h`;
 }
 
+const LUNCH_BREAK_HOURS = 1.5;
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/** Les heures de l'équipe viennent désormais de ses créneaux renseignés,
+ * auxquels on retire la pause déjeuner de 1 h 30 chaque jour travaillé. */
+function scheduledWeeklyHours(schedule: { start: string; end: string }[]) {
+  return schedule.reduce((total, slot) => {
+    const worked = (timeToMinutes(slot.end) - timeToMinutes(slot.start)) / 60;
+    return total + Math.max(0, worked - LUNCH_BREAK_HOURS);
+  }, 0);
+}
+
+function formatHours(hours: number) {
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1).replace(".", ",")} h`;
+}
+
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   permanent: "Ouvrier permanent",
   polyvalent: "Ouvrier polyvalent",
@@ -188,6 +208,12 @@ function WorkersTab({
           .includes(normalized),
     );
   const inactiveCount = workers.filter((worker) => worker.active === false).length;
+  const weeklyHoursByWorker = new Map(
+    schedules.map((schedule) => [
+      schedule.workerId,
+      scheduledWeeklyHours(schedule.availability),
+    ]),
+  );
 
   function openNew() {
     setEditing(null);
@@ -290,8 +316,10 @@ function WorkersTab({
                       <span className="text-zinc-400">{EMPLOYMENT_TYPE_LABELS[worker.employmentType ?? "none"]}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400" title="Durée mensuelle du contrat ramenée à la semaine">
-                    {worker.monthlyHours ? formatWeeklyHours(worker.monthlyHours) : "—"}
+                  <td className="px-4 py-3 text-zinc-400" title="Calculé à partir des horaires renseignés, pause de 1 h 30 déduite chaque jour">
+                    {weeklyHoursByWorker.has(worker._id)
+                      ? formatHours(weeklyHoursByWorker.get(worker._id) ?? 0)
+                      : "—"}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -562,6 +590,7 @@ function WorkerScheduleEditor({
   const [slots, setSlots] = useState<Record<number, { start: string; end: string }>>(initial);
   const [saving, setSaving] = useState(false);
   const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+  const weeklyHours = scheduledWeeklyHours(Object.values(slots));
 
   async function save() {
     setSaving(true);
@@ -574,13 +603,42 @@ function WorkerScheduleEditor({
   return (
     <Modal open onClose={onClose} title={`Horaires de ${worker.firstName} ${worker.lastName}`} className="max-w-2xl">
       <div className="space-y-3">
-        <p className="text-xs text-zinc-500">
-          Les créneaux servent à repérer les salariés disponibles lors d’une affectation.
-        </p>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2">
+          <p className="text-sm font-semibold text-[var(--foreground)]">
+            {formatHours(weeklyHours)} par semaine
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Calcul automatique : 1 h 30 de pause déjeuner est déduite chaque jour coché.
+          </p>
+        </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {days.map((label, index) => {
             const weekday = index + 1; const value = slots[weekday];
-            return <div key={weekday} className="grid grid-cols-[minmax(130px,1fr)_1fr_1fr] items-center gap-3 rounded-lg border border-[var(--crm-border)] p-2 text-sm"><Checkbox label={label} variant="inline" checked={Boolean(value)} onChange={() => setSlots((current) => { const next = { ...current }; if (next[weekday]) delete next[weekday]; else next[weekday] = { start: "09:00", end: "17:00" }; return next; })} /><input type="time" disabled={!value} value={value?.start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { end: "17:00" }), start: event.target.value } }))} className="rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 disabled:opacity-40" /><input type="time" disabled={!value} value={value?.end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { start: "09:00" }), end: event.target.value } }))} className="rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 disabled:opacity-40" /></div>;
+            return (
+              <div key={weekday} className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--crm-border)] p-3 text-sm">
+                <div className="col-span-2">
+                  <Checkbox
+                    label={label}
+                    variant="inline"
+                    checked={Boolean(value)}
+                    onChange={() => setSlots((current) => {
+                      const next = { ...current };
+                      if (next[weekday]) delete next[weekday];
+                      else next[weekday] = { start: "09:00", end: "17:00" };
+                      return next;
+                    })}
+                  />
+                </div>
+                <label className="grid gap-1 text-xs text-zinc-500">
+                  Début
+                  <input type="time" disabled={!value} value={value?.start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { end: "17:00" }), start: event.target.value } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
+                </label>
+                <label className="grid gap-1 text-xs text-zinc-500">
+                  Fin
+                  <input type="time" disabled={!value} value={value?.end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { start: "09:00" }), end: event.target.value } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
+                </label>
+              </div>
+            );
           })}
         </div>
         <div className="flex justify-end gap-2 pt-2">
