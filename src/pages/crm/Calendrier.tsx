@@ -2307,10 +2307,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   return (
     // Le planning occupe la hauteur de l'écran : une semaine chargée se lit
     // d'un coup d'œil, sans faire défiler la page.
-    <div className="flex h-[calc(100dvh-11rem)] min-h-[520px] flex-col gap-3 p-4 sm:p-6">
+    <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col gap-3 p-4 sm:p-6">
       {/* Les tâches restent visibles au-dessus du calendrier : on les dépose
           simplement sur une journée pour préparer une affectation. */}
-      <div className="shrink-0 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+      <div className="hidden shrink-0 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
             Tâches à planifier
@@ -2397,13 +2397,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         >
           Cette semaine
         </Button>
-        <p className="ml-auto text-xs text-zinc-500">
-          Déposez une tâche sur le créneau souhaité, puis renseignez-la si
-          besoin.
-        </p>
+        {canCreate ? <Button size="sm" onClick={() => tasks[0] && setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(weekStart, 13), endAt: dayAtHour(weekStart, 17) })}><Plus className="h-4 w-4" />Nouvelle tâche</Button> : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
+      <div className="thin-scroll min-h-0 flex-1 overflow-x-scroll overflow-y-auto rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
         <div className="min-w-[980px]">
           <div className="sticky top-0 z-20 grid grid-cols-[56px_repeat(7,minmax(132px,1fr))] border-b border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-sm">
             <div className="border-r border-[var(--crm-border)]" />
@@ -2529,7 +2526,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                           setForegroundActivityId(String(activity._id));
                         }}
                         className={cn(
-                          "absolute overflow-hidden rounded-md border border-brand-400/40 bg-brand-500/25 px-1.5 py-1 text-left text-[11px] font-medium text-brand-100 shadow-sm transition hover:bg-brand-500/40",
+                          "absolute overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-medium shadow-sm transition",
+                          activity.taskName.toLocaleLowerCase("fr").includes("caisse") ? "border-violet-400/50 bg-violet-500/25 text-violet-100 hover:bg-violet-500/40" : "border-emerald-400/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/40",
                           foregroundActivityId === String(activity._id) && "ring-2 ring-brand-300",
                         )}
                         style={{
@@ -2552,11 +2550,12 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                             </span>
                           ) : null}
                         </p>
-                        <p className="truncate text-brand-100/80">
+                        <p className="flex items-center gap-1 truncate text-current/80">
+                          {activity.workerId ? <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/25 text-[8px] font-extrabold text-white">{activity.workerName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("")}</span> : null}
                           {activity.workerName}
                         </p>
                         {segment.height >= 46 ? (
-                          <p className="mt-0.5 text-[10px] font-normal text-brand-100/70">
+                          <p className="mt-0.5 text-[10px] font-normal text-current/70">
                             {segment.timeLabel}
                           </p>
                         ) : null}
@@ -2851,9 +2850,13 @@ function ResourceDayPanel({
             <Field label="Tâche">
               <Select
                 value={taskId}
-                onChange={(e) =>
-                  setTaskId(e.target.value as Id<"polyvalentTasks">)
-                }
+                onChange={(e) => {
+                  const nextId = e.target.value as Id<"polyvalentTasks">;
+                  setTaskId(nextId);
+                  const task = tasks.find((item) => item._id === nextId);
+                  if (task?.name.toLocaleLowerCase("fr").includes("apports")) { setStartAt(dayAtHour(day, 13)); setEndAt(dayAtHour(day, 17)); }
+                  if (task?.name.toLocaleLowerCase("fr").includes("caisse")) { setStartAt(dayAtHour(day, 14)); setEndAt(dayAtHour(day, 17)); }
+                }}
               >
                 <option value="">Sélectionner une tâche</option>
                 {tasks.map((task) => (

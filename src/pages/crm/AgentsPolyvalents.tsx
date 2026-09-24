@@ -72,7 +72,7 @@ export function Taches() {
       />
 
       <div className="px-4 py-4 sm:px-6">
-        <WorkloadSummary tasks={visibleTasks} workers={visibleWorkers} />
+        <div className="hidden"><WorkloadSummary tasks={visibleTasks} workers={visibleWorkers} /></div>
 
         <UnderlineTabs
           className="mb-1"
