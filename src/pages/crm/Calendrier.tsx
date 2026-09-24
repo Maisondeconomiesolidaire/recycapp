@@ -2250,6 +2250,15 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     return eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 5) });
   }, [calendarDay, calendarView, weekStart]);
 
+  const recurrenceExceptions = useQuery(
+    api.polyvalents.listRecurrenceExceptions,
+    canRead ? { startAt: days[0].getTime(), endAt: addDays(days[days.length - 1], 1).getTime() } : "skip",
+  );
+  const excludedOccurrences = useMemo(
+    () => new Set((recurrenceExceptions ?? []).map((item) => `${item.recurrenceId}:${item.originalStartAt}`)),
+    [recurrenceExceptions],
+  );
+
   // Une activité s'affiche sur chaque jour compris entre sa date de début et sa
   // date de fin (créneaux multi-jours inclus).
   const byDay = useMemo(() => {
@@ -2269,7 +2278,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       }
     }
     for (const recurrence of recurrences ?? []) {
-      if (!matchesSite(recurrence.taskSite)) continue;
+      if (!matchesSite(recurrence.taskSite) || recurrenceExceptions === undefined) continue;
       for (const day of days) {
         const weekday = day.getDay() || 7;
         for (const slot of recurrence.slots.filter(
@@ -2279,12 +2288,13 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           const [endHour, endMinute] = slot.end.split(":").map(Number);
           const start = new Date(day);
           start.setHours(startHour, startMinute, 0, 0);
+          if (excludedOccurrences.has(`${recurrence._id}:${start.getTime()}`)) continue;
           const end = new Date(day);
           end.setHours(endHour, endMinute, 0, 0);
           const key = format(day, "yyyy-MM-dd");
           const arr = map.get(key) ?? [];
           arr.push({
-            _id: `${recurrence._id}-${weekday}` as Activity["_id"],
+            _id: `${recurrence._id}-${start.getTime()}` as Activity["_id"],
             _creationTime: recurrence._creationTime,
             taskId: recurrence.taskId,
             workerId: recurrence.workerId,
@@ -2300,7 +2310,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       }
     }
     return map;
-  }, [activities, days, recurrences, siteFilter]);
+  }, [activities, days, recurrences, siteFilter, recurrenceExceptions, excludedOccurrences]);
 
   const selectedDayActivities = useMemo(() => {
     if (!selectedDay) return [];
@@ -2480,7 +2490,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           </div>
           <EventCalendarToolbar className="hidden" />
           {timingError ? <p role="alert" className="px-4 py-2 text-red-600 dark:text-red-400">{timingError}</p> : null}
-          <p className="px-4 py-1 text-xs text-muted-foreground">Glissez une tâche pour la déplacer, ou ses bords pour modifier sa durée. Une tâche récurrente modifie le créneau hebdomadaire.</p>
+          <p className="px-4 py-1 text-xs text-muted-foreground">Glissez une tâche pour la déplacer, ou ses bords pour modifier sa durée. Seule l’occurrence sélectionnée est modifiée.</p>
           <EventCalendarContent />
         </EventCalendar>
       </div>
