@@ -2,6 +2,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -72,6 +73,13 @@ import { cn } from "../../lib/cn";
 import { initials } from "../../lib/format";
 import { useUpload } from "../../lib/useUpload";
 import { useAnchoredPopover } from "../../lib/useAnchoredPopover";
+import { EventCalendar } from "../../components/reui/event-calendar/event-calendar";
+import { EventCalendarContent } from "../../components/reui/event-calendar/event-calendar-content";
+import { EventCalendarNav, EventCalendarToolbar } from "../../components/reui/event-calendar/event-calendar-nav";
+import type {
+  CalendarEvent as ReuiCalendarEvent,
+  EventCalendarProposedUpdate,
+} from "../../components/reui/event-calendar/event-calendar-types";
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -103,6 +111,12 @@ type DroppedTask = {
   taskId: Id<"polyvalentTasks">;
   startAt: number;
   endAt: number;
+};
+type PlannerEventData = {
+  activity: DisplayActivity;
+  activities: DisplayActivity[];
+  assignedWorkers: number;
+  requiredWorkers: number;
 };
 type DisplayActivity = Pick<
   Activity,
@@ -338,7 +352,7 @@ function DepotCalendar({ month }: { month: Date }) {
         variant="left"
         title={
           selectedDay
-            ? format(selectedDay, "EEEE d MMMM yyyy", { locale: fr })
+            ? format(selectedDay as Date, "EEEE d MMMM yyyy", { locale: fr })
             : ""
         }
         bodyClassName="p-0"
@@ -2212,6 +2226,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       ),
     [allTasks, siteFilter],
   );
+  const taskById = useMemo(
+    () => new Map((tasks ?? []).map((task) => [String(task._id), task])),
+    [tasks],
+  );
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [weekStart, setWeekStart] = useState(() =>
@@ -2229,6 +2247,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     id: string;
     endAt: number;
   } | null>(null);
+  const suppressEventClickRef = useRef(false);
 
   useEffect(() => {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
@@ -2298,6 +2317,38 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       (activity): activity is Activity => !activity.recurrenceId,
     );
   }, [selectedDay, byDay]);
+
+  const plannerEvents = useMemo(() => {
+    const uniqueActivities = new Map<string, DisplayActivity>();
+    for (const dayActivities of byDay.values()) {
+      for (const activity of dayActivities) {
+        uniqueActivities.set(String(activity._id), activity);
+      }
+    }
+    const grouped = new Map<string, DisplayActivity[]>();
+    for (const activity of uniqueActivities.values()) {
+      const key = `${activity.taskId}-${activity.startAt}-${activity.endAt}`;
+      const group = grouped.get(key) ?? [];
+      group.push(activity);
+      grouped.set(key, group);
+    }
+    return Array.from(grouped.values()).map((group) => {
+      const activity = group[0];
+      const requiredWorkers = taskById.get(String(activity.taskId))?.requiredWorkers ?? 1;
+      const assignedWorkers = group.filter((item) => Boolean(item.workerId)).length;
+      const isCaisse = activity.taskName.toLocaleLowerCase("fr").includes("caisse");
+      return {
+        id: String(activity._id),
+        title: activity.taskName,
+        start: new Date(activity.startAt),
+        end: new Date(activity.endAt),
+        color: isCaisse ? "#7c3aed" : "#059669",
+        draggable: isStoredActivity(activity),
+        resizable: isStoredActivity(activity),
+        data: { activity, activities: group, assignedWorkers, requiredWorkers },
+      } satisfies ReuiCalendarEvent<PlannerEventData>;
+    });
+  }, [byDay, taskById]);
 
   if (!canRead) {
     return (
@@ -2383,6 +2434,200 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp, { once: true });
   }
+
+  /** Déplacement au pointeur, y compris sur écran tactile : évite les limites
+   * du drag HTML natif dans une grille qui défile. */
+  function startMove(
+    activity: DisplayActivity,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    if (!isStoredActivity(activity) || !canUpdate) return;
+    const originX = event.clientX;
+    const originY = event.clientY;
+    let moved = false;
+    let targetStart = activity.startAt;
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < 7) return;
+      moved = true;
+      const target = document
+        .elementFromPoint(moveEvent.clientX, moveEvent.clientY)
+        ?.closest<HTMLElement>("[data-resource-day]");
+      const date = target?.dataset.resourceDate;
+      if (!target || !date) return;
+      const bounds = target.getBoundingClientRect();
+      const halfHours = Math.max(
+        0,
+        Math.min(
+          (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * 2 - 1,
+          Math.floor((moveEvent.clientY - bounds.top) / (RESOURCE_HOUR_HEIGHT / 2)),
+        ),
+      );
+      targetStart = dayAtHour(new Date(`${date}T12:00:00`), RESOURCE_DAY_START_HOUR) + halfHours * 30 * 60_000;
+    };
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      suppressEventClickRef.current = moved;
+      if (!moved || targetStart === activity.startAt) return;
+      const duration = activity.endAt - activity.startAt;
+      void updateActivity({
+        id: activity._id,
+        taskId: activity.taskId,
+        workerId: activity.workerId ?? undefined,
+        startAt: targetStart,
+        endAt: targetStart + duration,
+      });
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+  }
+
+  // Le moteur ReUI est le même que celui de la maquette fournie : il gère les
+  // collisions, le déplacement et les poignées de redimensionnement au pointeur.
+  // Le calendrier précédent reste plus bas temporairement pour conserver le
+  // panneau de création et les modales métier déjà branchées.
+  return (
+    <>
+      <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col p-4 sm:p-6">
+        <EventCalendar<PlannerEventData>
+          events={plannerEvents}
+          view={calendarView}
+          date={calendarView === "week" ? weekStart : calendarDay}
+          views={["week", "day"]}
+          locale={fr}
+          weekStartsOn={1}
+          weekendDays={[0]}
+          viewSettings={{ weekends: false, nowIndicator: true }}
+          dayStartHour={RESOURCE_DAY_START_HOUR}
+          dayEndHour={RESOURCE_DAY_END_HOUR}
+          slotDuration={30}
+          snapDuration={30}
+          interactions={{ drag: canUpdate, resize: canUpdate, selectSlot: canCreate }}
+          className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] text-[var(--foreground)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
+          classNames={{
+            event: "text-[var(--foreground)]",
+            content: "min-h-0",
+          }}
+          onViewChange={(nextView) => {
+            if (nextView === "week" || nextView === "day") setCalendarView(nextView);
+          }}
+          onDateChange={(date) => {
+            if (calendarView === "week") setWeekStart(startOfWeek(date, { weekStartsOn: 1 }));
+            else setCalendarDay(date);
+          }}
+          onSlotClick={(slot) => {
+            const firstTask = tasks[0];
+            if (!canCreate || !firstTask) return;
+            const day = startOfDay(slot.date);
+            setSelectedDay(day);
+            setDroppedTask({
+              taskId: firstTask._id,
+              startAt: slot.date.getTime(),
+              endAt: slot.end?.getTime() ?? slot.date.getTime() + 60 * 60_000,
+            });
+          }}
+          onEventClick={(occurrence) => {
+            setForegroundActivityId(String(occurrence.event.data?.activity._id));
+            setActivityToEdit(occurrence.event.data?.activity ?? null);
+          }}
+          onEventUpdate={(update: EventCalendarProposedUpdate<PlannerEventData>) => {
+            const eventData = update.event.data;
+            const activity = eventData?.activity;
+            if (!eventData || !activity || !isStoredActivity(activity) || !canUpdate) return false;
+            void Promise.all(
+              eventData.activities
+                .filter(isStoredActivity)
+                .map((item) =>
+                  updateActivity({
+                    id: item._id,
+                    taskId: item.taskId,
+                    workerId: item.workerId ?? undefined,
+                    startAt: update.start.getTime(),
+                    endAt: update.end.getTime(),
+                  }),
+                ),
+            );
+            return true;
+          }}
+          renderEvent={({ occurrence }) => {
+            const data = occurrence.event.data;
+            if (!data) return null;
+            const worker = data.activity.workerName;
+            const workerInitials = worker
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0])
+              .join("");
+            return (
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden text-left leading-tight text-[var(--foreground)]">
+                <span className="flex min-w-0 items-center gap-1 font-bold">
+                  <span className="truncate">{occurrence.event.title}</span>
+                  <span className="ml-auto shrink-0 rounded-full bg-black/15 px-1.5 py-0.5 text-[9px] font-extrabold text-[var(--foreground)]">
+                    {data.assignedWorkers}/{data.requiredWorkers}
+                  </span>
+                </span>
+                <span className="flex min-w-0 items-center gap-1 text-[10px] font-medium opacity-85">
+                  {data.activity.workerId ? (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface)] text-[8px] font-extrabold text-[var(--foreground)]">
+                      {workerInitials}
+                    </span>
+                  ) : null}
+                  <span className="truncate">{worker}</span>
+                </span>
+              </span>
+            );
+          }}
+        >
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--crm-border)] px-3 py-2">
+            <EventCalendarNav showViewSwitcher />
+            {canCreate ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const day = calendarView === "day" ? calendarDay : weekStart;
+                  if (!tasks[0]) return;
+                  setSelectedDay(day);
+                  setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(day, 13), endAt: dayAtHour(day, 17) });
+                }}
+              >
+                <Plus className="h-4 w-4" /> Nouvelle tâche
+              </Button>
+            ) : null}
+          </div>
+          <EventCalendarToolbar className="hidden" />
+          <EventCalendarContent />
+        </EventCalendar>
+      </div>
+      <Drawer
+        open={selectedDay !== null}
+        onClose={() => {
+          setSelectedDay(null);
+          setActivityToEdit(null);
+        }}
+        variant="side"
+        title={selectedDay ? format(selectedDay, "EEEE d MMMM yyyy", { locale: fr }) : ""}
+        bodyClassName="p-0"
+        panelClassName="max-w-4xl"
+      >
+        {selectedDay ? <ResourceDayPanel day={selectedDay} activities={selectedDayActivities} workers={workers ?? []} tasks={tasks ?? []} schedules={schedules ?? []} canCreate={canCreate} canUpdate={canUpdate} canDelete={canDelete} droppedTask={droppedTask} onDroppedTaskConsumed={() => setDroppedTask(null)} /> : null}
+      </Drawer>
+      {activityToEdit ? (
+        <ActivityWorkerModal
+          key={activityToEdit._id}
+          activity={activityToEdit}
+          workers={workers ?? []}
+          assignedActivities={(activities ?? []).filter((item) => item.taskId === activityToEdit.taskId && item.startAt === activityToEdit.startAt && item.endAt === activityToEdit.endAt)}
+          requiredWorkers={taskById.get(String(activityToEdit.taskId))?.requiredWorkers ?? 1}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
+          onClose={() => setActivityToEdit(null)}
+        />
+      ) : null}
+    </>
+  );
 
   return (
     // Le planning occupe la hauteur de l'écran : une semaine chargée se lit
@@ -2577,6 +2822,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 <div
                   key={key}
                   data-resource-day="true"
+                  data-resource-date={key}
                   onClick={() => setSelectedDay(day)}
                   onDragOver={(event) => {
                     if (canCreate || canUpdate) event.preventDefault();
@@ -2641,6 +2887,14 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                     ),
                   )}
                   {positionedItems.map(({ activity, segment, column, columns }) => {
+                    const requiredWorkers = taskById.get(String(activity.taskId))?.requiredWorkers ?? 1;
+                    const assignedWorkers = items.filter(
+                      (item) =>
+                        item.taskId === activity.taskId &&
+                        item.startAt === activity.startAt &&
+                        item.endAt === activity.endAt &&
+                        Boolean(item.workerId),
+                    ).length;
                     const resizedActivity =
                       resizePreview?.id === String(activity._id)
                         ? { ...activity, endAt: resizePreview.endAt }
@@ -2650,17 +2904,13 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                       <button
                         key={activity._id}
                         type="button"
-                        draggable={isStoredActivity(activity) && canUpdate}
-                        onDragStart={(event) => {
-                          if (!isStoredActivity(activity)) return;
-                          event.dataTransfer.setData(
-                            "application/x-recycapp-activity",
-                            String(activity._id),
-                          );
-                          event.dataTransfer.effectAllowed = "move";
-                        }}
+                        onPointerDown={(event) => startMove(activity, event)}
                         onClick={(event) => {
                           event.stopPropagation();
+                          if (suppressEventClickRef.current) {
+                            suppressEventClickRef.current = false;
+                            return;
+                          }
                           setForegroundActivityId(String(activity._id));
                           setActivityToEdit(activity);
                         }}
@@ -2682,6 +2932,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                       >
                         <p className="flex items-center gap-1 truncate font-semibold">
                           <span className="truncate">{activity.taskName}</span>
+                          <span className="ml-auto shrink-0 rounded-full bg-black/20 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                            {assignedWorkers}/{requiredWorkers}
+                          </span>
                           {!activity.workerId ? (
                             <span
                               title="Aucun salarié affecté"
@@ -2728,7 +2981,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         variant="side"
         title={
           selectedDay
-            ? format(selectedDay, "EEEE d MMMM yyyy", { locale: fr })
+            ? format(selectedDay as Date, "EEEE d MMMM yyyy", { locale: fr })
             : ""
         }
         bodyClassName="p-0"
@@ -2736,7 +2989,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       >
         {selectedDay ? (
           <ResourceDayPanel
-            day={selectedDay}
+            day={selectedDay as Date}
             activities={selectedDayActivities}
             workers={workers ?? []}
             tasks={tasks ?? []}
@@ -2751,9 +3004,16 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       </Drawer>
       {activityToEdit ? (
         <ActivityWorkerModal
-          key={activityToEdit._id}
-          activity={activityToEdit}
+          key={(activityToEdit as DisplayActivity)._id}
+          activity={activityToEdit as DisplayActivity}
           workers={workers ?? []}
+          assignedActivities={(activities ?? []).filter(
+            (item) =>
+              item.taskId === (activityToEdit as DisplayActivity).taskId &&
+              item.startAt === (activityToEdit as DisplayActivity).startAt &&
+              item.endAt === (activityToEdit as DisplayActivity).endAt,
+          )}
+          requiredWorkers={taskById.get(String((activityToEdit as DisplayActivity).taskId))?.requiredWorkers ?? 1}
           canCreate={canCreate}
           canUpdate={canUpdate}
           onClose={() => setActivityToEdit(null)}
@@ -2818,12 +3078,16 @@ function isStoredActivity(activity: DisplayActivity): activity is Activity {
 function ActivityWorkerModal({
   activity,
   workers,
+  assignedActivities,
+  requiredWorkers,
   canCreate,
   canUpdate,
   onClose,
 }: {
   activity: DisplayActivity;
   workers: WorkerList;
+  assignedActivities: Activity[];
+  requiredWorkers: number;
   canCreate: boolean;
   canUpdate: boolean;
   onClose: () => void;
@@ -2863,7 +3127,7 @@ function ActivityWorkerModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Récapitulatif de la tâche" className="max-w-md">
+    <Modal open onClose={onClose} title="Récapitulatif de la tâche" className="max-w-2xl">
       <div className="space-y-4">
         <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
           <p className="font-semibold text-[var(--foreground)]">{activity.taskName}</p>
@@ -2871,8 +3135,18 @@ function ActivityWorkerModal({
             {format(new Date(activity.startAt), "EEEE d MMMM · HH:mm", { locale: fr })} – {format(new Date(activity.endAt), "HH:mm", { locale: fr })}
           </p>
           <p className="mt-2 text-sm text-[var(--foreground)]">
-            Salarié affecté : <span className="font-semibold">{activity.workerName}</span>
+            Équipe affectée : <span className="font-semibold">{assignedActivities.filter((item) => item.workerId).length}/{requiredWorkers}</span>
           </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {assignedActivities.filter((item) => item.workerId).map((item) => (
+            <div key={item._id} className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm font-medium text-[var(--foreground)]">
+              {item.workerName}
+            </div>
+          ))}
+          {assignedActivities.filter((item) => item.workerId).length === 0 ? (
+            <p className="text-sm text-zinc-500">Aucun salarié n’est encore affecté.</p>
+          ) : null}
         </div>
         {addingWorker ? (
           <Field label="Ajouter un salarié">
@@ -2884,7 +3158,7 @@ function ActivityWorkerModal({
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Annuler</Button>
-          {!addingWorker && canCreate ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Ajouter un salarié</Button> : null}
+          {!addingWorker && canCreate && assignedActivities.filter((item) => item.workerId).length < requiredWorkers ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Ajouter un salarié</Button> : null}
           {addingWorker ? <Button onClick={() => void save()} disabled={saving || !workerId}>{saving ? "Enregistrement…" : "Ajouter"}</Button> : null}
           {!addingWorker && !activity.workerId && isStoredActivity(activity) && canUpdate ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Affecter un salarié</Button> : null}
         </div>

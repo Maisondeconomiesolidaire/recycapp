@@ -824,6 +824,9 @@ function TaskForm({
   const [weeklyHours, setWeeklyHours] = useState(
     task?.requiredMonthlyHours ? String(task.requiredMonthlyHours / 4).replace(".", ",") : "",
   );
+  const [requiredWorkers, setRequiredWorkers] = useState(
+    String(task?.requiredWorkers ?? 1),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -834,6 +837,11 @@ function TaskForm({
       setError("Les heures requises doivent être un nombre positif.");
       return;
     }
+    const workerCount = Number(requiredWorkers);
+    if (!Number.isInteger(workerCount) || workerCount < 1) {
+      setError("Le nombre de salariés requis doit être un entier positif.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -841,6 +849,7 @@ function TaskForm({
         name,
         site: task?.site ?? GESTION_SITE,
         requiredMonthlyHours: weekly !== undefined ? weekly * 4 : undefined,
+        requiredWorkers: workerCount,
       };
       if (task) await updateTask({ id: task._id, ...profile });
       else await createTask(profile);
@@ -868,6 +877,15 @@ function TaskForm({
             onChange={(event) => setWeeklyHours(event.target.value)}
             inputMode="decimal"
             placeholder="Ex : 30"
+          />
+        </Field>
+        <Field label="Salariés requis simultanément">
+          <Input
+            type="number"
+            min="1"
+            step="1"
+            value={requiredWorkers}
+            onChange={(event) => setRequiredWorkers(event.target.value)}
           />
         </Field>
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
