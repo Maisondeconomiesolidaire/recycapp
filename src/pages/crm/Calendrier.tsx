@@ -2382,10 +2382,16 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           snapDuration={30}
           i18n={PLANNER_FRENCH}
           interactions={{ drag: canUpdate, resize: canUpdate, selectSlot: canCreate }}
-          className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] text-[var(--foreground)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
+          className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-zinc-700 bg-[var(--crm-surface)] text-[var(--foreground)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
           classNames={{
             event: "items-start py-3 text-[var(--foreground)]",
             content: "min-h-0",
+            timeGrid: "border-zinc-700",
+            timeGridHeader: "border-zinc-700",
+            timeGutter: "border-zinc-700",
+            dayColumn: "border-zinc-700 [--ec-slot-line-color:rgb(63_63_70)]",
+            allDaySection: "border-zinc-700",
+            allDayCell: "border-zinc-700",
             resizeHandle: "!h-3 !opacity-100 z-30",
             resizeGrip: "!w-6",
           }}

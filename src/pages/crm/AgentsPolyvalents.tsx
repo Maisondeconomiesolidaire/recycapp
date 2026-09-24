@@ -585,24 +585,26 @@ function WorkerScheduleEditor({
 }) {
   const setSchedule = useMutation(api.polyvalents.setWorkerSchedule);
   type DaySlots = {
-    morning: { start: string; end: string };
-    afternoon: { start: string; end: string };
+    morning: { enabled: boolean; start: string; end: string };
+    afternoon: { enabled: boolean; start: string; end: string };
   };
+  const emptyDay = (): DaySlots => ({
+    morning: { enabled: false, start: "09:00", end: "12:00" },
+    afternoon: { enabled: false, start: "13:30", end: "17:00" },
+  });
   const initial = schedule.reduce<Record<number, DaySlots>>((result, slot) => {
-    const current = result[slot.weekday] ?? {
-      morning: { start: "09:00", end: "12:00" },
-      afternoon: { start: "13:30", end: "17:00" },
-    };
-    if (!result[slot.weekday]) current.morning = { start: slot.start, end: slot.end };
-    else current.afternoon = { start: slot.start, end: slot.end };
+    if (slot.weekday === 7) return result;
+    const current = result[slot.weekday] ?? emptyDay();
+    const period = timeToMinutes(slot.start) < 13 * 60 ? "morning" : "afternoon";
+    current[period] = { enabled: true, start: slot.start, end: slot.end };
     result[slot.weekday] = current;
     return result;
   }, {});
   const [slots, setSlots] = useState<Record<number, DaySlots>>(initial);
   const [saving, setSaving] = useState(false);
-  const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+  const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
   const weeklyHours = scheduledWeeklyHours(
-    Object.values(slots).flatMap((day) => [day.morning, day.afternoon]),
+    Object.values(slots).flatMap((day) => [day.morning, day.afternoon].filter((period) => period.enabled)),
   );
 
   async function save() {
@@ -610,10 +612,11 @@ function WorkerScheduleEditor({
     try {
       await setSchedule({
         workerId: worker._id,
-        availability: Object.entries(slots).flatMap(([weekday, day]) => [
-          { weekday: Number(weekday), ...day.morning },
-          { weekday: Number(weekday), ...day.afternoon },
-        ]),
+        availability: Object.entries(slots).flatMap(([weekday, day]) =>
+          [day.morning, day.afternoon]
+            .filter((period) => period.enabled)
+            .map(({ start, end }) => ({ weekday: Number(weekday), start, end })),
+        ),
       });
       onClose();
     } finally { setSaving(false); }
@@ -644,20 +647,33 @@ function WorkerScheduleEditor({
                       const next = { ...current };
                       if (next[weekday]) delete next[weekday];
                       else next[weekday] = {
-                        morning: { start: "09:00", end: "12:00" },
-                        afternoon: { start: "13:30", end: "17:00" },
+                        morning: { enabled: true, start: "09:00", end: "12:00" },
+                        afternoon: { enabled: true, start: "13:30", end: "17:00" },
                       };
                       return next;
                     })}
                   />
                 </div>
                 {(["morning", "afternoon"] as const).map((period) => (
-                  <div key={period} className="col-span-2 grid grid-cols-[72px_1fr_1fr] items-center gap-2">
-                    <span className="text-xs font-medium text-[var(--foreground)]">
-                      {period === "morning" ? "Matin" : "Après-midi"}
-                    </span>
-                    <input type="time" disabled={!value} value={value?.[period].start ?? "09:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { morning: { start: "09:00", end: "12:00" }, afternoon: { start: "13:30", end: "17:00" } }), [period]: { ...(current[weekday]?.[period] ?? { end: "17:00" }), start: event.target.value } } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
-                    <input type="time" disabled={!value} value={value?.[period].end ?? "17:00"} onChange={(event) => setSlots((current) => ({ ...current, [weekday]: { ...(current[weekday] ?? { morning: { start: "09:00", end: "12:00" }, afternoon: { start: "13:30", end: "17:00" } }), [period]: { ...(current[weekday]?.[period] ?? { start: "09:00" }), end: event.target.value } } }))} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
+                  <div key={period} className="col-span-2 grid grid-cols-[112px_1fr_1fr] items-center gap-2">
+                    <Checkbox
+                      label={period === "morning" ? "Matin" : "Après-midi"}
+                      variant="inline"
+                      disabled={!value}
+                      checked={Boolean(value?.[period].enabled)}
+                      onChange={() => setSlots((current) => {
+                        const day = current[weekday] ?? emptyDay();
+                        return { ...current, [weekday]: { ...day, [period]: { ...day[period], enabled: !day[period].enabled } } };
+                      })}
+                    />
+                    <input type="time" disabled={!value?.[period].enabled} value={value?.[period].start ?? "09:00"} onChange={(event) => setSlots((current) => {
+                      const day = current[weekday] ?? emptyDay();
+                      return { ...current, [weekday]: { ...day, [period]: { ...day[period], start: event.target.value } } };
+                    })} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
+                    <input type="time" disabled={!value?.[period].enabled} value={value?.[period].end ?? "17:00"} onChange={(event) => setSlots((current) => {
+                      const day = current[weekday] ?? emptyDay();
+                      return { ...current, [weekday]: { ...day, [period]: { ...day[period], end: event.target.value } } };
+                    })} className="w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2 py-2 text-sm text-[var(--foreground)] disabled:opacity-40" />
                   </div>
                 ))}
               </div>
