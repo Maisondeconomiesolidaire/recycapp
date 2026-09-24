@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useMemo,
   useState,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -2190,6 +2191,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     canRead ? {} : "skip",
   );
   const removeRecurrence = useMutation(api.polyvalents.deleteRecurrence);
+  const updateActivity = useMutation(api.polyvalents.updateActivity);
   const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
 
   // Le filtre principal de la page restreint tout le planning à une recyclerie :
@@ -2222,6 +2224,11 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   });
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
   const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
+  const [activityToEdit, setActivityToEdit] = useState<Activity | null>(null);
+  const [resizePreview, setResizePreview] = useState<{
+    id: string;
+    endAt: number;
+  } | null>(null);
 
   useEffect(() => {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
@@ -2328,6 +2335,52 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     const today = startOfDay(new Date());
     setWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
     setCalendarDay(today.getDay() === 0 ? addDays(today, 1) : today);
+  }
+
+  function startResize(
+    activity: Activity,
+    day: Date,
+    event: ReactPointerEvent<HTMLSpanElement>,
+  ) {
+    if (!canUpdate) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const column = event.currentTarget.closest("[data-resource-day]");
+    if (!(column instanceof HTMLElement)) return;
+    const bounds = column.getBoundingClientRect();
+    const gridStart = dayAtHour(day, RESOURCE_DAY_START_HOUR);
+    const gridEnd = dayAtHour(day, RESOURCE_DAY_END_HOUR);
+    let nextEnd = activity.endAt;
+
+    const updatePreview = (clientY: number) => {
+      const halfHours = Math.round(
+        (clientY - bounds.top) / (RESOURCE_HOUR_HEIGHT / 2),
+      );
+      nextEnd = Math.min(
+        gridEnd,
+        Math.max(activity.startAt + 30 * 60_000, gridStart + halfHours * 30 * 60_000),
+      );
+      setResizePreview({ id: String(activity._id), endAt: nextEnd });
+    };
+    updatePreview(event.clientY);
+
+    const onPointerMove = (moveEvent: PointerEvent) => updatePreview(moveEvent.clientY);
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      setResizePreview(null);
+      if (nextEnd !== activity.endAt) {
+        void updateActivity({
+          id: activity._id,
+          taskId: activity.taskId,
+          workerId: activity.workerId ?? undefined,
+          startAt: activity.startAt,
+          endAt: nextEnd,
+        });
+      }
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
   }
 
   return (
@@ -2519,6 +2572,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
               return (
                 <div
                   key={key}
+                  data-resource-day
                   onClick={() => setSelectedDay(day)}
                   onDragOver={(event) => {
                     if (canCreate) event.preventDefault();
@@ -2569,6 +2623,11 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                     ),
                   )}
                   {positionedItems.map(({ activity, segment, column, columns }) => {
+                    const resizedActivity =
+                      resizePreview?.id === String(activity._id)
+                        ? { ...activity, endAt: resizePreview.endAt }
+                        : activity;
+                    const resizedSegment = resourceActivitySegment(resizedActivity, day) ?? segment;
                     return (
                       <button
                         key={activity._id}
@@ -2577,22 +2636,23 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                           event.stopPropagation();
                           setSelectedDay(day);
                           setForegroundActivityId(String(activity._id));
+                          if (isStoredActivity(activity) && canUpdate) setActivityToEdit(activity);
                         }}
                         className={cn(
-                          "absolute overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-medium shadow-sm transition",
+                          "group absolute overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-medium shadow-sm transition",
                           activity.taskName.toLocaleLowerCase("fr").includes("caisse")
                             ? "border-violet-800 bg-violet-700 text-white hover:bg-violet-800"
                             : "border-emerald-800 bg-emerald-700 text-white hover:bg-emerald-800",
                           foregroundActivityId === String(activity._id) && "ring-2 ring-brand-300",
                         )}
                         style={{
-                          top: segment.top,
-                          height: segment.height,
+                          top: resizedSegment.top,
+                          height: resizedSegment.height,
                           left: `calc(${(column / columns) * 100}% + 4px)`,
                           width: `calc(${100 / columns}% - 8px)`,
                           zIndex: foregroundActivityId === String(activity._id) ? 30 : 10 + column,
                         }}
-                        title={`${activity.workerName} — ${activity.taskName} · ${segment.timeLabel}`}
+                        title={`${activity.workerName} — ${activity.taskName} · ${resizedSegment.timeLabel}`}
                       >
                         <p className="flex items-center gap-1 truncate font-semibold">
                           <span className="truncate">{activity.taskName}</span>
@@ -2609,10 +2669,19 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                           {activity.workerId ? <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/25 text-[8px] font-extrabold text-white">{activity.workerName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("")}</span> : null}
                           {activity.workerName}
                         </p>
-                        {segment.height >= 46 ? (
+                        {resizedSegment.height >= 46 ? (
                           <p className="mt-0.5 text-[10px] font-normal text-white/80">
-                            {segment.timeLabel}
+                            {resizedSegment.timeLabel}
                           </p>
+                        ) : null}
+                        {isStoredActivity(activity) && canUpdate ? (
+                          <span
+                            role="presentation"
+                            onClick={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => startResize(activity, day, event)}
+                            className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize bg-white/20 opacity-0 transition-opacity hover:bg-white/40 group-hover:opacity-100"
+                            title="Glissez pour modifier la durée"
+                          />
                         ) : null}
                       </button>
                     );
@@ -2626,7 +2695,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
 
       <Drawer
         open={selectedDay !== null}
-        onClose={() => setSelectedDay(null)}
+        onClose={() => {
+          setSelectedDay(null);
+          setActivityToEdit(null);
+        }}
         variant="side"
         title={
           selectedDay
@@ -2648,6 +2720,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             canDelete={canDelete}
             droppedTask={droppedTask}
             onDroppedTaskConsumed={() => setDroppedTask(null)}
+            activityToEdit={activityToEdit}
+            onActivityToEditConsumed={() => setActivityToEdit(null)}
           />
         ) : null}
       </Drawer>
@@ -2699,6 +2773,12 @@ function dayAtHour(day: Date, hour: number) {
   return d.getTime();
 }
 
+/** Les occurrences sont des projections calculées : seules les activités
+ * enregistrées peuvent être modifiées ou redimensionnées. */
+function isStoredActivity(activity: DisplayActivity): activity is Activity {
+  return !activity.recurrenceId;
+}
+
 function ResourceDayPanel({
   day,
   activities,
@@ -2710,6 +2790,8 @@ function ResourceDayPanel({
   canDelete,
   droppedTask,
   onDroppedTaskConsumed,
+  activityToEdit,
+  onActivityToEditConsumed,
 }: {
   day: Date;
   activities: Activity[];
@@ -2721,6 +2803,8 @@ function ResourceDayPanel({
   canDelete: boolean;
   droppedTask: DroppedTask | null;
   onDroppedTaskConsumed: () => void;
+  activityToEdit: Activity | null;
+  onActivityToEditConsumed: () => void;
 }) {
   const createActivity = useMutation(api.polyvalents.createActivity);
   const createActivities = useMutation(api.polyvalents.createActivities);
@@ -2762,6 +2846,12 @@ function ResourceDayPanel({
     onDroppedTaskConsumed();
   }, [droppedTask, onDroppedTaskConsumed]);
 
+  useEffect(() => {
+    if (!activityToEdit) return;
+    openEdit(activityToEdit);
+    onActivityToEditConsumed();
+  }, [activityToEdit, onActivityToEditConsumed]);
+
   function openCreate() {
     setEditing(null);
     setWorkerId("");
@@ -2781,6 +2871,7 @@ function ResourceDayPanel({
     setTaskId(activity.taskId);
     setStartAt(activity.startAt);
     setEndAt(activity.endAt);
+    setIsRecurring(false);
     setError(null);
     setFormOpen(true);
   }
@@ -2788,14 +2879,20 @@ function ResourceDayPanel({
   async function save() {
     setError(null);
     if (!taskId) return setError("Sélectionne une tâche.");
-    if (startAt == null) return setError("Renseigne la date de début.");
-    if (endAt == null) return setError("Renseigne la date de fin.");
-    if (endAt < startAt) return setError("La fin doit être après le début.");
+    if (isRecurring) {
+      if (Object.keys(recurrenceSlots).length === 0) {
+        return setError("Sélectionne au moins un jour.");
+      }
+    } else {
+      if (startAt == null) return setError("Renseigne la date de début.");
+      if (endAt == null) return setError("Renseigne la date de fin.");
+      if (endAt < startAt) return setError("La fin doit être après le début.");
+    }
     setSaving(true);
     const shared = { workerId: workerId || undefined, taskId };
     try {
       if (editing) {
-        await updateActivity({ id: editing._id, ...shared, startAt, endAt });
+        await updateActivity({ id: editing._id, ...shared, startAt: startAt!, endAt: endAt! });
       } else if (isRecurring) {
         await createRecurrence({
           ...shared,
@@ -2807,10 +2904,10 @@ function ResourceDayPanel({
       } else if (extraSlots.length > 0) {
         await createActivities({
           ...shared,
-          slots: [{ startAt, endAt }, ...extraSlots],
+          slots: [{ startAt: startAt!, endAt: endAt! }, ...extraSlots],
         });
       } else {
-        await createActivity({ ...shared, startAt, endAt });
+        await createActivity({ ...shared, startAt: startAt!, endAt: endAt! });
       }
       setFormOpen(false);
     } catch (err) {
@@ -2825,11 +2922,11 @@ function ResourceDayPanel({
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
-        {activities.length === 0 ? (
+        {!editing && activities.length === 0 ? (
           <p className="py-8 text-center text-sm text-zinc-500">
             Aucun agent affecté ce jour.
           </p>
-        ) : (
+        ) : !editing ? (
           activities.map((activity) => (
             <div
               key={activity._id}
@@ -2879,7 +2976,7 @@ function ResourceDayPanel({
               </p>
             </div>
           ))
-        )}
+        ) : null}
 
         {formOpen ? (
           <div className="grid gap-3 rounded-2xl border border-brand-500/40 bg-[var(--crm-surface)] p-4">
@@ -2902,7 +2999,7 @@ function ResourceDayPanel({
                 ))}
               </Select>
             </Field>
-            <Field label="Tâche">
+            {!editing ? <Field label="Tâche">
               <Select
                 value={taskId}
                 onChange={(e) => {
@@ -2920,21 +3017,21 @@ function ResourceDayPanel({
                   </option>
                 ))}
               </Select>
-            </Field>
-            <Field label="Début">
+            </Field> : null}
+            {!isRecurring && !editing ? <Field label="Début">
               <DateTimePicker
                 value={startAt}
                 onChange={setStartAt}
                 placeholder="Date et heure de début"
               />
-            </Field>
-            <Field label="Fin">
+            </Field> : null}
+            {!isRecurring && !editing ? <Field label="Fin">
               <DateTimePicker
                 value={endAt}
                 onChange={setEndAt}
                 placeholder="Date et heure de fin"
               />
-            </Field>
+            </Field> : null}
             {!editing ? (
               <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
                 <Checkbox
@@ -2972,7 +3069,6 @@ function ResourceDayPanel({
                       "Jeudi",
                       "Vendredi",
                       "Samedi",
-                      "Dimanche",
                     ].map((label, index) => {
                       const weekday = index + 1;
                       const slot = recurrenceSlots[weekday];
@@ -2989,11 +3085,12 @@ function ResourceDayPanel({
                               setRecurrenceSlots((current) => {
                                 const next = { ...current };
                                 if (next[weekday]) delete next[weekday];
-                                else
-                                  next[weekday] = {
-                                    start: "09:00",
-                                    end: "17:00",
-                                  };
+                                else {
+                                  const firstSlot = Object.values(next)[0];
+                                  next[weekday] = firstSlot
+                                    ? { ...firstSlot }
+                                    : { start: "09:00", end: "17:00" };
+                                }
                                 return next;
                               })
                             }
