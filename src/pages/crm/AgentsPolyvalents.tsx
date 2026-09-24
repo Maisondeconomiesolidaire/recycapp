@@ -7,7 +7,7 @@ import { PageHeader } from "../../components/crm/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Input, Select, Textarea } from "../../components/ui/Field";
 import { Modal } from "../../components/ui/Modal";
 import { SITE_LABELS, Site } from "../../lib/constants";
 import { initials } from "../../lib/format";
@@ -422,6 +422,8 @@ function WorkerForm({
   const [employmentType, setEmploymentType] = useState<"permanent" | "polyvalent" | "">(
     worker?.employmentType ?? "",
   );
+  const [hasDrivingLicenseB, setHasDrivingLicenseB] = useState(worker?.hasDrivingLicenseB ?? false);
+  const [notes, setNotes] = useState(worker?.notes ?? "");
   const fromHr = Boolean(worker?.hrEmployeeId);
   const [active, setActive] = useState(worker?.active !== false);
   const [saving, setSaving] = useState(false);
@@ -444,6 +446,8 @@ function WorkerForm({
         email: email.trim() || undefined,
         sites: sites.length ? sites : undefined,
         employmentType: employmentType || undefined,
+        hasDrivingLicenseB,
+        notes: notes.trim() || undefined,
       };
       if (worker) await updateWorker({ id: worker._id, ...profile, active });
       else await createWorker(profile);
@@ -505,6 +509,19 @@ function WorkerForm({
             <option value="polyvalent">Ouvrier polyvalent</option>
             <option value="permanent">Ouvrier permanent</option>
           </Select>
+        </Field>
+        <Checkbox
+          checked={hasDrivingLicenseB}
+          onChange={(event) => setHasDrivingLicenseB(event.target.checked)}
+          label="Permis B"
+          description="Le salarié est titulaire du permis de conduire B"
+        />
+        <Field label="Notes">
+          <Textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Informations complémentaires sur le salarié…"
+          />
         </Field>
         {worker ? (
           <Checkbox
