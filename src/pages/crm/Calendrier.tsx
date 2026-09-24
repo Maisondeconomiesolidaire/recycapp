@@ -119,8 +119,8 @@ type DisplayActivity = Pick<
   taskSite?: Site | null;
 };
 
-const RESOURCE_DAY_START_HOUR = 6;
-const RESOURCE_DAY_END_HOUR = 20;
+const RESOURCE_DAY_START_HOUR = 8;
+const RESOURCE_DAY_END_HOUR = 18;
 const RESOURCE_HOUR_HEIGHT = 72;
 const RESOURCE_DAY_HEIGHT =
   (RESOURCE_DAY_END_HOUR - RESOURCE_DAY_START_HOUR) * RESOURCE_HOUR_HEIGHT;
@@ -2190,6 +2190,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     canRead ? {} : "skip",
   );
   const removeRecurrence = useMutation(api.polyvalents.deleteRecurrence);
+  const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
 
   // Le filtre principal de la page restreint tout le planning à une recyclerie :
   // les tâches à planifier, les salariés proposés et les créneaux affichés.
@@ -2203,7 +2204,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const tasks = useMemo(
     () =>
       (allTasks ?? []).filter(
-        (task) => !siteFilter || task.site === siteFilter,
+        (task) =>
+          (!siteFilter || task.site === siteFilter) &&
+          ["apports", "caisse magasin"].includes(task.name.trim().toLocaleLowerCase("fr")),
       ),
     [allTasks, siteFilter],
   );
@@ -2213,6 +2216,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   );
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
+
+  useEffect(() => {
+    if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
+  }, [canCreate, ensurePlannerTasks, siteFilter]);
 
   const days = useMemo(
     () =>
