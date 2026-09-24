@@ -15,7 +15,7 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
-import { ResourceCalendar } from "./Calendrier";
+import { WeeklyEmployeePlanner } from "../../components/crm/WeeklyEmployeePlanner";
 
 type Tab = "planning" | "ouvriers" | "taches";
 
@@ -86,7 +86,7 @@ export function Taches() {
         />
 
         {tab === "planning" ? (
-          <ResourceCalendar siteFilter={GESTION_SITE} />
+          <WeeklyEmployeePlanner site={GESTION_SITE} />
         ) : tab === "ouvriers" ? (
           <WorkersTab
             workers={visibleWorkers}
