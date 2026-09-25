@@ -2236,7 +2236,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   });
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
   const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
-  const [activityToEdit, setActivityToEdit] = useState<DisplayActivity | null>(null);
+  const [activityToEdit, setActivityToEdit] = useState<PlannerEventData | null>(null);
   const [timingError, setTimingError] = useState<string | null>(null);
   const [pendingTiming, setPendingTiming] = useState<Record<string, { start: Date; end: Date }>>({});
 
@@ -2420,7 +2420,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           }}
           onEventClick={(occurrence) => {
             setForegroundActivityId(String(occurrence.event.data?.activity._id));
-            setActivityToEdit(occurrence.event.data?.activity ?? null);
+            setActivityToEdit(occurrence.event.data ?? null);
           }}
           onEventUpdate={(update: EventCalendarProposedUpdate<PlannerEventData>) => {
             const eventData = update.event.data;
@@ -2515,13 +2515,14 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       </Drawer>
       {activityToEdit ? (
         <ActivityWorkerModal
-          key={activityToEdit._id}
-          activity={activityToEdit}
+          key={activityToEdit.activity._id}
+          activity={activityToEdit.activity}
+          occurrenceActivities={activityToEdit.activities}
           workers={workers ?? []}
-          assignedActivities={(activities ?? []).filter((item) => item.taskId === activityToEdit.taskId && item.startAt === activityToEdit.startAt && item.endAt === activityToEdit.endAt)}
-          requiredWorkers={taskById.get(String(activityToEdit.taskId))?.requiredWorkers ?? 1}
+          requiredWorkers={activityToEdit.requiredWorkers}
           canCreate={canCreate}
           canUpdate={canUpdate}
+          canDelete={canDelete}
           onClose={() => setActivityToEdit(null)}
         />
       ) : null}
@@ -2546,28 +2547,35 @@ function isStoredActivity(activity: DisplayActivity): activity is Activity {
  * créneau, il ne reste qu'à lui affecter (ou retirer) un salarié. */
 function ActivityWorkerModal({
   activity,
+  occurrenceActivities,
   workers,
-  assignedActivities,
   requiredWorkers,
   canCreate,
   canUpdate,
+  canDelete,
   onClose,
 }: {
   activity: DisplayActivity;
+  occurrenceActivities: DisplayActivity[];
   workers: WorkerList;
-  assignedActivities: Activity[];
   requiredWorkers: number;
   canCreate: boolean;
   canUpdate: boolean;
+  canDelete: boolean;
   onClose: () => void;
 }) {
   const updateActivity = useMutation(api.polyvalents.updateActivity);
   const createActivity = useMutation(api.polyvalents.createActivity);
+  const deletePlannerOccurrence = useMutation(api.polyvalents.deletePlannerOccurrence);
   const [workerId, setWorkerId] = useState<Id<"polyvalentWorkers"> | "">(
     "",
   );
   const [addingWorker, setAddingWorker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const assignedActivities = occurrenceActivities.filter((item) => item.workerId);
 
   async function save() {
     if (!workerId) return;
@@ -2595,6 +2603,20 @@ function ActivityWorkerModal({
     }
   }
 
+  async function destroy() {
+    setDeleting(true);
+    try {
+      await deletePlannerOccurrence({
+        activityIds: occurrenceActivities.filter(isStoredActivity).map((item) => item._id),
+        recurrenceIds: occurrenceActivities.flatMap((item) => item.recurrenceId ? [item.recurrenceId] : []),
+        originalStartAt: activity.startAt,
+      });
+      onClose();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <Modal open onClose={onClose} title="Récapitulatif de la tâche" className="max-w-2xl">
       <div className="space-y-4">
@@ -2604,16 +2626,16 @@ function ActivityWorkerModal({
             {format(new Date(activity.startAt), "EEEE d MMMM · HH:mm", { locale: fr })} – {format(new Date(activity.endAt), "HH:mm", { locale: fr })}
           </p>
           <p className="mt-2 text-sm text-[var(--foreground)]">
-            Équipe affectée : <span className="font-semibold">{assignedActivities.filter((item) => item.workerId).length}/{requiredWorkers}</span>
+            Équipe affectée : <span className="font-semibold">{assignedActivities.length}/{requiredWorkers}</span>
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
-          {assignedActivities.filter((item) => item.workerId).map((item) => (
+          {assignedActivities.map((item) => (
             <div key={item._id} className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-sm font-medium text-[var(--foreground)]">
               {item.workerName}
             </div>
           ))}
-          {assignedActivities.filter((item) => item.workerId).length === 0 ? (
+          {assignedActivities.length === 0 ? (
             <p className="text-sm text-zinc-500">Aucun salarié n’est encore affecté.</p>
           ) : null}
         </div>
@@ -2627,10 +2649,19 @@ function ActivityWorkerModal({
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Annuler</Button>
-          {!addingWorker && canCreate && assignedActivities.filter((item) => item.workerId).length < requiredWorkers ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Ajouter un salarié</Button> : null}
+          {canDelete ? <Button variant="outline" className="text-red-600 hover:text-red-700 dark:text-red-400" onClick={() => setConfirmDelete(true)}><Trash2 className="h-4 w-4" />Supprimer la tâche</Button> : null}
+          {!addingWorker && canCreate && assignedActivities.length < requiredWorkers ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Ajouter un salarié</Button> : null}
           {addingWorker ? <Button onClick={() => void save()} disabled={saving || !workerId}>{saving ? "Enregistrement…" : "Ajouter"}</Button> : null}
           {!addingWorker && !activity.workerId && isStoredActivity(activity) && canUpdate ? <Button onClick={() => setAddingWorker(true)}><Plus className="h-4 w-4" />Affecter un salarié</Button> : null}
         </div>
+        <ConfirmDialog
+          open={confirmDelete}
+          onClose={() => setConfirmDelete(false)}
+          onConfirm={() => void destroy()}
+          title="Supprimer cette tâche ?"
+          description="Le créneau sélectionné et ses affectations seront supprimés. Si la tâche est récurrente, les autres semaines restent inchangées."
+          confirmLabel={deleting ? "Suppression…" : "Supprimer"}
+        />
       </div>
     </Modal>
   );
