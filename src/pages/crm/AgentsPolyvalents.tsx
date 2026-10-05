@@ -9,7 +9,13 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Checkbox, Field, Input, Select, Textarea } from "../../components/ui/Field";
 import { Modal } from "../../components/ui/Modal";
-import { SITE_LABELS, Site } from "../../lib/constants";
+import {
+  SITE_LABELS,
+  Site,
+  WORKER_EMPLOYMENT_LABELS,
+  WORKER_EMPLOYMENT_TYPES,
+  type WorkerEmploymentType,
+} from "../../lib/constants";
 import { initials } from "../../lib/format";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
@@ -50,12 +56,11 @@ function formatHours(hours: number) {
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1).replace(".", ",")} h`;
 }
 
-const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
-  permanent: "Ouvrier permanent",
-  polyvalent: "Ouvrier polyvalent",
-  encadranttechnique: "Encadrant technique",
-  none: "À définir",
-};
+const EMPLOYMENT_TYPE_PLACEHOLDER = "À définir";
+
+function employmentTypeLabel(type?: WorkerEmploymentType) {
+  return type ? WORKER_EMPLOYMENT_LABELS[type] : EMPLOYMENT_TYPE_PLACEHOLDER;
+}
 type WorkerList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
 type TaskList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listTasks>>>;
 type ScheduleList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkerSchedules>>>;
@@ -302,18 +307,20 @@ function WorkersTab({
                           void setEmploymentType({
                             id: worker._id,
                             employmentType:
-                              (event.target.value as "permanent" | "polyvalent") || undefined,
+                              (event.target.value as WorkerEmploymentType) || undefined,
                           })
                         }
                         className="h-9 w-[190px] text-xs"
                       >
-                        <option value="">À définir</option>
-                        <option value="polyvalent">Ouvrier polyvalent</option>
-                        <option value="permanent">Ouvrier permanent</option>
-                        <option value="encadranttechnique">Encadrant technique</option>
+                        <option value="">{EMPLOYMENT_TYPE_PLACEHOLDER}</option>
+                        {WORKER_EMPLOYMENT_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {WORKER_EMPLOYMENT_LABELS[type]}
+                          </option>
+                        ))}
                       </Select>
                     ) : (
-                      <span className="text-zinc-400">{EMPLOYMENT_TYPE_LABELS[worker.employmentType ?? "none"]}</span>
+                      <span className="text-zinc-400">{employmentTypeLabel(worker.employmentType)}</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-zinc-400" title="Calculé automatiquement à partir des créneaux matin et après-midi renseignés">
@@ -447,7 +454,7 @@ function WorkerForm({
   const [lastName, setLastName] = useState(worker?.lastName ?? "");
   const [email, setEmail] = useState(worker?.email ?? "");
   const [sites, setSites] = useState<Site[]>(worker?.sites ?? [GESTION_SITE]);
-  const [employmentType, setEmploymentType] = useState<"permanent" | "polyvalent" | "">(
+  const [employmentType, setEmploymentType] = useState<WorkerEmploymentType | "">(
     worker?.employmentType ?? "",
   );
   const [hasDrivingLicenseB, setHasDrivingLicenseB] = useState(worker?.hasDrivingLicenseB ?? false);
@@ -531,11 +538,14 @@ function WorkerForm({
         <Field label="Type de contrat">
           <Select
             value={employmentType}
-            onChange={(event) => setEmploymentType(event.target.value as "permanent" | "polyvalent" | "")}
+            onChange={(event) => setEmploymentType(event.target.value as WorkerEmploymentType | "")}
           >
-            <option value="">À définir</option>
-            <option value="polyvalent">Ouvrier polyvalent</option>
-            <option value="permanent">Ouvrier permanent</option>
+            <option value="">{EMPLOYMENT_TYPE_PLACEHOLDER}</option>
+            {WORKER_EMPLOYMENT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {WORKER_EMPLOYMENT_LABELS[type]}
+              </option>
+            ))}
           </Select>
         </Field>
         <Checkbox

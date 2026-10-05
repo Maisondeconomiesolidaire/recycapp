@@ -68,6 +68,8 @@ import {
   COATING_OPTIONS,
   DEPOT_SITE_LABELS,
   DEPOT_VEHICLE_LABELS,
+  workerEmploymentLabel,
+  type WorkerEmploymentType,
 } from "../../lib/constants";
 import { collecteCategoryLabel } from "../public/CollecteCategoryPicker";
 import { STEP } from "../../../convex/processes";
@@ -3307,7 +3309,7 @@ function AssigneePickerModal({
     lastName: string;
     email?: string;
     sites?: Site[];
-    employmentType?: "permanent" | "polyvalent";
+    employmentType?: WorkerEmploymentType;
     active?: boolean;
   }>;
   selectedId: Id<"polyvalentWorkers"> | null;
@@ -3400,11 +3402,7 @@ function AssigneePickerModal({
                   </span>
                   <span className="block truncate text-xs text-zinc-500">
                     {[
-                      worker.employmentType === "permanent"
-                        ? "Ouvrier permanent"
-                        : worker.employmentType === "polyvalent"
-                          ? "Ouvrier polyvalent"
-                          : null,
+                      workerEmploymentLabel(worker.employmentType),
                       worker.sites?.length
                         ? worker.sites.map((site) => SITE_LABELS[site]).join(" · ")
                         : null,

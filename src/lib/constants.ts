@@ -141,6 +141,27 @@ export const SITE_LABELS: Record<Site, string> = {
   "76": "Recyclerie 76",
 };
 
+/** Type de contrat d'un salarié — aligné sur `polyvalentWorkers.employmentType`. */
+export type WorkerEmploymentType = "permanent" | "encadranttechnique" | "polyvalent";
+
+export const WORKER_EMPLOYMENT_LABELS: Record<WorkerEmploymentType, string> = {
+  permanent: "Ouvrier permanent",
+  encadranttechnique: "Encadrant technique",
+  polyvalent: "Ouvrier polyvalent",
+};
+
+/** Ordre d'affichage dans les sélecteurs de type de contrat. */
+export const WORKER_EMPLOYMENT_TYPES: WorkerEmploymentType[] = [
+  "polyvalent",
+  "permanent",
+  "encadranttechnique",
+];
+
+/** Libellé du contrat, ou `null` quand le type n'est pas encore renseigné. */
+export function workerEmploymentLabel(type?: WorkerEmploymentType | null): string | null {
+  return type ? WORKER_EMPLOYMENT_LABELS[type] : null;
+}
+
 /** Recycleries proposées à la création d'un article et dans la boutique. */
 export const ARTICLE_SITES: { value: Site; label: string }[] = [
   { value: "60", label: "Recyclerie 60" },

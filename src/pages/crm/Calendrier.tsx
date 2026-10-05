@@ -63,6 +63,7 @@ import {
   SITE_LABELS,
   TYPE_COLORS,
   TYPE_LABELS,
+  workerEmploymentLabel,
   type DepotSite,
   type Site,
 } from "../../lib/constants";
@@ -1401,11 +1402,7 @@ function WorkerPickerModal({
                     </span>
                     <span className="block truncate text-xs text-zinc-500">
                       {[
-                        worker.employmentType === "permanent"
-                          ? "Ouvrier permanent"
-                          : worker.employmentType === "polyvalent"
-                            ? "Ouvrier polyvalent"
-                            : null,
+                        workerEmploymentLabel(worker.employmentType),
                         worker.sites?.length
                           ? worker.sites
                               .map((site) => SITE_LABELS[site])
