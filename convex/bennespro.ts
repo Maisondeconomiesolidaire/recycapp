@@ -10,7 +10,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { v, type Infer } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
 import { accessAllows, livePhotosByClerkId, requireCrmPermission, requireUser } from "./lib";
@@ -976,6 +976,37 @@ export const listDepots = query({
   },
 });
 
+/**
+ * Dates minimales nécessaires au graphique de fréquentation. La période est
+ * bornée pour éviter qu'un écran analytique ne charge l'historique sans limite.
+ */
+export const attendanceStats = query({
+  args: { from: v.number(), to: v.number() },
+  handler: async (ctx, { from, to }) => {
+    await requireCrmPermission(ctx, "bennespro:depots", "read");
+    const maxRange = 370 * 24 * 60 * 60 * 1000;
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > maxRange) {
+      throw new ConvexError("La période de fréquentation demandée est invalide.");
+    }
+
+    const [depots, companies] = await Promise.all([
+      ctx.db
+        .query("bpDepots")
+        .withIndex("by_createdAt", (q) => q.gte("createdAt", from).lt("createdAt", to))
+        .collect(),
+      ctx.db
+        .query("bpCompanies")
+        .withIndex("by_createdAt", (q) => q.gte("createdAt", from).lt("createdAt", to))
+        .collect(),
+    ]);
+
+    return {
+      depotTimestamps: depots.map((depot) => depot.createdAt),
+      companyTimestamps: companies.map((company) => company.createdAt),
+    };
+  },
+});
+
 export const getDepot = query({
   args: { depotId: v.id("bpDepots") },
   handler: async (ctx, { depotId }) => {
@@ -1061,8 +1092,8 @@ const WOOD_MATERIAL = "Bois";
 
 /** Prix par défaut : 32 centimes d'euro le kilo. */
 const DEFAULT_DIB_PRICE_CENTS_PER_KG = 32;
-/** Prix du bois : 17 centimes d'euro le kilo. */
-const WOOD_PRICE_CENTS_PER_KG = 17;
+/** Prix du bois par défaut : 17 centimes d'euro le kilo. */
+const DEFAULT_WOOD_PRICE_CENTS_PER_KG = 17;
 const DIB_VAT_RATE = 20;
 
 const SETTINGS_KEY = "bennespro";
@@ -1081,10 +1112,10 @@ function materialWeightKg(items: DepotItems, material: string): number {
 }
 
 async function buildBilling(ctx: QueryCtx | MutationCtx, items: DepotItems) {
-  const dibPriceCentsPerKg = await readDibPrice(ctx);
+  const [dibPriceCentsPerKg, woodPriceCentsPerKg] = await Promise.all([readDibPrice(ctx), readWoodPrice(ctx)]);
   const billableItems = ([
     { material: DIB_MATERIAL, weightKg: materialWeightKg(items, DIB_MATERIAL), priceCentsPerKg: dibPriceCentsPerKg },
-    { material: WOOD_MATERIAL, weightKg: materialWeightKg(items, WOOD_MATERIAL), priceCentsPerKg: WOOD_PRICE_CENTS_PER_KG },
+    { material: WOOD_MATERIAL, weightKg: materialWeightKg(items, WOOD_MATERIAL), priceCentsPerKg: woodPriceCentsPerKg },
   ] satisfies Array<{
     material: Infer<typeof bpMaterial>;
     weightKg: number;
@@ -1114,13 +1145,21 @@ async function readDibPrice(ctx: QueryCtx | MutationCtx): Promise<number> {
   return settings?.dibPriceCentsPerKg ?? DEFAULT_DIB_PRICE_CENTS_PER_KG;
 }
 
+async function readWoodPrice(ctx: QueryCtx | MutationCtx): Promise<number> {
+  const settings = await ctx.db
+    .query("bpSettings")
+    .withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY))
+    .unique();
+  return settings?.woodPriceCentsPerKg ?? DEFAULT_WOOD_PRICE_CENTS_PER_KG;
+}
+
 export const getDibSettings = query({
   args: {},
   handler: async (ctx) => {
     await requireCrmPermission(ctx, "bennespro:depots", "read");
     return {
       priceCentsPerKg: await readDibPrice(ctx),
-      woodPriceCentsPerKg: WOOD_PRICE_CENTS_PER_KG,
+      woodPriceCentsPerKg: await readWoodPrice(ctx),
       stripeConfigured: Boolean(env.BENNESPRO_STRIPE_SECRET_KEY),
     };
   },
@@ -1153,6 +1192,25 @@ export const setDibPrice = mutation({
         updatedBy: identity.email ?? undefined,
       });
     }
+  },
+});
+
+/** Met à jour les tarifs des deux matières facturables (DIB et bois). */
+export const setMaterialPrices = mutation({
+  args: { dibPriceCentsPerKg: v.number(), woodPriceCentsPerKg: v.number() },
+  handler: async (ctx, { dibPriceCentsPerKg, woodPriceCentsPerKg }) => {
+    await requireCrmPermission(ctx, "bennespro:depots", "update");
+    const identity = await requireUser(ctx);
+    const prices = [dibPriceCentsPerKg, woodPriceCentsPerKg];
+    if (prices.some((price) => !Number.isFinite(price) || price <= 0 || price > 100000)) {
+      throw new Error("Tarif invalide.");
+    }
+    const dib = Math.round(dibPriceCentsPerKg * 100) / 100;
+    const wood = Math.round(woodPriceCentsPerKg * 100) / 100;
+    const settings = await ctx.db.query("bpSettings").withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY)).unique();
+    const patch = { dibPriceCentsPerKg: dib, woodPriceCentsPerKg: wood, updatedAt: Date.now(), updatedBy: identity.email ?? undefined };
+    if (settings) await ctx.db.patch(settings._id, patch);
+    else await ctx.db.insert("bpSettings", { key: SETTINGS_KEY, ...patch });
   },
 });
 

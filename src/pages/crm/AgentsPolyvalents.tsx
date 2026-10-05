@@ -53,6 +53,7 @@ function formatHours(hours: number) {
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   permanent: "Ouvrier permanent",
   polyvalent: "Ouvrier polyvalent",
+  encadranttechnique: "Encadrant technique",
   none: "À définir",
 };
 type WorkerList = NonNullable<ReturnType<typeof useQuery<typeof api.polyvalents.listWorkers>>>;
@@ -309,6 +310,7 @@ function WorkersTab({
                         <option value="">À définir</option>
                         <option value="polyvalent">Ouvrier polyvalent</option>
                         <option value="permanent">Ouvrier permanent</option>
+                        <option value="encadranttechnique">Encadrant technique</option>
                       </Select>
                     ) : (
                       <span className="text-zinc-400">{EMPLOYMENT_TYPE_LABELS[worker.employmentType ?? "none"]}</span>

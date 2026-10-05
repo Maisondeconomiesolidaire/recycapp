@@ -18,8 +18,10 @@ import {
 } from "./lib";
 import { bytesToBase64, type EmailAttachment } from "./emails";
 import type { Doc, Id } from "./_generated/dataModel";
+import { drivingRoute, drivingRouteGeometry, geocode } from "./livraison";
 
 const RH_PAGE_KEY = "mesoutils:rh";
+const RH_DASHBOARD_PAGE_KEY = "mesoutils:rh-tableau-de-bord";
 const CONTRACT_WEBHOOK_URL =
   "https://hook.eu2.make.com/huqlb8dif2n27j5bpnp5tycwniqrt1ow";
 
@@ -377,6 +379,216 @@ export const listEmployees = query({
     await requireCrmPermission(ctx, RH_PAGE_KEY, "read");
     const employees = await ctx.db.query("hrEmployees").withIndex("by_fullName").collect();
     return employees.sort((a, b) => a.fullName.localeCompare(b.fullName, "fr"));
+  },
+});
+
+/**
+ * Vue volontairement séparée des fiches RH et des contrats : elle ne délivre
+ * que l'identité, la structure et l'adresse nécessaires au tableau de bord.
+ */
+export const listDashboardEmployees = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, RH_DASHBOARD_PAGE_KEY, "read");
+    const employees = await ctx.db.query("hrEmployees").withIndex("by_fullName").collect();
+    const latestContracts = await Promise.all(
+      employees.map((employee) =>
+        ctx.db
+          .query("hrContracts")
+          .withIndex("by_employee_and_requestedAt", (q) => q.eq("employeeId", employee._id))
+          .order("desc")
+          .first(),
+      ),
+    );
+    const todayInParis = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Paris",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    return employees
+      .filter((_, index) => {
+        const contract = latestContracts[index]?.payload;
+        if (!contract) return false;
+        if (contract.type_contrat === "CDI") return true;
+        return Boolean(contract.date_fin_contrat && contract.date_fin_contrat >= todayInParis);
+      })
+      .map(({ _id, firstName, lastName, fullName, address, structure, active, commuteDistanceKm, commuteDurationMinutes, commuteCalculatedAt, commuteWorkplaceAddress, commuteLongitude, commuteLatitude }) => ({
+        _id,
+        firstName,
+        lastName,
+        fullName,
+        address,
+        structure,
+        active,
+        commuteDistanceKm,
+        commuteDurationMinutes,
+        commuteCalculatedAt,
+        commuteWorkplaceAddress,
+        commuteLongitude,
+        commuteLatitude,
+      }))
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, "fr"));
+  },
+});
+
+/** Version interne, utilisée par l'action Google Maps avec le même contrôle d'accès. */
+export const listDashboardEmployeesForDistance = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, RH_DASHBOARD_PAGE_KEY, "read");
+    const employees = await ctx.db.query("hrEmployees").withIndex("by_fullName").collect();
+    return employees.map(({ _id, fullName, address, structure }) => ({
+      _id,
+      fullName,
+      address,
+      structure,
+    }));
+  },
+});
+
+export const getDashboardEmployeeForRoute = internalQuery({
+  args: { employeeId: v.id("hrEmployees") },
+  handler: async (ctx, { employeeId }) => {
+    await requireCrmPermission(ctx, RH_DASHBOARD_PAGE_KEY, "read");
+    const employee = await ctx.db.get(employeeId);
+    if (!employee) throw new Error("Salarié introuvable.");
+    return employee;
+  },
+});
+
+const WORKPLACE_ADDRESSES: Record<Doc<"hrEmployees">["structure"], string> = {
+  "Pays de Bray Emploi": "4 rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+  "Pays de Bray Services 60": "4 rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+  "Maison d'Economie Solidaire": "4 rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+  "Recyclerie 60": "4 rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+  "Les Sens du Bray": "4 rue de la Prairie, 60650 Lachapelle-aux-Pots, France",
+  "Pays de Bray Services 76": "150 Rte de Paris, 76220 Gournay-en-Bray, France",
+  "Recyclerie 76": "150 Rte de Paris, 76220 Gournay-en-Bray, France",
+};
+
+/** Même calcul routier que les demandes de collecte Recycapp. */
+async function calculateCommuteRoute(origin: string, destination: string) {
+  if (!env.MAPBOX_ACCESS_TOKEN) {
+    throw new Error("MAPBOX_ACCESS_TOKEN n'est pas configuré sur le déploiement Convex.");
+  }
+  const [from, to] = await Promise.all([
+    geocode(origin, env.MAPBOX_ACCESS_TOKEN),
+    geocode(destination, env.MAPBOX_ACCESS_TOKEN),
+  ]);
+  const route = await drivingRoute(from, to, env.MAPBOX_ACCESS_TOKEN);
+  return {
+    distanceKm: Math.round(route.km * 10) / 10,
+    durationMinutes: Math.round(route.minutes),
+    longitude: from.longitude,
+    latitude: from.latitude,
+  };
+}
+
+export const saveDashboardDistances = internalMutation({
+  args: {
+    distances: v.array(v.object({
+      employeeId: v.id("hrEmployees"),
+      distanceKm: v.number(),
+      durationMinutes: v.optional(v.number()),
+      workplaceAddress: v.string(),
+      longitude: v.number(),
+      latitude: v.number(),
+    })),
+  },
+  handler: async (ctx, { distances }) => {
+    await requireCrmPermission(ctx, RH_DASHBOARD_PAGE_KEY, "read");
+    const calculatedAt = Date.now();
+    for (const distance of distances) {
+      await ctx.db.patch(distance.employeeId, {
+        commuteDistanceKm: distance.distanceKm,
+        commuteDurationMinutes: distance.durationMinutes,
+        commuteCalculatedAt: calculatedAt,
+        commuteWorkplaceAddress: distance.workplaceAddress,
+        commuteLongitude: distance.longitude,
+        commuteLatitude: distance.latitude,
+      });
+    }
+    return distances.length;
+  },
+});
+
+/** Calcule à la demande les trajets et les sauvegarde sur les fiches salariés. */
+export const calculateDashboardDistances = action({
+  args: {},
+  handler: async (ctx) => {
+    const employees: Array<Pick<Doc<"hrEmployees">, "_id" | "address" | "structure">> = await ctx.runQuery(
+      internal.rh.listDashboardEmployeesForDistance,
+      {},
+    );
+    const results: Array<{
+      employeeId: Id<"hrEmployees">;
+      distanceKm?: number;
+      durationMinutes?: number;
+      longitude?: number;
+      latitude?: number;
+      error?: string;
+    }> = [];
+
+    // Petits lots pour respecter les quotas de l'API tout en restant réactif.
+    for (let index = 0; index < employees.length; index += 4) {
+      const batch = employees.slice(index, index + 4);
+      const batchResults = await Promise.all(batch.map(async (employee) => {
+        if (!employee.address.trim()) {
+          return { employeeId: employee._id, error: "Adresse du salarié non renseignée." };
+        }
+        try {
+          return { employeeId: employee._id, ...(await calculateCommuteRoute(employee.address, WORKPLACE_ADDRESSES[employee.structure])) };
+        } catch (error) {
+          return { employeeId: employee._id, error: error instanceof Error ? error.message : "Calcul impossible." };
+        }
+      }));
+      results.push(...batchResults);
+    }
+    const calculatedDistances = results.filter(
+      (result): result is { employeeId: Id<"hrEmployees">; distanceKm: number; durationMinutes?: number; longitude: number; latitude: number } =>
+        typeof result.distanceKm === "number" && typeof result.longitude === "number" && typeof result.latitude === "number",
+    );
+    if (calculatedDistances.length > 0) {
+      await ctx.runMutation(internal.rh.saveDashboardDistances, {
+        distances: calculatedDistances.map((result) => ({
+          employeeId: result.employeeId,
+          distanceKm: result.distanceKm,
+          durationMinutes: result.durationMinutes,
+          workplaceAddress: WORKPLACE_ADDRESSES[employees.find((employee) => employee._id === result.employeeId)!.structure],
+          longitude: result.longitude,
+          latitude: result.latitude,
+        })),
+      });
+    }
+    return results;
+  },
+});
+
+/** Itinéraire domicile → lieu de travail affiché au clic sur un pin de la carte RH. */
+export const getDashboardCommuteRoute = action({
+  args: { employeeId: v.id("hrEmployees") },
+  handler: async (ctx, { employeeId }) => {
+    const employee: Doc<"hrEmployees"> = await ctx.runQuery(
+      internal.rh.getDashboardEmployeeForRoute,
+      { employeeId },
+    );
+    if (!employee.address.trim()) throw new Error("Adresse du salarié non renseignée.");
+    if (!env.MAPBOX_ACCESS_TOKEN) throw new Error("MAPBOX_ACCESS_TOKEN n'est pas configuré sur le déploiement Convex.");
+
+    const from = employee.commuteLongitude !== undefined && employee.commuteLatitude !== undefined
+      ? { longitude: employee.commuteLongitude, latitude: employee.commuteLatitude }
+      : await geocode(employee.address, env.MAPBOX_ACCESS_TOKEN);
+    const workplaceAddress = WORKPLACE_ADDRESSES[employee.structure];
+    const to = await geocode(workplaceAddress, env.MAPBOX_ACCESS_TOKEN);
+    const route = await drivingRouteGeometry(from, to, env.MAPBOX_ACCESS_TOKEN);
+    return {
+      distanceKm: Math.round(route.km * 10) / 10,
+      durationMinutes: Math.round(route.minutes),
+      workplaceAddress,
+      coordinates: route.coordinates,
+    };
   },
 });
 

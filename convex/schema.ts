@@ -38,6 +38,7 @@ export const depotDetails = v.object({
 /** App « Feedback » — application visée par un retour utilisateur. */
 export const feedbackApp = v.union(
   v.literal("mesoutils"),
+  v.literal("mestodo"),
   v.literal("recycapp"),
   v.literal("klyde"),
   v.literal("cycleenbray"),
@@ -1713,6 +1714,11 @@ export default defineSchema(
     requestKey: v.string(),
     message: v.string(),
     images: v.array(v.id("_storage")),
+    /**
+     * Vidéo du post. Les réseaux n'acceptent pas photos et vidéo dans la même
+     * publication : une composition porte soit l'un, soit l'autre.
+     */
+    videos: v.optional(v.array(v.id("_storage"))),
     authorClerkId: v.string(),
     authorName: v.string(),
     scheduledFor: v.optional(v.number()),
@@ -1752,6 +1758,8 @@ export default defineSchema(
     /** Date de publication programmée, absente pour une publication immédiate. */
     scheduledFor: v.optional(v.number()),
     withPhoto: v.boolean(),
+    /** Publication vidéo (Facebook /videos, Instagram Reels). */
+    withVideo: v.optional(v.boolean()),
     authorClerkId: v.string(),
     authorName: v.string(),
     createdAt: v.number(),
@@ -2323,7 +2331,8 @@ export default defineSchema(
     createdAt: v.number(),
   })
     .index("by_name", ["name"])
-    .index("by_owner", ["ownerUserId"]),
+    .index("by_owner", ["ownerUserId"])
+    .index("by_createdAt", ["createdAt"]),
 
   /** Documents rattachés à une entreprise (KBIS, RIB… ; client ↔ staff). */
   bpCompanyDocuments: defineTable({
@@ -2432,6 +2441,8 @@ export default defineSchema(
     key: v.string(),
     /** Prix du DIB en centimes d'euro par kg (défaut : 34). */
     dibPriceCentsPerKg: v.optional(v.number()),
+    /** Prix du bois en centimes d'euro par kg (défaut : 17). */
+    woodPriceCentsPerKg: v.optional(v.number()),
     /** Code PIN de l'onglet « Profils » (défaut : 0205). */
     profilesPin: v.optional(v.string()),
     updatedAt: v.optional(v.number()),
@@ -2502,7 +2513,8 @@ export default defineSchema(
   })
     .index("by_company", ["companyId"])
     .index("by_number", ["depotNumber"])
-    .index("by_profile", ["createdByProfileId"]),
+    .index("by_profile", ["createdByProfileId"])
+    .index("by_createdAt", ["createdAt"]),
 
   // ───────────────────────── App « Pointeuse LSDB » ─────────────────────────
   // Suivi des salariés et des chantiers : clients, projets, pointages,
@@ -2731,6 +2743,14 @@ export default defineSchema(
     socialSecurityNumber: v.string(),
     socialSecurityNumberNormalized: v.string(),
     firstContractDate: v.optional(v.string()),
+    /** Distance domicile → lieu de travail, calculée via le service de tournée partagé. */
+    commuteDistanceKm: v.optional(v.number()),
+    commuteDurationMinutes: v.optional(v.number()),
+    commuteCalculatedAt: v.optional(v.number()),
+    commuteWorkplaceAddress: v.optional(v.string()),
+    /** Coordonnées géocodées, destinées uniquement à la carte interne RH. */
+    commuteLongitude: v.optional(v.number()),
+    commuteLatitude: v.optional(v.number()),
     active: v.boolean(),
     importedFrom: v.optional(v.string()),
     createdAt: v.number(),
@@ -2893,7 +2913,9 @@ export default defineSchema(
   polyvalentRecurrenceExceptions: defineTable({
     recurrenceId: v.id("polyvalentTaskRecurrences"),
     originalStartAt: v.number(),
-    activityId: v.id("polyvalentActivities"),
+    /** Une occurrence peut être déplacée vers une activité datée, ou simplement
+     * supprimée. Dans ce dernier cas, aucun remplacement n'est créé. */
+    activityId: v.optional(v.id("polyvalentActivities")),
   })
     .index("by_originalStartAt", ["originalStartAt"])
     .index("by_recurrenceId_and_originalStartAt", ["recurrenceId", "originalStartAt"]),
@@ -3296,6 +3318,87 @@ export default defineSchema(
     .index("by_clerkId", ["clerkId"])
     .index("by_reference", ["reference"])
     .index("by_createdAt", ["createdAt"]),
+
+  /** Projets et chantiers suivis dans Mes Todo. */
+  todoProjects: defineTable({
+    title: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("completed"),
+      v.literal("archived"),
+    ),
+    color: v.optional(v.string()),
+    dueAt: v.optional(v.number()),
+    taskCount: v.number(),
+    completedTaskCount: v.number(),
+    createdByClerkId: v.string(),
+    createdByName: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status_and_updatedAt", ["status", "updatedAt"])
+    .index("by_updatedAt", ["updatedAt"]),
+
+  /** Tâches d'un projet Mes Todo. */
+  todoTasks: defineTable({
+    projectId: v.id("todoProjects"),
+    /** Une seule profondeur de sous-tâches, à la manière d'une tâche Asana. */
+    parentTaskId: v.optional(v.id("todoTasks")),
+    title: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(
+      v.literal("todo"),
+      v.literal("in_progress"),
+      v.literal("done"),
+    ),
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("urgent"),
+    ),
+    assignees: v.array(
+      v.object({
+        clerkId: v.string(),
+        name: v.string(),
+        imageUrl: v.optional(v.string()),
+        /** RACI : les anciennes affectations sans rôle restent des réalisateurs. */
+        role: v.optional(
+          v.union(
+            v.literal("responsible"),
+            v.literal("accountable"),
+            v.literal("consulted"),
+            v.literal("informed"),
+          ),
+        ),
+      }),
+    ),
+    dueAt: v.optional(v.number()),
+    position: v.number(),
+    completedAt: v.optional(v.number()),
+    createdByClerkId: v.string(),
+    createdByName: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_parentTaskId", ["parentTaskId"])
+    .index("by_projectId_and_status", ["projectId", "status"])
+    .index("by_dueAt", ["dueAt"]),
+
+  /** Notes de suivi, rattachées au projet ou à une tâche précise. */
+  todoNotes: defineTable({
+    projectId: v.id("todoProjects"),
+    taskId: v.optional(v.id("todoTasks")),
+    body: v.string(),
+    authorClerkId: v.string(),
+    authorName: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_taskId", ["taskId"]),
   },
   { schemaValidation: false },
 );
