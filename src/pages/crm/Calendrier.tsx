@@ -932,7 +932,10 @@ function EventDetailModal({
   onClose: () => void;
 }) {
   const access = useCrmAccess();
-  const canDelete = canAccess(access, "calendrier", "delete");
+  // La suppression se décide par évènement : `calendrier:delete` couvre tout le
+  // calendrier, et à défaut chacun retire ce qu'il a créé (`canDelete` renvoyé
+  // par la requête). La permission seule ne suffit donc plus à cacher le bouton.
+  const canDelete = event?.canDelete ?? canAccess(access, "calendrier", "delete");
   const canUpdate = canAccess(access, "calendrier", "update");
   const remove = useMutation(api.recycappCalendar.remove);
   const setWorkers = useMutation(api.recycappCalendar.setWorkers);
