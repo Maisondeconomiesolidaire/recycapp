@@ -137,6 +137,8 @@ const RESOURCE_DAY_START_HOUR = 8;
 const RESOURCE_DAY_END_HOUR = 18;
 
 export function Calendrier() {
+  const access = useCrmAccess();
+  const canCreateEvent = canAccess(access, "calendrier", "create");
   const [view, setView] = useState<CalView>("tout");
   const [eventOpen, setEventOpen] = useState(false);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
@@ -183,7 +185,7 @@ export function Calendrier() {
                 <CalendarCog className="h-4 w-4" /> Gérer les créneaux de dépôt
               </Button>
             ) : null}
-            {view === "tout" || view === "evenements" ? (
+            {(view === "tout" || view === "evenements") && canCreateEvent ? (
               <Button size="sm" onClick={() => setEventOpen(true)}>
                 <CalendarPlus className="h-4 w-4" /> Nouvel évènement
               </Button>
