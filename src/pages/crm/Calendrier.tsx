@@ -2350,6 +2350,21 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   }, [byDay]);
 
   /**
+   * Taux de couverture de chaque créneau : combien de salariés y sont affectés
+   * sur le nombre requis par la tâche. C'est lui qui colore les créneaux.
+   */
+  const staffing = useMemo(() => {
+    const map = new Map<string, Staffing>();
+    for (const [key, group] of occurrenceGroups) {
+      map.set(key, {
+        assigned: group.filter((item) => Boolean(item.workerId)).length,
+        required: taskById.get(String(group[0].taskId))?.requiredWorkers ?? 1,
+      });
+    }
+    return map;
+  }, [occurrenceGroups, taskById]);
+
+  /**
    * Lignes de la grille : les salariés de la recyclerie. Un salarié devenu
    * inactif (fin de contrat) garde sa ligne tant qu'il a des créneaux dans la
    * semaine affichée, sinon son planning disparaîtrait sans être supprimé.
@@ -2463,8 +2478,13 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 {task.name}
               </span>
             ))}
-            <span className="ml-auto text-xs text-zinc-500">
-              Glissez une tâche sur la case d'un salarié, puis choisissez ses horaires.
+            <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+              <span>Glissez une tâche sur la case d'un salarié, puis choisissez ses horaires.</span>
+              <span className="flex items-center gap-2">
+                <StaffingLegend color="#dc2626" label="Personne" />
+                <StaffingLegend color="#d97706" label="Incomplet" />
+                <StaffingLegend color="#059669" label="Complet" />
+              </span>
             </span>
           </div>
         ) : null}
@@ -2503,6 +2523,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 workerId={worker._id}
                 days={days}
                 byWorkerDay={byWorkerDay}
+                staffing={staffing}
                 schedules={schedules ?? []}
                 canUpdate={canUpdate}
                 hoveredCell={hoveredCell}
@@ -2522,6 +2543,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 workerId={null}
                 days={days}
                 byWorkerDay={byWorkerDay}
+                staffing={staffing}
                 schedules={schedules ?? []}
                 canUpdate={canUpdate}
                 hoveredCell={hoveredCell}
@@ -2624,9 +2646,33 @@ function cellKey(workerId: Id<"polyvalentWorkers"> | null | undefined, dayKey: s
   return `${workerId ?? "none"}|${dayKey}`;
 }
 
-/** Couleur de la tâche, identique au bandeau et aux créneaux posés. */
+/** Couleur de la tâche dans le bandeau : elle identifie la tâche, pas un créneau. */
 function taskColor(taskName: string) {
   return taskName.toLocaleLowerCase("fr").includes("caisse") ? "#7c3aed" : "#059669";
+}
+
+/** Pastille du code couleur, rappelé au-dessus de la grille. */
+function StaffingLegend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
+
+/** Effectif d'un créneau : affecté sur requis. */
+type Staffing = { assigned: number; required: number };
+
+/**
+ * Couleur d'un créneau posé : elle dit s'il est pourvu, pas de quelle tâche il
+ * s'agit. Un créneau complet s'efface (opacité réduite) pour laisser ressortir
+ * ceux qui réclament encore quelqu'un.
+ */
+function staffingStyle({ assigned, required }: Staffing) {
+  if (assigned === 0) return { color: "#dc2626", complete: false, opacity: 1 };
+  if (assigned < required) return { color: "#d97706", complete: false, opacity: 1 };
+  return { color: "#059669", complete: true, opacity: 0.55 };
 }
 
 function dayAtTime(day: Date, time: string) {
@@ -2691,6 +2737,7 @@ function PlannerRow({
   workerId,
   days,
   byWorkerDay,
+  staffing,
   schedules,
   canUpdate,
   hoveredCell,
@@ -2705,6 +2752,7 @@ function PlannerRow({
   workerId: Id<"polyvalentWorkers"> | null;
   days: Date[];
   byWorkerDay: Map<string, DisplayActivity[]>;
+  staffing: Map<string, Staffing>;
   schedules: ScheduleList;
   canUpdate: boolean;
   hoveredCell: string | null;
@@ -2751,33 +2799,45 @@ function PlannerRow({
                   : ""
             }`}
           >
-            {cellActivities.map((activity) => (
-              <button
-                key={activity._id}
-                type="button"
-                draggable={canUpdate && !activity.recurrenceId}
-                onDragStart={() => {
-                  if (!canUpdate || activity.recurrenceId) return;
-                  onDragActivity({
-                    kind: "activity",
-                    activityId: activity._id,
-                    taskId: activity.taskId,
-                    startAt: activity.startAt,
-                    endAt: activity.endAt,
-                  });
-                }}
-                onClick={() => onOpenActivity(activity)}
-                className="block w-full cursor-pointer rounded-lg px-2 py-1 text-left text-[11px] font-semibold leading-tight text-white shadow-sm transition hover:brightness-110"
-                style={{ backgroundColor: taskColor(activity.taskName) }}
-                title={activity.recurrenceId ? "Créneau récurrent" : "Glisser pour déplacer"}
-              >
-                <span className="block truncate">{activity.taskName}</span>
-                <span className="block tabular-nums opacity-85">
-                  {format(new Date(activity.startAt), "HH:mm")} – {format(new Date(activity.endAt), "HH:mm")}
-                  {activity.recurrenceId ? " · ↻" : ""}
-                </span>
-              </button>
-            ))}
+            {cellActivities.map((activity) => {
+              const crew = staffing.get(
+                `${activity.taskId}-${activity.startAt}-${activity.endAt}`,
+              ) ?? { assigned: activity.workerId ? 1 : 0, required: 1 };
+              const style = staffingStyle(crew);
+              return (
+                <button
+                  key={activity._id}
+                  type="button"
+                  draggable={canUpdate && !activity.recurrenceId}
+                  onDragStart={() => {
+                    if (!canUpdate || activity.recurrenceId) return;
+                    onDragActivity({
+                      kind: "activity",
+                      activityId: activity._id,
+                      taskId: activity.taskId,
+                      startAt: activity.startAt,
+                      endAt: activity.endAt,
+                    });
+                  }}
+                  onClick={() => onOpenActivity(activity)}
+                  className="block w-full cursor-pointer rounded-lg px-2 py-1 text-left text-[11px] font-semibold leading-tight text-white shadow-sm transition hover:opacity-100 hover:brightness-110"
+                  style={{ backgroundColor: style.color, opacity: style.opacity }}
+                  title={`${activity.taskName} · ${crew.assigned}/${crew.required} salarié${crew.required > 1 ? "s" : ""}${activity.recurrenceId ? " · créneau récurrent" : ""}`}
+                >
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="truncate">{activity.taskName}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-0.5 rounded-full bg-black/20 px-1.5 py-0.5 text-[9px] font-extrabold tabular-nums">
+                      {style.complete ? <Check className="h-2.5 w-2.5" /> : null}
+                      {crew.assigned}/{crew.required}
+                    </span>
+                  </span>
+                  <span className="block tabular-nums opacity-85">
+                    {format(new Date(activity.startAt), "HH:mm")} – {format(new Date(activity.endAt), "HH:mm")}
+                    {activity.recurrenceId ? " · ↻" : ""}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         );
       })}
