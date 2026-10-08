@@ -71,14 +71,6 @@ import { cn } from "../../lib/cn";
 import { initials } from "../../lib/format";
 import { useUpload } from "../../lib/useUpload";
 import { useAnchoredPopover } from "../../lib/useAnchoredPopover";
-import { EventCalendar } from "../../components/reui/event-calendar/event-calendar";
-import { PLANNER_FRENCH } from "../../components/reui/event-calendar/planner-french";
-import { EventCalendarContent } from "../../components/reui/event-calendar/event-calendar-content";
-import { EventCalendarNav, EventCalendarToolbar } from "../../components/reui/event-calendar/event-calendar-nav";
-import type {
-  CalendarEvent as ReuiCalendarEvent,
-  EventCalendarProposedUpdate,
-} from "../../components/reui/event-calendar/event-calendar-types";
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -133,8 +125,6 @@ type DisplayActivity = Pick<
   taskSite?: Site | null;
 };
 
-const RESOURCE_DAY_START_HOUR = 8;
-const RESOURCE_DAY_END_HOUR = 18;
 
 export function Calendrier() {
   const access = useCrmAccess();
@@ -2177,6 +2167,13 @@ function RequestDayPanel({
  * toujours sur la semaine en cours, et la colonne de gauche permet de ne
  * garder que les agents dont on veut suivre les tâches.
  */
+/**
+ * Planning des ressources : une ligne par salarié, une colonne par jour.
+ *
+ * Les tâches à placer sont présentées en haut et se glissent dans la case
+ * (salarié × jour) voulue ; les horaires se choisissent ensuite. Une tâche
+ * déjà posée se déplace de la même façon, en conservant sa durée.
+ */
 export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const access = useCrmAccess();
   const canRead = canAccess(access, "agents-polyvalents", "read");
@@ -2201,7 +2198,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     api.polyvalents.listRecurrences,
     canRead ? {} : "skip",
   );
-  const updatePlannerTiming = useMutation(api.polyvalents.updatePlannerTiming);
+  const createActivity = useMutation(api.polyvalents.createActivity);
+  const updateActivity = useMutation(api.polyvalents.updateActivity);
   const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
 
   // Le filtre principal de la page restreint tout le planning à une recyclerie :
@@ -2231,26 +2229,22 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const [weekStart, setWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   );
-  const [calendarView, setCalendarView] = useState<"week" | "day">("week");
-  const [calendarDay, setCalendarDay] = useState(() => {
-    const today = startOfDay(new Date());
-    return today.getDay() === 0 ? addDays(today, 1) : today;
-  });
   const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
-  const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
   const [activityToEdit, setActivityToEdit] = useState<PlannerEventData | null>(null);
-  const [timingError, setTimingError] = useState<string | null>(null);
-  const [pendingTiming, setPendingTiming] = useState<Record<string, { start: Date; end: Date }>>({});
+  const [dragged, setDragged] = useState<PlannerDrag | null>(null);
+  const [hoveredCell, setHoveredCell] = useState<string | null>(null);
+  const [slotDraft, setSlotDraft] = useState<SlotDraft | null>(null);
+  const [plannerError, setPlannerError] = useState<string | null>(null);
 
   useEffect(() => {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
   }, [canCreate, ensurePlannerTasks, siteFilter]);
 
-  const days = useMemo(() => {
-    if (calendarView === "day") return [calendarDay];
-    // La recyclerie ne planifie pas le dimanche : la vue semaine s'arrête au samedi.
-    return eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 5) });
-  }, [calendarDay, calendarView, weekStart]);
+  // La recyclerie ne planifie pas le dimanche : la semaine s'arrête au samedi.
+  const days = useMemo(
+    () => eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 5) }),
+    [weekStart],
+  );
 
   const recurrenceExceptions = useQuery(
     api.polyvalents.listRecurrenceExceptions,
@@ -2321,38 +2315,95 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     );
   }, [selectedDay, byDay]);
 
-  const plannerEvents = useMemo(() => {
-    const uniqueActivities = new Map<string, DisplayActivity>();
-    for (const dayActivities of byDay.values()) {
+  /** Case de la grille : les créneaux d'un salarié un jour donné. */
+  const byWorkerDay = useMemo(() => {
+    const map = new Map<string, DisplayActivity[]>();
+    for (const [dayKey, dayActivities] of byDay) {
       for (const activity of dayActivities) {
-        uniqueActivities.set(String(activity._id), activity);
+        const key = cellKey(activity.workerId ?? null, dayKey);
+        const arr = map.get(key) ?? [];
+        arr.push(activity);
+        map.set(key, arr);
       }
     }
+    for (const list of map.values()) list.sort((a, b) => a.startAt - b.startAt);
+    return map;
+  }, [byDay]);
+
+  /**
+   * Un même créneau peut porter plusieurs salariés : la fiche récapitulative
+   * les affiche ensemble, comme avant le passage à la grille par salarié.
+   */
+  const occurrenceGroups = useMemo(() => {
+    const unique = new Map<string, DisplayActivity>();
+    for (const dayActivities of byDay.values()) {
+      for (const activity of dayActivities) unique.set(String(activity._id), activity);
+    }
     const grouped = new Map<string, DisplayActivity[]>();
-    for (const activity of uniqueActivities.values()) {
+    for (const activity of unique.values()) {
       const key = `${activity.taskId}-${activity.startAt}-${activity.endAt}`;
       const group = grouped.get(key) ?? [];
       group.push(activity);
       grouped.set(key, group);
     }
-    return Array.from(grouped.values()).map((group) => {
-      const activity = group[0];
-      const requiredWorkers = taskById.get(String(activity.taskId))?.requiredWorkers ?? 1;
-      const assignedWorkers = group.filter((item) => Boolean(item.workerId)).length;
-      const isCaisse = activity.taskName.toLocaleLowerCase("fr").includes("caisse");
-      return {
-        id: String(activity._id),
-        title: activity.taskName,
-        start: new Date(activity.startAt),
-        end: new Date(activity.endAt),
-        color: isCaisse ? "#7c3aed" : "#059669",
-        draggable: canUpdate,
-        resizable: canUpdate,
-        zIndex: foregroundActivityId === String(activity._id) ? 50 : undefined,
-        data: { activity, activities: group, assignedWorkers, requiredWorkers },
-      } satisfies ReuiCalendarEvent<PlannerEventData>;
+    return grouped;
+  }, [byDay]);
+
+  /**
+   * Lignes de la grille : les salariés de la recyclerie. Un salarié devenu
+   * inactif (fin de contrat) garde sa ligne tant qu'il a des créneaux dans la
+   * semaine affichée, sinon son planning disparaîtrait sans être supprimé.
+   */
+  const rows = useMemo(() => {
+    const shown = new Map(
+      workers.filter((worker) => worker.active !== false).map((worker) => [String(worker._id), worker]),
+    );
+    for (const worker of workers) {
+      if (shown.has(String(worker._id))) continue;
+      const busy = days.some(
+        (day) => (byWorkerDay.get(cellKey(worker._id, format(day, "yyyy-MM-dd"))) ?? []).length > 0,
+      );
+      if (busy) shown.set(String(worker._id), worker);
+    }
+    return Array.from(shown.values());
+  }, [workers, days, byWorkerDay]);
+
+  /** Les créneaux sans salarié ont leur propre ligne : rien ne doit se perdre. */
+  const hasUnassigned = useMemo(
+    () => days.some((day) => (byWorkerDay.get(cellKey(null, format(day, "yyyy-MM-dd"))) ?? []).length > 0),
+    [days, byWorkerDay],
+  );
+
+  function openSlotDraft(workerId: Id<"polyvalentWorkers"> | null, day: Date, taskId: Id<"polyvalentTasks">) {
+    const slot = defaultSlot(schedules ?? [], workerId, day, taskById.get(String(taskId))?.name);
+    setPlannerError(null);
+    setSlotDraft({ taskId, workerId, day, start: slot.start, end: slot.end });
+  }
+
+  function handleDrop(workerId: Id<"polyvalentWorkers"> | null, day: Date) {
+    const drag = dragged;
+    setDragged(null);
+    setHoveredCell(null);
+    if (!drag) return;
+    if (drag.kind === "task") {
+      if (!canCreate) return;
+      openSlotDraft(workerId, day, drag.taskId);
+      return;
+    }
+    if (!canUpdate) return;
+    // Déplacement : on garde l'heure et la durée, on change de jour et de salarié.
+    const startAt = dayAtClock(day, new Date(drag.startAt));
+    setPlannerError(null);
+    void updateActivity({
+      id: drag.activityId,
+      taskId: drag.taskId,
+      workerId: workerId ?? undefined,
+      startAt,
+      endAt: startAt + (drag.endAt - drag.startAt),
+    }).catch((error: unknown) => {
+      setPlannerError(error instanceof Error ? error.message : "Déplacement impossible.");
     });
-  }, [byDay, taskById, canUpdate, foregroundActivityId]);
+  }
 
   if (!canRead) {
     return (
@@ -2365,143 +2416,154 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     );
   }
 
+  const columns = `minmax(180px, 220px) repeat(${days.length}, minmax(150px, 1fr))`;
+
   return (
     <>
-      <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col p-4 sm:p-6">
-        <EventCalendar<PlannerEventData>
-          events={plannerEvents.map((event) => ({ ...event, ...pendingTiming[event.id] }))}
-          view={calendarView}
-          date={calendarView === "week" ? weekStart : calendarDay}
-          views={["week", "day"]}
-          locale={fr}
-          timeZone="Europe/Paris"
-          weekStartsOn={1}
-          weekendDays={[0]}
-          viewSettings={{ weekends: false, nowIndicator: true }}
-          dayStartHour={RESOURCE_DAY_START_HOUR}
-          dayEndHour={RESOURCE_DAY_END_HOUR}
-          slotDuration={30}
-          snapDuration={30}
-          i18n={PLANNER_FRENCH}
-          interactions={{ drag: canUpdate, resize: canUpdate, selectSlot: canCreate }}
-          className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)] text-[var(--foreground)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
-          classNames={{
-            event: "items-start py-3 text-[var(--foreground)]",
-            content: "min-h-0",
-            timeGrid: "border-[var(--crm-border)]",
-            timeGridHeader: "border-[var(--crm-border)]",
-            timeGutter: "border-[var(--crm-border)]",
-            dayColumn: "border-[var(--crm-border)] [--ec-slot-line-color:var(--crm-border)]",
-            allDaySection: "border-[var(--crm-border)]",
-            allDayCell: "border-[var(--crm-border)]",
-            resizeHandle: "!h-3 !opacity-100 z-30",
-            resizeGrip: "!w-6",
-          }}
-          onViewChange={(nextView) => {
-            if (nextView === "week" || nextView === "day") setCalendarView(nextView);
-          }}
-          onDateChange={(date) => {
-            if (calendarView === "week") setWeekStart(startOfWeek(date, { weekStartsOn: 1 }));
-            else setCalendarDay(date);
-          }}
-          onSlotClick={(slot) => {
-            const firstTask = tasks[0];
-            if (!canCreate || !firstTask) return;
-            const day = startOfDay(slot.date);
-            setSelectedDay(day);
-            setDroppedTask({
-              taskId: firstTask._id,
-              startAt: slot.date.getTime(),
-              endAt: slot.end?.getTime() ?? slot.date.getTime() + 60 * 60_000,
-            });
-          }}
-          onSelectSlot={(slot) => {
-            if (!canCreate || !tasks[0]) return;
-            setSelectedDay(startOfDay(slot.start));
-            setDroppedTask({ taskId: tasks[0]._id, startAt: slot.start.getTime(), endAt: slot.end.getTime() });
-          }}
-          onEventClick={(occurrence) => {
-            setForegroundActivityId(String(occurrence.event.data?.activity._id));
-            setActivityToEdit(occurrence.event.data ?? null);
-          }}
-          onEventUpdate={(update: EventCalendarProposedUpdate<PlannerEventData>) => {
-            const eventData = update.event.data;
-            const activity = eventData?.activity;
-            if (!eventData || !activity || !canUpdate || pendingTiming[update.event.id]) return false;
-            setTimingError(null);
-            setPendingTiming((current) => ({ ...current, [update.event.id]: { start: update.start, end: update.end } }));
-            void updatePlannerTiming({
-              activityIds: eventData.activities.filter(isStoredActivity).map((item) => item._id),
-              recurrenceIds: eventData.activities.flatMap((item) => item.recurrenceId ? [item.recurrenceId] : []),
-              originalStartAt: activity.startAt,
-              startAt: update.start.getTime(),
-              endAt: update.end.getTime(),
-            }).catch((error: unknown) => {
-              setTimingError(error instanceof Error ? error.message : "Impossible d’enregistrer le créneau.");
-            }).finally(() => {
-              setPendingTiming((current) => {
-                const next = { ...current };
-                delete next[update.event.id];
-                return next;
-              });
-            });
-            return true;
-          }}
-          renderEvent={({ occurrence }) => {
-            const data = occurrence.event.data;
-            if (!data) return null;
-            const worker = data.activity.workerName;
-            const workerInitials = worker
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0])
-              .join("");
-            return (
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden text-left leading-tight text-[var(--foreground)]">
-                <span className="flex min-w-0 items-center gap-1 font-bold">
-                  <span className="truncate">{occurrence.event.title}</span>
-                  <span className="ml-auto shrink-0 rounded-full bg-black/15 px-1.5 py-0.5 text-[9px] font-extrabold text-[var(--foreground)]">
-                    {data.assignedWorkers}/{data.requiredWorkers}
-                  </span>
-                </span>
-                <span className="flex min-w-0 items-center gap-1 text-[10px] font-medium opacity-85">
-                  {data.activity.workerId ? (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface)] text-[8px] font-extrabold text-[var(--foreground)]">
-                      {workerInitials}
-                    </span>
-                  ) : null}
-                  <span className="truncate">{worker}</span>
-                </span>
-                <span className="text-[10px] tabular-nums opacity-80">
-                  {format(occurrence.start, "HH:mm")} – {format(occurrence.end, "HH:mm")}
-                </span>
-              </span>
-            );
-          }}
-        >
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--crm-border)] px-3 py-2">
-            <EventCalendarNav showViewSwitcher />
-            {canCreate ? (
-              <Button
-                size="sm"
-                onClick={() => {
-                  const day = calendarView === "day" ? calendarDay : weekStart;
-                  if (!tasks[0]) return;
-                  setSelectedDay(day);
-                  setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(day, 13), endAt: dayAtHour(day, 17) });
+      <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col gap-3 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[200px] text-center text-sm font-semibold">
+            {format(weekStart, "d MMMM", { locale: fr })} – {format(addDays(weekStart, 5), "d MMMM yyyy", { locale: fr })}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+          >
+            Cette semaine
+          </Button>
+        </div>
+
+        {canCreate ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Tâches à planifier
+            </span>
+            {tasks.length === 0 ? (
+              <span className="text-sm text-zinc-500">Aucune tâche pour cette recyclerie.</span>
+            ) : null}
+            {tasks.map((task) => (
+              <span
+                key={task._id}
+                draggable
+                onDragStart={() => setDragged({ kind: "task", taskId: task._id })}
+                onDragEnd={() => {
+                  setDragged(null);
+                  setHoveredCell(null);
                 }}
+                className="cursor-grab select-none rounded-full px-3 py-1.5 text-sm font-semibold text-white shadow-sm active:cursor-grabbing"
+                style={{ backgroundColor: taskColor(task.name) }}
               >
-                <Plus className="h-4 w-4" /> Nouvelle tâche
-              </Button>
+                {task.name}
+              </span>
+            ))}
+            <span className="ml-auto text-xs text-zinc-500">
+              Glissez une tâche sur la case d'un salarié, puis choisissez ses horaires.
+            </span>
+          </div>
+        ) : null}
+
+        {plannerError ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">{plannerError}</p>
+        ) : null}
+
+        <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)]">
+          <div className="grid min-w-[900px]" style={{ gridTemplateColumns: columns }}>
+            <div className="sticky left-0 top-0 z-30 border-b border-r border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Salariés
+            </div>
+            {days.map((day) => (
+              <button
+                key={day.toISOString()}
+                type="button"
+                onClick={() => setSelectedDay(startOfDay(day))}
+                className={`sticky top-0 z-20 border-b border-r border-[var(--crm-border)] px-3 py-2 text-center transition hover:bg-[var(--crm-surface-2)] ${
+                  isToday(day) ? "bg-brand-500/10" : "bg-[var(--crm-surface-2)]"
+                }`}
+                title="Voir le détail de la journée"
+              >
+                <span className="block text-xs font-semibold capitalize text-zinc-400">
+                  {format(day, "EEEE", { locale: fr })}
+                </span>
+                <span className="block text-sm font-bold">{format(day, "d MMM", { locale: fr })}</span>
+              </button>
+            ))}
+
+            {rows.map((worker) => (
+              <PlannerRow
+                key={worker._id}
+                label={`${worker.firstName} ${worker.lastName}`.trim()}
+                sublabel={worker.active === false ? "Inactif" : undefined}
+                workerId={worker._id}
+                days={days}
+                byWorkerDay={byWorkerDay}
+                schedules={schedules ?? []}
+                canUpdate={canUpdate}
+                hoveredCell={hoveredCell}
+                dragging={dragged !== null}
+                onHover={setHoveredCell}
+                onDrop={handleDrop}
+                onDragActivity={setDragged}
+                onOpenActivity={(activity) =>
+                  setActivityToEdit(buildEventData(activity, occurrenceGroups, taskById))
+                }
+              />
+            ))}
+            {hasUnassigned ? (
+              <PlannerRow
+                label="Non affecté"
+                sublabel="Créneaux sans salarié"
+                workerId={null}
+                days={days}
+                byWorkerDay={byWorkerDay}
+                schedules={schedules ?? []}
+                canUpdate={canUpdate}
+                hoveredCell={hoveredCell}
+                dragging={dragged !== null}
+                onHover={setHoveredCell}
+                onDrop={handleDrop}
+                onDragActivity={setDragged}
+                onOpenActivity={(activity) =>
+                  setActivityToEdit(buildEventData(activity, occurrenceGroups, taskById))
+                }
+              />
+            ) : null}
+            {rows.length === 0 ? (
+              <div
+                className="col-span-full px-4 py-10 text-center text-sm text-zinc-500"
+                style={{ gridColumn: `1 / span ${days.length + 1}` }}
+              >
+                Aucun salarié pour cette recyclerie.
+              </div>
             ) : null}
           </div>
-          <EventCalendarToolbar className="hidden" />
-          {timingError ? <p role="alert" className="px-4 py-2 text-red-600 dark:text-red-400">{timingError}</p> : null}
-          <p className="px-4 py-1 text-xs text-muted-foreground">Glissez une tâche pour la déplacer, ou ses bords pour modifier sa durée. Seule l’occurrence sélectionnée est modifiée.</p>
-          <EventCalendarContent />
-        </EventCalendar>
+        </div>
       </div>
+
+      {slotDraft ? (
+        <SlotTimingModal
+          draft={slotDraft}
+          taskName={taskById.get(String(slotDraft.taskId))?.name ?? "Tâche"}
+          workerName={workerName(rows, slotDraft.workerId)}
+          onClose={() => setSlotDraft(null)}
+          onConfirm={async (start, end) => {
+            await createActivity({
+              taskId: slotDraft.taskId,
+              workerId: slotDraft.workerId ?? undefined,
+              startAt: dayAtTime(slotDraft.day, start),
+              endAt: dayAtTime(slotDraft.day, end),
+            });
+            setSlotDraft(null);
+          }}
+        />
+      ) : null}
+
       <Drawer
         open={selectedDay !== null}
         onClose={() => {
@@ -2530,7 +2592,258 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       ) : null}
     </>
   );
+}
 
+/** Ce qu'on est en train de glisser : une tâche du bandeau, ou un créneau posé. */
+type PlannerDrag =
+  | { kind: "task"; taskId: Id<"polyvalentTasks"> }
+  | {
+      kind: "activity";
+      activityId: Id<"polyvalentActivities">;
+      taskId: Id<"polyvalentTasks">;
+      startAt: number;
+      endAt: number;
+    };
+
+/** Tâche déposée sur une case, en attente de ses horaires. */
+type SlotDraft = {
+  taskId: Id<"polyvalentTasks">;
+  workerId: Id<"polyvalentWorkers"> | null;
+  day: Date;
+  start: string;
+  end: string;
+};
+
+/** Nom affiché dans la fiche d'horaires, ou la ligne « non affecté ». */
+function workerName(workers: WorkerList, workerId: Id<"polyvalentWorkers"> | null) {
+  const worker = workerId ? workers.find((item) => item._id === workerId) : undefined;
+  return worker ? `${worker.firstName} ${worker.lastName}`.trim() : "Aucun salarié affecté";
+}
+
+function cellKey(workerId: Id<"polyvalentWorkers"> | null | undefined, dayKey: string) {
+  return `${workerId ?? "none"}|${dayKey}`;
+}
+
+/** Couleur de la tâche, identique au bandeau et aux créneaux posés. */
+function taskColor(taskName: string) {
+  return taskName.toLocaleLowerCase("fr").includes("caisse") ? "#7c3aed" : "#059669";
+}
+
+function dayAtTime(day: Date, time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  const date = new Date(day);
+  date.setHours(hour, minute ?? 0, 0, 0);
+  return date.getTime();
+}
+
+function dayAtClock(day: Date, reference: Date) {
+  const date = new Date(day);
+  date.setHours(reference.getHours(), reference.getMinutes(), 0, 0);
+  return date.getTime();
+}
+
+/**
+ * Horaires proposés au dépôt d'une tâche : ceux du salarié ce jour-là s'ils
+ * sont renseignés, sinon l'habitude de la tâche (apports et caisse se tiennent
+ * l'après-midi), sinon la journée standard.
+ */
+function defaultSlot(
+  schedules: ScheduleList,
+  workerId: Id<"polyvalentWorkers"> | null,
+  day: Date,
+  taskName: string | undefined,
+) {
+  const weekday = day.getDay() || 7;
+  const slots = workerId
+    ? schedules
+        .find((schedule) => schedule.workerId === workerId)
+        ?.availability.filter((item) => item.weekday === weekday)
+    : undefined;
+  if (slots?.length) {
+    const sorted = [...slots].sort((a, b) => a.start.localeCompare(b.start));
+    return { start: sorted[0].start, end: sorted[sorted.length - 1].end };
+  }
+  const name = taskName?.toLocaleLowerCase("fr") ?? "";
+  if (name.includes("apports")) return { start: "13:00", end: "17:00" };
+  if (name.includes("caisse")) return { start: "14:00", end: "17:00" };
+  return { start: "09:00", end: "17:00" };
+}
+
+/** Reconstitue la fiche d'un créneau (tous les salariés qui y sont affectés). */
+function buildEventData(
+  activity: DisplayActivity,
+  groups: Map<string, DisplayActivity[]>,
+  taskById: Map<string, TaskList[number]>,
+): PlannerEventData {
+  const group = groups.get(`${activity.taskId}-${activity.startAt}-${activity.endAt}`) ?? [activity];
+  return {
+    activity,
+    activities: group,
+    assignedWorkers: group.filter((item) => Boolean(item.workerId)).length,
+    requiredWorkers: taskById.get(String(activity.taskId))?.requiredWorkers ?? 1,
+  };
+}
+
+/** Une ligne de la grille : le salarié à gauche, puis une case par jour. */
+function PlannerRow({
+  label,
+  sublabel,
+  workerId,
+  days,
+  byWorkerDay,
+  schedules,
+  canUpdate,
+  hoveredCell,
+  dragging,
+  onHover,
+  onDrop,
+  onDragActivity,
+  onOpenActivity,
+}: {
+  label: string;
+  sublabel?: string;
+  workerId: Id<"polyvalentWorkers"> | null;
+  days: Date[];
+  byWorkerDay: Map<string, DisplayActivity[]>;
+  schedules: ScheduleList;
+  canUpdate: boolean;
+  hoveredCell: string | null;
+  dragging: boolean;
+  onHover: (key: string | null) => void;
+  onDrop: (workerId: Id<"polyvalentWorkers"> | null, day: Date) => void;
+  onDragActivity: (drag: PlannerDrag) => void;
+  onOpenActivity: (activity: DisplayActivity) => void;
+}) {
+  return (
+    <>
+      <div className="sticky left-0 z-10 flex flex-col justify-center border-b border-r border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2">
+        <span className="truncate text-sm font-semibold text-[var(--foreground)]">{label}</span>
+        {sublabel ? <span className="truncate text-xs text-zinc-500">{sublabel}</span> : null}
+      </div>
+      {days.map((day) => {
+        const dayKey = format(day, "yyyy-MM-dd");
+        const key = cellKey(workerId, dayKey);
+        const cellActivities = byWorkerDay.get(key) ?? [];
+        const available = workerId
+          ? schedules
+              .find((schedule) => schedule.workerId === workerId)
+              ?.availability.some((item) => item.weekday === (day.getDay() || 7))
+          : undefined;
+        return (
+          <div
+            key={key}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (hoveredCell !== key) onHover(key);
+            }}
+            onDragLeave={() => {
+              if (hoveredCell === key) onHover(null);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              onDrop(workerId, day);
+            }}
+            className={`min-h-[72px] space-y-1 border-b border-r border-[var(--crm-border)] p-1.5 transition ${
+              hoveredCell === key
+                ? "bg-brand-500/20 ring-2 ring-inset ring-brand-500"
+                : dragging && available === false
+                  ? "bg-zinc-500/5"
+                  : ""
+            }`}
+          >
+            {cellActivities.map((activity) => (
+              <button
+                key={activity._id}
+                type="button"
+                draggable={canUpdate && !activity.recurrenceId}
+                onDragStart={() => {
+                  if (!canUpdate || activity.recurrenceId) return;
+                  onDragActivity({
+                    kind: "activity",
+                    activityId: activity._id,
+                    taskId: activity.taskId,
+                    startAt: activity.startAt,
+                    endAt: activity.endAt,
+                  });
+                }}
+                onClick={() => onOpenActivity(activity)}
+                className="block w-full cursor-pointer rounded-lg px-2 py-1 text-left text-[11px] font-semibold leading-tight text-white shadow-sm transition hover:brightness-110"
+                style={{ backgroundColor: taskColor(activity.taskName) }}
+                title={activity.recurrenceId ? "Créneau récurrent" : "Glisser pour déplacer"}
+              >
+                <span className="block truncate">{activity.taskName}</span>
+                <span className="block tabular-nums opacity-85">
+                  {format(new Date(activity.startAt), "HH:mm")} – {format(new Date(activity.endAt), "HH:mm")}
+                  {activity.recurrenceId ? " · ↻" : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** Horaires d'une tâche qu'on vient de déposer sur la case d'un salarié. */
+function SlotTimingModal({
+  draft,
+  taskName,
+  workerName,
+  onClose,
+  onConfirm,
+}: {
+  draft: SlotDraft;
+  taskName: string;
+  workerName: string;
+  onClose: () => void;
+  onConfirm: (start: string, end: string) => Promise<void>;
+}) {
+  const [start, setStart] = useState(draft.start);
+  const [end, setEnd] = useState(draft.end);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm() {
+    if (end <= start) return setError("La fin doit être après le début.");
+    setError(null);
+    setSaving(true);
+    try {
+      await onConfirm(start, end);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enregistrement impossible.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Horaires du créneau" className="max-w-md">
+      <div className="space-y-4">
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-3">
+          <p className="font-semibold text-[var(--foreground)]">{taskName}</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            {workerName} · {format(draft.day, "EEEE d MMMM yyyy", { locale: fr })}
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Début">
+            <Input type="time" value={start} onChange={(event) => setStart(event.target.value)} />
+          </Field>
+          <Field label="Fin">
+            <Input type="time" value={end} onChange={(event) => setEnd(event.target.value)} />
+          </Field>
+        </div>
+        {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={() => void confirm()} disabled={saving}>
+            {saving ? "Enregistrement…" : "Planifier"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
 function dayAtHour(day: Date, hour: number) {
