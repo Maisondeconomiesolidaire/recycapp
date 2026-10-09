@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -38,6 +39,7 @@ import {
   Trash2,
   UsersRound,
   CalendarPlus,
+  Printer,
   Users,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -56,6 +58,7 @@ import { RequestDrawer } from "../../components/crm/RequestDrawer";
 import { NewRequestDrawer } from "../../components/crm/NewRequestDrawer";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { printPlannings, type PrintablePlanning } from "../../lib/printPlanning";
 import {
   DEPOT_SITE_LABELS,
   DEPOT_VEHICLE_LABELS,
@@ -2390,6 +2393,36 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     [days, byWorkerDay],
   );
 
+  const periodLabel = `${format(weekStart, "d MMMM", { locale: fr })} au ${format(addDays(weekStart, 5), "d MMMM yyyy", { locale: fr })}`;
+
+  /** Transcrit la semaine affichée d'un salarié en feuille imprimable. */
+  const buildPlanning = useCallback(
+    (worker: WorkerList[number]): PrintablePlanning => {
+      const printableDays = days.map((day) => {
+        const slots = byWorkerDay.get(cellKey(worker._id, format(day, "yyyy-MM-dd"))) ?? [];
+        return {
+          label: format(day, "EEEE d MMMM", { locale: fr }),
+          slots: slots.map((activity) => ({
+            time: `${format(new Date(activity.startAt), "HH:mm")} – ${format(new Date(activity.endAt), "HH:mm")}`,
+            task: activity.taskName,
+            recurring: Boolean(activity.recurrenceId),
+          })),
+        };
+      });
+      const hours = days.reduce(
+        (total, day) =>
+          total +
+          (byWorkerDay.get(cellKey(worker._id, format(day, "yyyy-MM-dd"))) ?? []).reduce(
+            (sum, activity) => sum + activityHours(activity),
+            0,
+          ),
+        0,
+      );
+      return { worker: `${worker.firstName} ${worker.lastName}`.trim(), days: printableDays, hours };
+    },
+    [byWorkerDay, days],
+  );
+
   function openSlotDraft(workerId: Id<"polyvalentWorkers"> | null, day: Date, taskId: Id<"polyvalentTasks">) {
     const slot = defaultSlot(schedules ?? [], workerId, day, taskById.get(String(taskId))?.name);
     setPlannerError(null);
@@ -2453,6 +2486,22 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
           >
             Cette semaine
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            disabled={rows.length === 0}
+            onClick={() =>
+              printPlannings({
+                plannings: rows.map(buildPlanning),
+                periodLabel,
+                siteLabel: siteFilter ? `Recyclerie ${siteFilter}` : "",
+              })
+            }
+            title="Une feuille par salarié, pour la semaine affichée"
+          >
+            <Printer className="h-4 w-4" /> Imprimer les plannings
           </Button>
         </div>
 
@@ -2534,6 +2583,13 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 onDragActivity={setDragged}
                 onOpenActivity={(activity) =>
                   setActivityToEdit(buildEventData(activity, occurrenceGroups, taskById))
+                }
+                onPrint={() =>
+                  printPlannings({
+                    plannings: [buildPlanning(worker)],
+                    periodLabel,
+                    siteLabel: siteFilter ? `Recyclerie ${siteFilter}` : "",
+                  })
                 }
               />
             ))}
@@ -2767,6 +2823,7 @@ function PlannerRow({
   onDrop,
   onDragActivity,
   onOpenActivity,
+  onPrint,
 }: {
   label: string;
   sublabel?: string;
@@ -2782,12 +2839,27 @@ function PlannerRow({
   onDrop: (workerId: Id<"polyvalentWorkers"> | null, day: Date) => void;
   onDragActivity: (drag: PlannerDrag) => void;
   onOpenActivity: (activity: DisplayActivity) => void;
+  /** Absent sur la ligne « non affecté » : elle ne se distribue à personne. */
+  onPrint?: () => void;
 }) {
   return (
     <>
-      <div className="sticky left-0 z-10 flex flex-col justify-center border-b border-r border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2">
-        <span className="truncate text-sm font-semibold text-[var(--foreground)]">{label}</span>
-        {sublabel ? <span className="truncate text-xs text-zinc-500">{sublabel}</span> : null}
+      <div className="sticky left-0 z-10 flex items-center gap-2 border-b border-r border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-[var(--foreground)]">{label}</span>
+          {sublabel ? <span className="block truncate text-xs text-zinc-500">{sublabel}</span> : null}
+        </div>
+        {onPrint ? (
+          <button
+            type="button"
+            onClick={onPrint}
+            className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition hover:bg-[var(--crm-surface-2)] hover:text-brand-300"
+            aria-label={`Imprimer le planning de ${label}`}
+            title={`Imprimer le planning de ${label}`}
+          >
+            <Printer className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
       {days.map((day) => {
         const dayKey = format(day, "yyyy-MM-dd");
