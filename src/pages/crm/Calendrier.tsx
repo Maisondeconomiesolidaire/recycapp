@@ -2211,13 +2211,14 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       ),
     [allWorkers, siteFilter],
   );
+  // Toutes les tâches de la recyclerie sont planifiables : le bandeau ne se
+  // limitait qu'aux deux tâches créées d'office (apports, caisse magasin), ce
+  // qui rendait les autres impossibles à poser au planning.
   const tasks = useMemo(
     () =>
-      (allTasks ?? []).filter(
-        (task) =>
-          (!siteFilter || task.site === siteFilter) &&
-          ["apports", "caisse magasin"].includes(task.name.trim().toLocaleLowerCase("fr")),
-      ),
+      (allTasks ?? [])
+        .filter((task) => !siteFilter || task.site === siteFilter)
+        .sort((a, b) => a.name.localeCompare(b.name, "fr")),
     [allTasks, siteFilter],
   );
   const taskById = useMemo(
@@ -2646,9 +2647,29 @@ function cellKey(workerId: Id<"polyvalentWorkers"> | null | undefined, dayKey: s
   return `${workerId ?? "none"}|${dayKey}`;
 }
 
-/** Couleur de la tâche dans le bandeau : elle identifie la tâche, pas un créneau. */
+/**
+ * Couleur de la tâche dans le bandeau : elle identifie la tâche, pas un
+ * créneau. Elle est dérivée du nom, donc stable d'une session à l'autre sans
+ * rien à stocker. Le rouge et l'orange en sont absents : ils disent l'effectif
+ * manquant d'un créneau posé, et prêteraient à confusion ici.
+ */
+const TASK_COLORS = [
+  "#059669",
+  "#7c3aed",
+  "#2563eb",
+  "#0891b2",
+  "#db2777",
+  "#65a30d",
+  "#475569",
+  "#9333ea",
+];
+
 function taskColor(taskName: string) {
-  return taskName.toLocaleLowerCase("fr").includes("caisse") ? "#7c3aed" : "#059669";
+  let hash = 0;
+  for (const char of taskName.trim().toLocaleLowerCase("fr")) {
+    hash = (hash * 31 + char.codePointAt(0)!) % 100_000;
+  }
+  return TASK_COLORS[hash % TASK_COLORS.length];
 }
 
 /** Pastille du code couleur, rappelé au-dessus de la grille. */
