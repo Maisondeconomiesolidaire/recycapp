@@ -58,7 +58,11 @@ import { RequestDrawer } from "../../components/crm/RequestDrawer";
 import { NewRequestDrawer } from "../../components/crm/NewRequestDrawer";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
-import { printPlannings, type PrintablePlanning } from "../../lib/printPlanning";
+import {
+  printTeamPlanning,
+  printWorkerPlanning,
+  type PrintablePlanning,
+} from "../../lib/printPlanning";
 import {
   DEPOT_SITE_LABELS,
   DEPOT_VEHICLE_LABELS,
@@ -2402,6 +2406,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         const slots = byWorkerDay.get(cellKey(worker._id, format(day, "yyyy-MM-dd"))) ?? [];
         return {
           label: format(day, "EEEE d MMMM", { locale: fr }),
+          shortLabel: format(day, "EEE d", { locale: fr }),
           slots: slots.map((activity) => ({
             time: `${format(new Date(activity.startAt), "HH:mm")} – ${format(new Date(activity.endAt), "HH:mm")}`,
             task: activity.taskName,
@@ -2421,6 +2426,16 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       return { worker: `${worker.firstName} ${worker.lastName}`.trim(), days: printableDays, hours };
     },
     [byWorkerDay, days],
+  );
+
+  /**
+   * Plannings retenus pour l'impression d'équipe : ceux qui portent au moins un
+   * créneau. Une ligne vide dans une grille murale n'apprend rien et pousse le
+   * tableau sur une seconde page.
+   */
+  const scheduledPlannings = useMemo(
+    () => rows.map(buildPlanning).filter((planning) => planning.days.some((day) => day.slots.length > 0)),
+    [rows, buildPlanning],
   );
 
   function openSlotDraft(workerId: Id<"polyvalentWorkers"> | null, day: Date, taskId: Id<"polyvalentTasks">) {
@@ -2491,15 +2506,15 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             variant="outline"
             size="sm"
             className="ml-auto"
-            disabled={rows.length === 0}
+            disabled={scheduledPlannings.length === 0}
             onClick={() =>
-              printPlannings({
-                plannings: rows.map(buildPlanning),
+              printTeamPlanning({
+                plannings: scheduledPlannings,
                 periodLabel,
                 siteLabel: siteFilter ? `Recyclerie ${siteFilter}` : "",
               })
             }
-            title="Une feuille par salarié, pour la semaine affichée"
+            title="La semaine de toute l'équipe sur une grille, salariés sans créneau exclus"
           >
             <Printer className="h-4 w-4" /> Imprimer les plannings
           </Button>
@@ -2585,8 +2600,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                   setActivityToEdit(buildEventData(activity, occurrenceGroups, taskById))
                 }
                 onPrint={() =>
-                  printPlannings({
-                    plannings: [buildPlanning(worker)],
+                  printWorkerPlanning({
+                    planning: buildPlanning(worker),
                     periodLabel,
                     siteLabel: siteFilter ? `Recyclerie ${siteFilter}` : "",
                   })
