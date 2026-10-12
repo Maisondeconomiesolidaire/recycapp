@@ -21,9 +21,15 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
-import { ResourceCalendar } from "./Calendrier";
+import { GeneralCalendar, ResourceCalendar } from "./Calendrier";
 
 type Tab = "planning" | "ouvriers" | "taches";
+/**
+ * Deux lectures du même planning : « Général » montre ce qui a une heure fixe
+ * sur une grille horaire (tâches récurrentes, créneaux ponctuels, demandes déjà
+ * datées), « Planning » montre qui fait quoi, salarié par salarié.
+ */
+type PlanningView = "general" | "planning";
 
 /**
  * Recyclerie couverte par cet espace. La Recyclerie 76 sera servie par un
@@ -74,6 +80,7 @@ export function Taches() {
   const tasks = useQuery(api.polyvalents.listTasks);
   const schedules = useQuery(api.polyvalents.listWorkerSchedules);
   const [tab, setTab] = useState<Tab>("planning");
+  const [planningView, setPlanningView] = useState<PlanningView>("general");
 
   const canCreate = canAccess(access, "agents-polyvalents", "create");
   const canUpdate = canAccess(access, "agents-polyvalents", "update");
@@ -110,7 +117,22 @@ export function Taches() {
         />
 
         {tab === "planning" ? (
-          <ResourceCalendar siteFilter={GESTION_SITE} />
+          <>
+            <UnderlineTabs
+              className="mb-1 mt-2"
+              items={[
+                { key: "general", label: "Général" },
+                { key: "planning", label: "Planning" },
+              ]}
+              value={planningView}
+              onChange={setPlanningView}
+            />
+            {planningView === "general" ? (
+              <GeneralCalendar siteFilter={GESTION_SITE} />
+            ) : (
+              <ResourceCalendar siteFilter={GESTION_SITE} />
+            )}
+          </>
         ) : tab === "ouvriers" ? (
           <WorkersTab
             workers={visibleWorkers}

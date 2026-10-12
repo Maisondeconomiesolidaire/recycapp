@@ -58,6 +58,14 @@ import { RequestDrawer } from "../../components/crm/RequestDrawer";
 import { NewRequestDrawer } from "../../components/crm/NewRequestDrawer";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { EventCalendar } from "../../components/reui/event-calendar/event-calendar";
+import { PLANNER_FRENCH } from "../../components/reui/event-calendar/planner-french";
+import { EventCalendarContent } from "../../components/reui/event-calendar/event-calendar-content";
+import { EventCalendarNav, EventCalendarToolbar } from "../../components/reui/event-calendar/event-calendar-nav";
+import type {
+  CalendarEvent as ReuiCalendarEvent,
+  EventCalendarProposedUpdate,
+} from "../../components/reui/event-calendar/event-calendar-types";
 import {
   printTeamPlanning,
   printWorkerPlanning,
@@ -80,6 +88,10 @@ import { useUpload } from "../../lib/useUpload";
 import { useAnchoredPopover } from "../../lib/useAnchoredPopover";
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+/** Amplitude affichée par la vue générale du planning. */
+const RESOURCE_DAY_START_HOUR = 8;
+const RESOURCE_DAY_END_HOUR = 18;
 
 /** Heures affichées à l'unité près quand c'est rond, sinon avec une décimale. */
 function formatHours(hours: number) {
@@ -2174,6 +2186,396 @@ function RequestDayPanel({
  * toujours sur la semaine en cours, et la colonne de gauche permet de ne
  * garder que les agents dont on veut suivre les tâches.
  */
+/**
+ * Vue générale du planning : la grille horaire d'origine.
+ *
+ * Elle montre ce qui a une heure fixe — les tâches récurrentes (apports tous
+ * les jours de 14 h à 17 h, caisse…) et les créneaux ponctuels — auxquelles
+ * s'ajoutent les demandes déjà datées (aérogommage, collecte…). La vue
+ * « Planning », elle, répond à une autre question : qui fait quoi, salarié par
+ * salarié.
+ */
+export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
+  const access = useCrmAccess();
+  const canRead = canAccess(access, "agents-polyvalents", "read");
+  const canCreate = canAccess(access, "agents-polyvalents", "create");
+  const canUpdate = canAccess(access, "agents-polyvalents", "update");
+  const canDelete = canAccess(access, "agents-polyvalents", "delete");
+
+  const allWorkers = useQuery(
+    api.polyvalents.listWorkers,
+    canRead ? {} : "skip",
+  );
+  const allTasks = useQuery(api.polyvalents.listTasks, canRead ? {} : "skip");
+  const schedules = useQuery(
+    api.polyvalents.listWorkerSchedules,
+    canRead ? {} : "skip",
+  );
+  const activities = useQuery(
+    api.polyvalents.listActivities,
+    canRead ? {} : "skip",
+  );
+  const recurrences = useQuery(
+    api.polyvalents.listRecurrences,
+    canRead ? {} : "skip",
+  );
+  const updatePlannerTiming = useMutation(api.polyvalents.updatePlannerTiming);
+  const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
+
+  // Le filtre principal de la page restreint tout le planning à une recyclerie :
+  // les tâches à planifier, les salariés proposés et les créneaux affichés.
+  const workers = useMemo(
+    () =>
+      (allWorkers ?? []).filter(
+        (worker) => !siteFilter || worker.sites?.includes(siteFilter),
+      ),
+    [allWorkers, siteFilter],
+  );
+  const tasks = useMemo(
+    () =>
+      (allTasks ?? []).filter((task) => !siteFilter || task.site === siteFilter),
+    [allTasks, siteFilter],
+  );
+  const taskById = useMemo(
+    () => new Map((tasks ?? []).map((task) => [String(task._id), task])),
+    [tasks],
+  );
+
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 }),
+  );
+  const [calendarView, setCalendarView] = useState<"week" | "day">("week");
+  const [calendarDay, setCalendarDay] = useState(() => {
+    const today = startOfDay(new Date());
+    return today.getDay() === 0 ? addDays(today, 1) : today;
+  });
+  const [droppedTask, setDroppedTask] = useState<DroppedTask | null>(null);
+  const [foregroundActivityId, setForegroundActivityId] = useState<string | null>(null);
+  const [activityToEdit, setActivityToEdit] = useState<PlannerEventData | null>(null);
+  const [timingError, setTimingError] = useState<string | null>(null);
+  const [pendingTiming, setPendingTiming] = useState<Record<string, { start: Date; end: Date }>>({});
+
+  useEffect(() => {
+    if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
+  }, [canCreate, ensurePlannerTasks, siteFilter]);
+
+  const days = useMemo(() => {
+    if (calendarView === "day") return [calendarDay];
+    return eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
+  }, [calendarDay, calendarView, weekStart]);
+
+  /** Demandes déjà datées : elles occupent l'équipe sans être des créneaux. */
+  const scheduledRequests = useQuery(
+    api.polyvalents.listScheduledRequests,
+    canRead
+      ? { from: days[0].getTime(), to: addDays(days[days.length - 1], 1).getTime() }
+      : "skip",
+  );
+
+  const recurrenceExceptions = useQuery(
+    api.polyvalents.listRecurrenceExceptions,
+    canRead ? { startAt: days[0].getTime(), endAt: addDays(days[days.length - 1], 1).getTime() } : "skip",
+  );
+  const excludedOccurrences = useMemo(
+    () => new Set((recurrenceExceptions ?? []).map((item) => `${item.recurrenceId}:${item.originalStartAt}`)),
+    [recurrenceExceptions],
+  );
+
+  // Une activité s'affiche sur chaque jour compris entre sa date de début et sa
+  // date de fin (créneaux multi-jours inclus).
+  const byDay = useMemo(() => {
+    const map = new Map<string, DisplayActivity[]>();
+    const matchesSite = (taskSite: Site | null | undefined) =>
+      !siteFilter || taskSite === siteFilter;
+    for (const activity of activities ?? []) {
+      if (!matchesSite(activity.taskSite)) continue;
+      let cursor = startOfDay(new Date(activity.startAt));
+      const last = startOfDay(new Date(activity.endAt));
+      while (cursor <= last) {
+        const key = format(cursor, "yyyy-MM-dd");
+        const arr = map.get(key) ?? [];
+        arr.push(activity);
+        map.set(key, arr);
+        cursor = addDays(cursor, 1);
+      }
+    }
+    for (const recurrence of recurrences ?? []) {
+      if (!matchesSite(recurrence.taskSite) || recurrenceExceptions === undefined) continue;
+      for (const day of days) {
+        const weekday = day.getDay() || 7;
+        for (const slot of recurrence.slots.filter(
+          (item) => item.weekday === weekday,
+        )) {
+          const [startHour, startMinute] = slot.start.split(":").map(Number);
+          const [endHour, endMinute] = slot.end.split(":").map(Number);
+          const start = new Date(day);
+          start.setHours(startHour, startMinute, 0, 0);
+          if (excludedOccurrences.has(`${recurrence._id}:${start.getTime()}`)) continue;
+          const end = new Date(day);
+          end.setHours(endHour, endMinute, 0, 0);
+          const key = format(day, "yyyy-MM-dd");
+          const arr = map.get(key) ?? [];
+          arr.push({
+            _id: `${recurrence._id}-${start.getTime()}` as Activity["_id"],
+            _creationTime: recurrence._creationTime,
+            taskId: recurrence.taskId,
+            workerId: recurrence.workerId,
+            startAt: start.getTime(),
+            endAt: end.getTime(),
+            taskName: recurrence.taskName,
+            workerName: recurrence.workerName,
+            recurrenceId: recurrence._id,
+            taskSite: recurrence.taskSite,
+          });
+          map.set(key, arr);
+        }
+      }
+    }
+    return map;
+  }, [activities, days, recurrences, siteFilter, recurrenceExceptions, excludedOccurrences]);
+
+  const selectedDayActivities = useMemo(() => {
+    if (!selectedDay) return [];
+    return (byDay.get(format(selectedDay, "yyyy-MM-dd")) ?? []).filter(
+      (activity): activity is Activity => !activity.recurrenceId,
+    );
+  }, [selectedDay, byDay]);
+
+  const plannerEvents = useMemo(() => {
+    const uniqueActivities = new Map<string, DisplayActivity>();
+    for (const dayActivities of byDay.values()) {
+      for (const activity of dayActivities) {
+        uniqueActivities.set(String(activity._id), activity);
+      }
+    }
+    const grouped = new Map<string, DisplayActivity[]>();
+    for (const activity of uniqueActivities.values()) {
+      const key = `${activity.taskId}-${activity.startAt}-${activity.endAt}`;
+      const group = grouped.get(key) ?? [];
+      group.push(activity);
+      grouped.set(key, group);
+    }
+    const activityEvents = Array.from(grouped.values()).map((group) => {
+      const activity = group[0];
+      const requiredWorkers = taskById.get(String(activity.taskId))?.requiredWorkers ?? 1;
+      const assignedWorkers = group.filter((item) => Boolean(item.workerId)).length;
+      const isCaisse = activity.taskName.toLocaleLowerCase("fr").includes("caisse");
+      return {
+        id: String(activity._id),
+        title: activity.taskName,
+        start: new Date(activity.startAt),
+        end: new Date(activity.endAt),
+        color: isCaisse ? "#7c3aed" : "#059669",
+        draggable: canUpdate,
+        resizable: canUpdate,
+        zIndex: foregroundActivityId === String(activity._id) ? 50 : undefined,
+        data: { activity, activities: group, assignedWorkers, requiredWorkers },
+      } satisfies ReuiCalendarEvent<PlannerEventData>;
+    });
+
+    // Les demandes datées se lisent à côté des créneaux, sans être modifiables
+    // ici : leur date appartient au suivi de la demande, pas au planning.
+    const requestEvents = (scheduledRequests ?? []).map((request) => ({
+      id: `request-${request.id}`,
+      title: `${TYPE_LABELS[request.type] ?? request.type}${request.customerName ? ` · ${request.customerName}` : ""}`,
+      start: new Date(request.scheduledDate),
+      end: new Date(request.scheduledDate + 2 * 60 * 60_000),
+      color: "#0ea5e9",
+      draggable: false,
+      resizable: false,
+    } satisfies ReuiCalendarEvent<PlannerEventData>));
+
+    return [...activityEvents, ...requestEvents];
+  }, [byDay, taskById, canUpdate, foregroundActivityId, scheduledRequests]);
+
+  if (!canRead) {
+    return (
+      <div className="p-6">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-8 text-center text-sm text-zinc-400">
+          Vous n'avez pas accès à la gestion des ressources (agents
+          polyvalents).
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col p-4 sm:p-6">
+        <EventCalendar<PlannerEventData>
+          events={plannerEvents.map((event) => ({ ...event, ...pendingTiming[event.id] }))}
+          view={calendarView}
+          date={calendarView === "week" ? weekStart : calendarDay}
+          views={["week", "day"]}
+          locale={fr}
+          timeZone="Europe/Paris"
+          weekStartsOn={1}
+          viewSettings={{ weekends: true, nowIndicator: true }}
+          dayStartHour={RESOURCE_DAY_START_HOUR}
+          dayEndHour={RESOURCE_DAY_END_HOUR}
+          slotDuration={30}
+          snapDuration={30}
+          i18n={PLANNER_FRENCH}
+          interactions={{ drag: canUpdate, resize: canUpdate, selectSlot: canCreate }}
+          className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)] text-[var(--foreground)] shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
+          classNames={{
+            event: "items-start py-3 text-[var(--foreground)]",
+            content: "min-h-0",
+            timeGrid: "border-[var(--crm-border)]",
+            timeGridHeader: "border-[var(--crm-border)]",
+            timeGutter: "border-[var(--crm-border)]",
+            dayColumn: "border-[var(--crm-border)] [--ec-slot-line-color:var(--crm-border)]",
+            allDaySection: "border-[var(--crm-border)]",
+            allDayCell: "border-[var(--crm-border)]",
+            resizeHandle: "!h-3 !opacity-100 z-30",
+            resizeGrip: "!w-6",
+          }}
+          onViewChange={(nextView) => {
+            if (nextView === "week" || nextView === "day") setCalendarView(nextView);
+          }}
+          onDateChange={(date) => {
+            if (calendarView === "week") setWeekStart(startOfWeek(date, { weekStartsOn: 1 }));
+            else setCalendarDay(date);
+          }}
+          onSlotClick={(slot) => {
+            const firstTask = tasks[0];
+            if (!canCreate || !firstTask) return;
+            const day = startOfDay(slot.date);
+            setSelectedDay(day);
+            setDroppedTask({
+              taskId: firstTask._id,
+              startAt: slot.date.getTime(),
+              endAt: slot.end?.getTime() ?? slot.date.getTime() + 60 * 60_000,
+            });
+          }}
+          onSelectSlot={(slot) => {
+            if (!canCreate || !tasks[0]) return;
+            setSelectedDay(startOfDay(slot.start));
+            setDroppedTask({ taskId: tasks[0]._id, startAt: slot.start.getTime(), endAt: slot.end.getTime() });
+          }}
+          onEventClick={(occurrence) => {
+            setForegroundActivityId(String(occurrence.event.data?.activity._id));
+            setActivityToEdit(occurrence.event.data ?? null);
+          }}
+          onEventUpdate={(update: EventCalendarProposedUpdate<PlannerEventData>) => {
+            const eventData = update.event.data;
+            const activity = eventData?.activity;
+            if (!eventData || !activity || !canUpdate || pendingTiming[update.event.id]) return false;
+            setTimingError(null);
+            setPendingTiming((current) => ({ ...current, [update.event.id]: { start: update.start, end: update.end } }));
+            void updatePlannerTiming({
+              activityIds: eventData.activities.filter(isStoredActivity).map((item) => item._id),
+              recurrenceIds: eventData.activities.flatMap((item) => item.recurrenceId ? [item.recurrenceId] : []),
+              originalStartAt: activity.startAt,
+              startAt: update.start.getTime(),
+              endAt: update.end.getTime(),
+            }).catch((error: unknown) => {
+              setTimingError(error instanceof Error ? error.message : "Impossible d’enregistrer le créneau.");
+            }).finally(() => {
+              setPendingTiming((current) => {
+                const next = { ...current };
+                delete next[update.event.id];
+                return next;
+              });
+            });
+            return true;
+          }}
+          renderEvent={({ occurrence }) => {
+            const data = occurrence.event.data;
+            if (!data) {
+              return (
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden text-left leading-tight text-[var(--foreground)]">
+                  <span className="truncate font-bold">{occurrence.event.title}</span>
+                  <span className="text-[10px] tabular-nums opacity-80">
+                    {format(occurrence.start, "HH:mm")} · demande planifiée
+                  </span>
+                </span>
+              );
+            }
+            const worker = data.activity.workerName;
+            const workerInitials = worker
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0])
+              .join("");
+            return (
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden text-left leading-tight text-[var(--foreground)]">
+                <span className="flex min-w-0 items-center gap-1 font-bold">
+                  <span className="truncate">{occurrence.event.title}</span>
+                  <span className="ml-auto shrink-0 rounded-full bg-black/15 px-1.5 py-0.5 text-[9px] font-extrabold text-[var(--foreground)]">
+                    {data.assignedWorkers}/{data.requiredWorkers}
+                  </span>
+                </span>
+                <span className="flex min-w-0 items-center gap-1 text-[10px] font-medium opacity-85">
+                  {data.activity.workerId ? (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--crm-surface)] text-[8px] font-extrabold text-[var(--foreground)]">
+                      {workerInitials}
+                    </span>
+                  ) : null}
+                  <span className="truncate">{worker}</span>
+                </span>
+                <span className="text-[10px] tabular-nums opacity-80">
+                  {format(occurrence.start, "HH:mm")} – {format(occurrence.end, "HH:mm")}
+                </span>
+              </span>
+            );
+          }}
+        >
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--crm-border)] px-3 py-2">
+            <EventCalendarNav showViewSwitcher />
+            {canCreate ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const day = calendarView === "day" ? calendarDay : weekStart;
+                  if (!tasks[0]) return;
+                  setSelectedDay(day);
+                  setDroppedTask({ taskId: tasks[0]._id, startAt: dayAtHour(day, 13), endAt: dayAtHour(day, 17) });
+                }}
+              >
+                <Plus className="h-4 w-4" /> Nouvelle tâche
+              </Button>
+            ) : null}
+          </div>
+          <EventCalendarToolbar className="hidden" />
+          {timingError ? <p role="alert" className="px-4 py-2 text-red-600 dark:text-red-400">{timingError}</p> : null}
+          <p className="px-4 py-1 text-xs text-muted-foreground">Glissez une tâche pour la déplacer, ou ses bords pour modifier sa durée. Seule l’occurrence sélectionnée est modifiée.</p>
+          <EventCalendarContent />
+        </EventCalendar>
+      </div>
+      <Drawer
+        open={selectedDay !== null}
+        onClose={() => {
+          setSelectedDay(null);
+          setActivityToEdit(null);
+        }}
+        variant="side"
+        title={selectedDay ? format(selectedDay, "EEEE d MMMM yyyy", { locale: fr }) : ""}
+        bodyClassName="p-0"
+        panelClassName="max-w-4xl"
+      >
+        {selectedDay ? <ResourceDayPanel day={selectedDay} activities={selectedDayActivities} workers={workers ?? []} tasks={tasks ?? []} schedules={schedules ?? []} canCreate={canCreate} canUpdate={canUpdate} canDelete={canDelete} droppedTask={droppedTask} onDroppedTaskConsumed={() => setDroppedTask(null)} /> : null}
+      </Drawer>
+      {activityToEdit ? (
+        <ActivityWorkerModal
+          key={activityToEdit.activity._id}
+          activity={activityToEdit.activity}
+          occurrenceActivities={activityToEdit.activities}
+          workers={workers ?? []}
+          requiredWorkers={activityToEdit.requiredWorkers}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
+          canDelete={canDelete}
+          onClose={() => setActivityToEdit(null)}
+        />
+      ) : null}
+    </>
+  );
+
+}
+
 /**
  * Planning des ressources : une ligne par salarié, une colonne par jour.
  *
