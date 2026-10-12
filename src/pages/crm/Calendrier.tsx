@@ -2255,9 +2255,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
   }, [canCreate, ensurePlannerTasks, siteFilter]);
 
-  // La recyclerie ne planifie pas le dimanche : la semaine s'arrête au samedi.
+  // Semaine complète, dimanche compris : des animations et des collectes y
+  // tombent, et elles n'avaient nulle part où se planifier.
   const days = useMemo(
-    () => eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 5) }),
+    () => eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) }),
     [weekStart],
   );
 
@@ -2389,6 +2390,33 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   }, [byDay]);
 
   /**
+   * Heures de main d'œuvre déjà planifiées cette semaine, par tâche.
+   *
+   * Chaque affectation compte pour sa durée : deux salariés sur le même
+   * créneau de quatre heures, c'est huit heures de main d'œuvre. C'est bien
+   * cette grandeur que mesure l'objectif hebdomadaire de la tâche.
+   *
+   * La complétude d'une JOURNÉE se lit sur l'effectif d'un créneau (1/2, 2/2) ;
+   * celle de la SEMAINE se lit ici, en heures.
+   */
+  const taskWeekHours = useMemo(() => {
+    const weekKeys = new Set(days.map((day) => format(day, "yyyy-MM-dd")));
+    const counted = new Set<string>();
+    const hours = new Map<string, number>();
+    for (const [dayKey, dayActivities] of byDay) {
+      if (!weekKeys.has(dayKey)) continue;
+      for (const activity of dayActivities) {
+        // Un créneau à cheval sur deux jours figure dans les deux cases.
+        if (counted.has(String(activity._id))) continue;
+        counted.add(String(activity._id));
+        const key = String(activity.taskId);
+        hours.set(key, (hours.get(key) ?? 0) + activityHours(activity));
+      }
+    }
+    return hours;
+  }, [byDay, days]);
+
+  /**
    * Un même créneau peut porter plusieurs salariés : la fiche récapitulative
    * les affiche ensemble, comme avant le passage à la grille par salarié.
    */
@@ -2451,7 +2479,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     [days, byWorkerDay, eventsByWorkerDay],
   );
 
-  const periodLabel = `${format(weekStart, "d MMMM", { locale: fr })} au ${format(addDays(weekStart, 5), "d MMMM yyyy", { locale: fr })}`;
+  const periodLabel = `${format(weekStart, "d MMMM", { locale: fr })} au ${format(addDays(weekStart, 6), "d MMMM yyyy", { locale: fr })}`;
 
   /** Transcrit la semaine affichée d'un salarié en feuille imprimable. */
   const buildPlanning = useCallback(
@@ -2544,7 +2572,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-[200px] text-center text-sm font-semibold">
-            {format(weekStart, "d MMMM", { locale: fr })} – {format(addDays(weekStart, 5), "d MMMM yyyy", { locale: fr })}
+            {format(weekStart, "d MMMM", { locale: fr })} – {format(addDays(weekStart, 6), "d MMMM yyyy", { locale: fr })}
           </span>
           <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, 7))}>
             <ChevronRight className="h-4 w-4" />
@@ -2583,19 +2611,16 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
               <span className="text-sm text-zinc-500">Aucune tâche pour cette recyclerie.</span>
             ) : null}
             {tasks.map((task) => (
-              <span
+              <TaskChip
                 key={task._id}
-                draggable
+                task={task}
+                plannedHours={taskWeekHours.get(String(task._id)) ?? 0}
                 onDragStart={() => setDragged({ kind: "task", taskId: task._id })}
                 onDragEnd={() => {
                   setDragged(null);
                   setHoveredCell(null);
                 }}
-                className="cursor-grab select-none rounded-full px-3 py-1.5 text-sm font-semibold text-white shadow-sm active:cursor-grabbing"
-                style={{ backgroundColor: taskColor(task.name) }}
-              >
-                {task.name}
-              </span>
+              />
             ))}
             <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-zinc-500">
               <span>Glissez une tâche sur la case d'un salarié, puis choisissez ses horaires.</span>
@@ -2641,7 +2666,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)]">
-          <div className="grid min-w-[900px]" style={{ gridTemplateColumns: columns }}>
+          <div className="grid min-w-[1040px]" style={{ gridTemplateColumns: columns }}>
             <div className="sticky left-0 top-0 z-30 border-b border-r border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
               Salariés
             </div>
@@ -2852,6 +2877,76 @@ function taskColor(taskName: string) {
     hash = (hash * 31 + char.codePointAt(0)!) % 100_000;
   }
   return TASK_COLORS[hash % TASK_COLORS.length];
+}
+
+/**
+ * Tâche du bandeau : ce qu'on glisse dans la grille, et son avancement de la
+ * semaine.
+ *
+ * Le taux se lit en heures de main d'œuvre, rapportées à l'objectif
+ * hebdomadaire de la tâche (les heures requises sont saisies au mois, sur la
+ * base d'un mois = quatre semaines, comme partout ailleurs dans la page
+ * Gestion). Une tâche sans objectif n'affiche que ce qui est planifié : lui
+ * inventer un taux ferait passer un champ vide pour un objectif atteint.
+ */
+function TaskChip({
+  task,
+  plannedHours,
+  onDragStart,
+  onDragEnd,
+}: {
+  task: TaskList[number];
+  plannedHours: number;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const requiredHours = task.requiredMonthlyHours ? task.requiredMonthlyHours / 4 : undefined;
+  const ratio = requiredHours ? plannedHours / requiredHours : undefined;
+  const tone =
+    ratio === undefined
+      ? "#64748b"
+      : ratio >= 1
+        ? "#059669"
+        : ratio > 0
+          ? "#d97706"
+          : "#dc2626";
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className="min-w-[160px] cursor-grab select-none rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 shadow-sm active:cursor-grabbing"
+      title={
+        requiredHours
+          ? `${task.name} — ${formatHours(plannedHours)} planifiées sur ${formatHours(requiredHours)} requises cette semaine`
+          : `${task.name} — aucune heure hebdomadaire requise n'est définie`
+      }
+    >
+      <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-[var(--foreground)]">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: taskColor(task.name) }} />
+        <span className="truncate">{task.name}</span>
+      </span>
+      <span className="mt-1 block text-[11px] tabular-nums text-zinc-400">
+        {formatHours(plannedHours)}
+        {requiredHours ? ` / ${formatHours(requiredHours)}` : " planifiées"}
+        {ratio !== undefined ? (
+          <span className="font-bold" style={{ color: tone }}>
+            {" · "}
+            {Math.round(ratio * 100)} %
+          </span>
+        ) : null}
+      </span>
+      {requiredHours ? (
+        <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/25">
+          <span
+            className="block h-full rounded-full"
+            style={{ width: `${Math.min(100, Math.round(ratio! * 100))}%`, backgroundColor: tone }}
+          />
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 /** Pastille du code couleur, rappelé au-dessus de la grille. */
