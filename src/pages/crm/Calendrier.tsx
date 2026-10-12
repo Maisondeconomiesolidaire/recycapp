@@ -2602,64 +2602,56 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           </Button>
         </div>
 
-        {canCreate ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Tâches à planifier
-            </span>
-            {tasks.length === 0 ? (
-              <span className="text-sm text-zinc-500">Aucune tâche pour cette recyclerie.</span>
-            ) : null}
-            {tasks.map((task) => (
-              <TaskChip
-                key={task._id}
-                task={task}
-                plannedHours={taskWeekHours.get(String(task._id)) ?? 0}
-                onDragStart={() => setDragged({ kind: "task", taskId: task._id })}
-                onDragEnd={() => {
-                  setDragged(null);
-                  setHoveredCell(null);
-                }}
-              />
-            ))}
-            <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-              <span>Glissez une tâche sur la case d'un salarié, puis choisissez ses horaires.</span>
-              <span className="flex items-center gap-2">
+        {/* Deux niveaux, même présentation : ce qu'il y a à planifier (tâches)
+            et ce qui est déjà au calendrier mais réclame une équipe. */}
+        <div className="space-y-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          {canCreate ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Tâches
+              </span>
+              {tasks.length === 0 ? (
+                <span className="text-sm text-zinc-500">Aucune tâche pour cette recyclerie.</span>
+              ) : null}
+              {tasks.map((task) => (
+                <TaskChip
+                  key={task._id}
+                  task={task}
+                  plannedHours={taskWeekHours.get(String(task._id)) ?? 0}
+                  onDragStart={() => setDragged({ kind: "task", taskId: task._id })}
+                  onDragEnd={() => {
+                    setDragged(null);
+                    setHoveredCell(null);
+                  }}
+                />
+              ))}
+              <span className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
                 <StaffingLegend color="#dc2626" label="Personne" />
                 <StaffingLegend color="#d97706" label="Incomplet" />
                 <StaffingLegend color="#059669" label="Complet" />
               </span>
-            </span>
-          </div>
-        ) : null}
-
-        {unstaffedEvents.length > 0 ? (
-          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3">
-            <p className="text-sm font-semibold text-amber-200">
-              {unstaffedEvents.length} évènement{unstaffedEvents.length > 1 ? "s" : ""} sans salarié mobilisé
-              cette semaine
-            </p>
-            <p className="mt-0.5 text-xs text-amber-200/80">
-              Créé{unstaffedEvents.length > 1 ? "s" : ""} au calendrier de la Recyclerie ou dans l'espace
-              partagé de Mes Outils. Affectez l'équipe pour qu'il{unstaffedEvents.length > 1 ? "s" : ""}{" "}
-              apparaisse{unstaffedEvents.length > 1 ? "nt" : ""} sur les lignes concernées.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {unstaffedEvents.map((event) => (
-                <button
-                  key={`${event.source}-${event.id}`}
-                  type="button"
-                  onClick={() => setEventToStaff(event)}
-                  disabled={!canUpdate}
-                  className="rounded-full border border-amber-500/50 bg-[var(--crm-surface)] px-3 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {format(new Date(event.startAt), "EEE d", { locale: fr })} · {event.title} ·{" "}
-                  <span className="font-bold">Compléter</span>
-                </button>
-              ))}
             </div>
+          ) : null}
+
+          <div className={`flex flex-wrap items-center gap-2 ${canCreate ? "border-t border-[var(--crm-border)] pt-2" : ""}`}>
+            <span className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Évènements
+              {unstaffedEvents.length > 0 ? (
+                <span className="ml-1 font-bold text-amber-400">{unstaffedEvents.length}</span>
+              ) : null}
+            </span>
+            {(plannerEvents ?? []).length === 0 ? (
+              <span className="text-sm text-zinc-500">Aucun évènement cette semaine.</span>
+            ) : null}
+            {(plannerEvents ?? []).map((event) => (
+              <EventChip
+                key={`${event.source}-${event.id}`}
+                event={event}
+                onClick={canUpdate ? () => setEventToStaff(event) : undefined}
+              />
+            ))}
           </div>
-        ) : null}
+        </div>
 
         {plannerError ? (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">{plannerError}</p>
@@ -2946,6 +2938,59 @@ function TaskChip({
         </span>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Évènement du bandeau, présenté comme une tâche : même carte, même barre.
+ *
+ * Son avancement ne se mesure pas en heures mais en équipe affectée — un
+ * évènement est soit pourvu, soit à compléter. La barre est donc pleine ou
+ * vide, et le clic ouvre le sélecteur de salariés.
+ */
+function EventChip({
+  event,
+  onClick,
+}: {
+  event: PlannerEvent;
+  onClick?: () => void;
+}) {
+  const staffed = event.workerIds.length > 0;
+  const tone = staffed ? "#059669" : "#d97706";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className="min-w-[160px] rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-left shadow-sm transition hover:border-[var(--crm-border-strong)] disabled:cursor-default"
+      title={
+        staffed
+          ? `${event.title} — ${event.workerNames.join(", ")}`
+          : `${event.title} — aucun salarié mobilisé, cliquez pour compléter`
+      }
+    >
+      <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-[var(--foreground)]">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: tone }} />
+        <span className="truncate">{event.title}</span>
+      </span>
+      <span className="mt-1 block text-[11px] tabular-nums text-zinc-400">
+        {format(new Date(event.startAt), "EEE d", { locale: fr })} ·{" "}
+        {format(new Date(event.startAt), "HH:mm")} – {format(new Date(event.endAt), "HH:mm")}
+        <span className="font-bold" style={{ color: tone }}>
+          {" · "}
+          {staffed
+            ? `${event.workerIds.length} salarié${event.workerIds.length > 1 ? "s" : ""}`
+            : "à compléter"}
+        </span>
+      </span>
+      <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/25">
+        <span
+          className="block h-full rounded-full"
+          style={{ width: staffed ? "100%" : "0%", backgroundColor: tone }}
+        />
+      </span>
+    </button>
   );
 }
 
