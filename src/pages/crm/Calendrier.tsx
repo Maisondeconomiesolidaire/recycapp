@@ -2562,11 +2562,11 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     );
   }
 
-  const columns = `minmax(180px, 220px) repeat(${days.length}, minmax(150px, 1fr))`;
+  const columns = `minmax(150px, 190px) repeat(${days.length}, minmax(118px, 1fr))`;
 
   return (
     <>
-      <div className="flex h-[calc(100dvh-7rem)] min-h-[520px] flex-col gap-3 p-4 sm:p-6">
+      <div className="flex h-[calc(100dvh-6rem)] min-h-[560px] flex-col gap-3 px-4 pb-4 pt-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
             <ChevronLeft className="h-4 w-4" />
@@ -2602,54 +2602,63 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           </Button>
         </div>
 
-        {/* Deux niveaux, même présentation : ce qu'il y a à planifier (tâches)
-            et ce qui est déjà au calendrier mais réclame une équipe. */}
-        <div className="space-y-2 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+        {/* Deux niveaux, même présentation. Chaque niveau tient sur UNE ligne
+            qui défile horizontalement : wrappées, dix-neuf tâches repoussaient
+            la grille hors de l'écran. */}
+        <div className="shrink-0 divide-y divide-[var(--crm-border)] rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
           {canCreate ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Tâches
-              </span>
+            <div className="flex items-start gap-3 p-2.5">
+              <div className="flex w-28 shrink-0 flex-col gap-1 pt-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Tâches <span className="text-zinc-600">{tasks.length}</span>
+                </span>
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500">
+                  <StaffingLegend color="#dc2626" label="Personne" />
+                  <StaffingLegend color="#d97706" label="Incomplet" />
+                  <StaffingLegend color="#059669" label="Complet" />
+                </span>
+              </div>
               {tasks.length === 0 ? (
-                <span className="text-sm text-zinc-500">Aucune tâche pour cette recyclerie.</span>
-              ) : null}
-              {tasks.map((task) => (
-                <TaskChip
-                  key={task._id}
-                  task={task}
-                  plannedHours={taskWeekHours.get(String(task._id)) ?? 0}
-                  onDragStart={() => setDragged({ kind: "task", taskId: task._id })}
-                  onDragEnd={() => {
-                    setDragged(null);
-                    setHoveredCell(null);
-                  }}
-                />
-              ))}
-              <span className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
-                <StaffingLegend color="#dc2626" label="Personne" />
-                <StaffingLegend color="#d97706" label="Incomplet" />
-                <StaffingLegend color="#059669" label="Complet" />
-              </span>
+                <span className="py-3 text-sm text-zinc-500">Aucune tâche pour cette recyclerie.</span>
+              ) : (
+                <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+                  {tasks.map((task) => (
+                    <TaskChip
+                      key={task._id}
+                      task={task}
+                      plannedHours={taskWeekHours.get(String(task._id)) ?? 0}
+                      onDragStart={() => setDragged({ kind: "task", taskId: task._id })}
+                      onDragEnd={() => {
+                        setDragged(null);
+                        setHoveredCell(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
 
-          <div className={`flex flex-wrap items-center gap-2 ${canCreate ? "border-t border-[var(--crm-border)] pt-2" : ""}`}>
-            <span className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Évènements
-              {unstaffedEvents.length > 0 ? (
-                <span className="ml-1 font-bold text-amber-400">{unstaffedEvents.length}</span>
-              ) : null}
+          <div className="flex items-start gap-3 p-2.5">
+            <span className="w-28 shrink-0 pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Évènements{" "}
+              <span className={unstaffedEvents.length > 0 ? "font-bold text-amber-400" : "text-zinc-600"}>
+                {unstaffedEvents.length > 0 ? unstaffedEvents.length : (plannerEvents ?? []).length}
+              </span>
             </span>
             {(plannerEvents ?? []).length === 0 ? (
-              <span className="text-sm text-zinc-500">Aucun évènement cette semaine.</span>
-            ) : null}
-            {(plannerEvents ?? []).map((event) => (
-              <EventChip
-                key={`${event.source}-${event.id}`}
-                event={event}
-                onClick={canUpdate ? () => setEventToStaff(event) : undefined}
-              />
-            ))}
+              <span className="py-3 text-sm text-zinc-500">Aucun évènement cette semaine.</span>
+            ) : (
+              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+                {(plannerEvents ?? []).map((event) => (
+                  <EventChip
+                    key={`${event.source}-${event.id}`}
+                    event={event}
+                    onClick={canUpdate ? () => setEventToStaff(event) : undefined}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -2658,7 +2667,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)]">
-          <div className="grid min-w-[1040px]" style={{ gridTemplateColumns: columns }}>
+          <div className="grid min-w-[980px]" style={{ gridTemplateColumns: columns }}>
             <div className="sticky left-0 top-0 z-30 border-b border-r border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
               Salariés
             </div>
@@ -2872,6 +2881,69 @@ function taskColor(taskName: string) {
 }
 
 /**
+ * Carte du bandeau, commune aux tâches et aux évènements.
+ *
+ * Largeur et hauteur fixes, piste de progression toujours rendue même sans
+ * objectif : sans cela les cartes n'avaient pas la même hauteur et les lignes
+ * se décalaient les unes par rapport aux autres.
+ */
+function PaletteCard({
+  dotColor,
+  title,
+  meta,
+  /** Part remplie de la piste, entre 0 et 1 ; absente = pas d'objectif connu. */
+  ratio,
+  tone,
+  hint,
+  draggable,
+  onDragStart,
+  onDragEnd,
+  onClick,
+}: {
+  dotColor: string;
+  title: string;
+  meta: ReactNode;
+  ratio?: number;
+  tone: string;
+  hint: string;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onClick?: () => void;
+}) {
+  return (
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (event) => { if (event.key === "Enter") onClick(); } : undefined}
+      title={hint}
+      className={`flex h-[64px] w-[178px] shrink-0 flex-col justify-between rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-2.5 py-1.5 shadow-sm ${
+        draggable ? "cursor-grab active:cursor-grabbing" : ""
+      } ${onClick ? "cursor-pointer transition hover:border-[var(--crm-border-strong)]" : ""}`}
+    >
+      <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold leading-tight text-[var(--foreground)]">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} />
+        <span className="truncate">{title}</span>
+      </span>
+      <span className="block truncate text-[10px] tabular-nums leading-tight text-zinc-400">{meta}</span>
+      <span className="block h-1 overflow-hidden rounded-full bg-black/30">
+        <span
+          className="block h-full rounded-full"
+          style={{
+            width: ratio === undefined ? "0%" : `${Math.min(100, Math.round(ratio * 100))}%`,
+            backgroundColor: tone,
+          }}
+        />
+      </span>
+    </div>
+  );
+}
+
+/**
  * Tâche du bandeau : ce qu'on glisse dans la grille, et son avancement de la
  * semaine.
  *
@@ -2895,102 +2967,72 @@ function TaskChip({
   const requiredHours = task.requiredMonthlyHours ? task.requiredMonthlyHours / 4 : undefined;
   const ratio = requiredHours ? plannedHours / requiredHours : undefined;
   const tone =
-    ratio === undefined
-      ? "#64748b"
-      : ratio >= 1
-        ? "#059669"
-        : ratio > 0
-          ? "#d97706"
-          : "#dc2626";
+    ratio === undefined ? "#52525b" : ratio >= 1 ? "#059669" : ratio > 0 ? "#d97706" : "#dc2626";
 
   return (
-    <div
+    <PaletteCard
+      dotColor={taskColor(task.name)}
+      title={task.name}
+      tone={tone}
+      ratio={ratio}
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="min-w-[160px] cursor-grab select-none rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 shadow-sm active:cursor-grabbing"
-      title={
+      hint={
         requiredHours
           ? `${task.name} — ${formatHours(plannedHours)} planifiées sur ${formatHours(requiredHours)} requises cette semaine`
           : `${task.name} — aucune heure hebdomadaire requise n'est définie`
       }
-    >
-      <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-[var(--foreground)]">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: taskColor(task.name) }} />
-        <span className="truncate">{task.name}</span>
-      </span>
-      <span className="mt-1 block text-[11px] tabular-nums text-zinc-400">
-        {formatHours(plannedHours)}
-        {requiredHours ? ` / ${formatHours(requiredHours)}` : " planifiées"}
-        {ratio !== undefined ? (
-          <span className="font-bold" style={{ color: tone }}>
-            {" · "}
-            {Math.round(ratio * 100)} %
-          </span>
-        ) : null}
-      </span>
-      {requiredHours ? (
-        <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/25">
-          <span
-            className="block h-full rounded-full"
-            style={{ width: `${Math.min(100, Math.round(ratio! * 100))}%`, backgroundColor: tone }}
-          />
-        </span>
-      ) : null}
-    </div>
+      meta={
+        <>
+          {formatHours(plannedHours)}
+          {requiredHours ? ` / ${formatHours(requiredHours)}` : " planifiées"}
+          {ratio !== undefined ? (
+            <span className="font-bold" style={{ color: tone }}>
+              {" · "}
+              {Math.round(ratio * 100)} %
+            </span>
+          ) : null}
+        </>
+      }
+    />
   );
 }
 
 /**
- * Évènement du bandeau, présenté comme une tâche : même carte, même barre.
+ * Évènement du bandeau, présenté comme une tâche : même carte, même piste.
  *
  * Son avancement ne se mesure pas en heures mais en équipe affectée — un
- * évènement est soit pourvu, soit à compléter. La barre est donc pleine ou
+ * évènement est soit pourvu, soit à compléter. La piste est donc pleine ou
  * vide, et le clic ouvre le sélecteur de salariés.
  */
-function EventChip({
-  event,
-  onClick,
-}: {
-  event: PlannerEvent;
-  onClick?: () => void;
-}) {
+function EventChip({ event, onClick }: { event: PlannerEvent; onClick?: () => void }) {
   const staffed = event.workerIds.length > 0;
   const tone = staffed ? "#059669" : "#d97706";
 
   return (
-    <button
-      type="button"
+    <PaletteCard
+      dotColor={tone}
+      title={event.title}
+      tone={tone}
+      ratio={staffed ? 1 : 0}
       onClick={onClick}
-      disabled={!onClick}
-      className="min-w-[160px] rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-3 py-2 text-left shadow-sm transition hover:border-[var(--crm-border-strong)] disabled:cursor-default"
-      title={
+      hint={
         staffed
           ? `${event.title} — ${event.workerNames.join(", ")}`
           : `${event.title} — aucun salarié mobilisé, cliquez pour compléter`
       }
-    >
-      <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-[var(--foreground)]">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: tone }} />
-        <span className="truncate">{event.title}</span>
-      </span>
-      <span className="mt-1 block text-[11px] tabular-nums text-zinc-400">
-        {format(new Date(event.startAt), "EEE d", { locale: fr })} ·{" "}
-        {format(new Date(event.startAt), "HH:mm")} – {format(new Date(event.endAt), "HH:mm")}
-        <span className="font-bold" style={{ color: tone }}>
-          {" · "}
-          {staffed
-            ? `${event.workerIds.length} salarié${event.workerIds.length > 1 ? "s" : ""}`
-            : "à compléter"}
-        </span>
-      </span>
-      <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/25">
-        <span
-          className="block h-full rounded-full"
-          style={{ width: staffed ? "100%" : "0%", backgroundColor: tone }}
-        />
-      </span>
-    </button>
+      meta={
+        <>
+          {format(new Date(event.startAt), "EEE d", { locale: fr })} ·{" "}
+          {format(new Date(event.startAt), "HH:mm")}–{format(new Date(event.endAt), "HH:mm")}
+          <span className="font-bold" style={{ color: tone }}>
+            {" · "}
+            {staffed ? `${event.workerIds.length} salarié${event.workerIds.length > 1 ? "s" : ""}` : "à compléter"}
+          </span>
+        </>
+      }
+    />
   );
 }
 
