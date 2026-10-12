@@ -20,6 +20,8 @@ export type PrintableSlot = {
   task: string;
   /** Marque les occurrences récurrentes, qui reviennent chaque semaine. */
   recurring?: boolean;
+  /** Indisponibilité RH (congé, formation…) et non un créneau de travail. */
+  absence?: boolean;
 };
 
 export type PrintableDay = {
@@ -68,7 +70,7 @@ export function printWorkerPlanning({
         ? day.slots
             .map(
               (slot) =>
-                `<div class="slot"><span class="time">${escapeHtml(slot.time)}</span>` +
+                `<div class="slot${slot.absence ? " absence" : ""}"><span class="time">${escapeHtml(slot.time)}</span>` +
                 `<span class="task">${escapeHtml(slot.task)}${slot.recurring ? " <span class='rec'>(hebdomadaire)</span>" : ""}</span></div>`,
             )
             .join("")
@@ -91,6 +93,9 @@ export function printWorkerPlanning({
       .time { min-width: 76px; font-variant-numeric: tabular-nums; font-weight: 700; }
       .task { flex: 1; }
       .rec { font-size: 8pt; color: #555; }
+      /* Une absence doit se repérer sans lire : elle n'est pas du travail. */
+      .slot.absence { background: #eee; font-style: italic; }
+      .slot.absence .task { text-transform: uppercase; letter-spacing: 0.04em; }
       .empty { font-size: 10pt; color: #777; }
       footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 14px; font-size: 10pt; }
       .signature { border-bottom: 1px solid #000; width: 60mm; padding-bottom: 14mm; }
@@ -140,7 +145,7 @@ export function printTeamPlanning({
           const slots = day.slots
             .map(
               (slot) =>
-                `<div class="slot"><span class="time">${escapeHtml(slot.time)}</span>` +
+                `<div class="slot${slot.absence ? " absence" : ""}"><span class="time">${escapeHtml(slot.time)}</span>` +
                 `<span class="task">${escapeHtml(slot.task)}</span></div>`,
             )
             .join("");
@@ -168,6 +173,8 @@ export function printTeamPlanning({
       .slot { font-size: 7pt; line-height: 1.25; padding-bottom: 0.4mm; }
       .time { display: block; font-weight: 700; font-variant-numeric: tabular-nums; }
       .task { display: block; overflow-wrap: anywhere; }
+      .slot.absence { background: #e4e4e4; font-style: italic; padding: 0 0.6mm; }
+      .slot.absence .task { text-transform: uppercase; }
       .off { background: repeating-linear-gradient(135deg, #fff, #fff 2mm, #f2f2f2 2mm, #f2f2f2 4mm); }
       tbody tr { page-break-inside: avoid; }
     `,

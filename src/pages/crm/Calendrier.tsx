@@ -2531,15 +2531,31 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const buildPlanning = useCallback(
     (worker: WorkerList[number]): PrintablePlanning => {
       const printableDays = days.map((day) => {
-        const slots = byWorkerDay.get(cellKey(worker._id, format(day, "yyyy-MM-dd"))) ?? [];
+        const key = cellKey(worker._id, format(day, "yyyy-MM-dd"));
+        const range = (item: { startAt: number; endAt: number }) =>
+          `${format(new Date(item.startAt), "HH:mm")} – ${format(new Date(item.endAt), "HH:mm")}`;
+        // Congés et formations figurent sur la feuille distribuée : un planning
+        // qui tait une absence laisse croire à une journée disponible.
+        const slots = [
+          ...(absencesByWorkerDay.get(key) ?? []).map((absence) => ({
+            time: range(absence),
+            task: ABSENCE_BY_KIND.get(absence.kind)?.label ?? absence.kind,
+            absence: true,
+            startAt: absence.startAt,
+          })),
+          ...(byWorkerDay.get(key) ?? []).map((activity) => ({
+            time: range(activity),
+            task: activity.taskName,
+            recurring: Boolean(activity.recurrenceId),
+            startAt: activity.startAt,
+          })),
+        ]
+          .sort((a, b) => a.startAt - b.startAt)
+          .map(({ startAt: _startAt, ...slot }) => slot);
         return {
           label: format(day, "EEEE d MMMM", { locale: fr }),
           shortLabel: format(day, "EEE d", { locale: fr }),
-          slots: slots.map((activity) => ({
-            time: `${format(new Date(activity.startAt), "HH:mm")} – ${format(new Date(activity.endAt), "HH:mm")}`,
-            task: activity.taskName,
-            recurring: Boolean(activity.recurrenceId),
-          })),
+          slots,
         };
       });
       const hours = days.reduce(
@@ -2553,7 +2569,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       );
       return { worker: `${worker.firstName} ${worker.lastName}`.trim(), days: printableDays, hours };
     },
-    [byWorkerDay, days],
+    [byWorkerDay, absencesByWorkerDay, days],
   );
 
   /**
