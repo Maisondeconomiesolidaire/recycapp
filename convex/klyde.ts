@@ -12,6 +12,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireAnyCrmPermission, requireCrmPermission } from "./lib";
 import { esc, resendSend } from "./emails";
+import { isOnVacation, vintedElapsedMs } from "./lib/klydeVacations";
 import { KLYDE_GENDERS, KLYDE_TAXONOMY, isKlydeTaxonomyChoice, klydeAverageWeightKg, klydeCategories, klydeSubcategories, klydeSubsubcategories } from "./klydeTaxonomy";
 
 const CONDITIONS = [
@@ -811,6 +812,64 @@ export const setActualSalePrice = mutation({
   },
 });
 
+/**
+ * Retour ou remboursement d'une vente.
+ *
+ * Trois situations, qui ne coûtent pas la même chose :
+ * - l'article ne convient pas et l'acheteur paie son retour — ni gain ni perte ;
+ * - l'erreur vient de nous et le retour est à nos frais — le port est à notre
+ *   charge ;
+ * - l'acheteur est remboursé et garde l'article — la somme rendue est perdue.
+ *
+ * Dans les trois cas la vente sort du chiffre d'affaires. Le montant saisi est
+ * ce qui reste réellement à notre charge, et il est ignoré pour un retour aux
+ * frais de l'acheteur, qui ne nous coûte rien.
+ */
+export const setReturn = mutation({
+  args: {
+    id: v.id("klydeItems"),
+    kind: v.union(
+      v.literal("retour_client"),
+      v.literal("retour_vendeur"),
+      v.literal("remboursement"),
+    ),
+    amount: v.optional(v.number()),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, kind, amount, note }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
+      throw new Error("Le montant doit être positif.");
+    }
+    await ctx.db.patch(id, {
+      returnKind: kind,
+      returnAmount: kind === "retour_client" ? undefined : normalizePrice(amount),
+      returnedAt: item.returnedAt ?? Date.now(),
+      returnNote: note?.trim() || undefined,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/** Annulation d'un retour saisi par erreur : la vente réintègre le rapport. */
+export const clearReturn = mutation({
+  args: { id: v.id("klydeItems") },
+  handler: async (ctx, { id }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const item = await ctx.db.get(id);
+    if (!item) throw new Error("Article introuvable.");
+    await ctx.db.patch(id, {
+      returnKind: undefined,
+      returnAmount: undefined,
+      returnedAt: undefined,
+      returnNote: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 /** Compteur Vinted relevé à la vente, modifiable même une fois l'article gagné. */
 export const setViewsAtSale = mutation({
   args: { id: v.id("klydeItems"), viewsAtSale: v.optional(v.number()) },
@@ -1390,13 +1449,80 @@ export const generateTryOn = action({
 
 const VINTED_ALERT_RECIPIENT = "s.maccioni@eco-solidaire.fr";
 const VINTED_ALERT_AFTER_MS = 21 * 24 * 60 * 60 * 1000; // 3 semaines
+
+/* ─── Mode vacances ────────────────────────────────────────────────────────
+ *
+ * Pendant les congés, l'ancienneté des annonces Vinted cesse de courir et
+ * l'alerte des trois semaines ne part pas. Les règles de calcul vivent dans
+ * `lib/klydeVacations.ts`, partagées avec l'application.
+ */
+
+export const vacationState = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, "klyde:stock", "read");
+    const periods = await ctx.db.query("klydeVacations").withIndex("by_startedAt").collect();
+    const now = Date.now();
+    const current = periods.find((period) => period.startedAt <= now && period.endedAt === undefined);
+    return {
+      active: current !== undefined,
+      startedAt: current?.startedAt,
+      note: current?.note,
+      periods: periods
+        .slice()
+        .sort((a, b) => b.startedAt - a.startedAt)
+        .slice(0, 20)
+        .map((period) => ({
+          id: period._id,
+          startedAt: period.startedAt,
+          endedAt: period.endedAt,
+          note: period.note,
+        })),
+    };
+  },
+});
+
+export const startVacation = mutation({
+  args: { note: v.optional(v.string()) },
+  handler: async (ctx, { note }) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const identity = await ctx.auth.getUserIdentity();
+    const periods = await ctx.db.query("klydeVacations").collect();
+    const now = Date.now();
+    // Deux périodes ouvertes se chevaucheraient : la seconde demande est sans
+    // effet plutôt que de créer un historique impossible à relire.
+    if (isOnVacation(periods, now)) return;
+    await ctx.db.insert("klydeVacations", {
+      startedAt: now,
+      note: note?.trim() || undefined,
+      createdByClerkId: identity?.subject,
+      createdAt: now,
+    });
+  },
+});
+
+export const endVacation = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireCrmPermission(ctx, "klyde:stock", "update");
+    const periods = await ctx.db.query("klydeVacations").collect();
+    const now = Date.now();
+    const current = periods.find((period) => period.startedAt <= now && period.endedAt === undefined);
+    if (!current) return;
+    await ctx.db.patch(current._id, { endedAt: now });
+  },
+});
 const KLYD_FROM = "Klyd <no-reply@mesoutils.eco-solidaire.fr>";
 
 /** Articles en vente sur Vinted depuis 3 semaines, non gagnés, sans alerte encore envoyée. */
 export const listVintedAlertCandidates = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const cutoff = Date.now() - VINTED_ALERT_AFTER_MS;
+    const now = Date.now();
+    const periods = await ctx.db.query("klydeVacations").collect();
+    // Pendant les vacances, aucune alerte : prévenir qu'un article traîne alors
+    // que personne n'est là pour le retirer ne sert qu'à encombrer la boîte.
+    if (isOnVacation(periods, now)) return [];
     const items = await ctx.db
       .query("klydeItems")
       .withIndex("by_status")
@@ -1406,7 +1532,9 @@ export const listVintedAlertCandidates = internalQuery({
         (item) =>
           item.vinted === true &&
           item.vintedAt != null &&
-          item.vintedAt <= cutoff &&
+          // L'ancienneté se compte vacances déduites : l'horloge de l'annonce
+          // s'arrête pendant les congés et reprend au retour.
+          vintedElapsedMs(item.vintedAt, periods, now) >= VINTED_ALERT_AFTER_MS &&
           item.status !== "gagne" &&
           item.status !== "archive" &&
           item.archivedAt === undefined &&

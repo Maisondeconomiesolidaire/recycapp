@@ -2209,6 +2209,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const updateActivity = useMutation(api.polyvalents.updateActivity);
   const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
   const setEventWorkers = useMutation(api.polyvalents.setEventWorkers);
+  const createAbsence = useMutation(api.polyvalents.createAbsence);
+  const moveAbsence = useMutation(api.polyvalents.moveAbsence);
+  const removeAbsence = useMutation(api.polyvalents.deleteAbsence);
 
   // Le filtre principal de la page restreint tout le planning à une recyclerie :
   // les tâches à planifier, les salariés proposés et les créneaux affichés.
@@ -2246,6 +2249,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [eventToStaff, setEventToStaff] = useState<PlannerEvent | null>(null);
   const [savingEventTeam, setSavingEventTeam] = useState(false);
+  const [absenceToRemove, setAbsenceToRemove] = useState<PlannerAbsence | null>(null);
   const assignableForEvents = useQuery(
     api.recycappCalendar.assignableWorkers,
     eventToStaff ? {} : "skip",
@@ -2307,6 +2311,48 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     for (const list of map.values()) list.sort((a, b) => a.startAt - b.startAt);
     return map;
   }, [plannerEvents]);
+
+  /** Indisponibilités RH de la semaine : congés, formations, récupérations… */
+  const absences = useQuery(
+    api.polyvalents.listAbsences,
+    canRead
+      ? { from: days[0].getTime(), to: addDays(days[days.length - 1], 1).getTime() }
+      : "skip",
+  );
+
+  const absencesByWorkerDay = useMemo(() => {
+    const map = new Map<string, PlannerAbsence[]>();
+    for (const absence of absences ?? []) {
+      let cursor = startOfDay(new Date(absence.startAt));
+      const last = startOfDay(new Date(absence.endAt));
+      while (cursor <= last) {
+        const key = cellKey(absence.workerId, format(cursor, "yyyy-MM-dd"));
+        const arr = map.get(key) ?? [];
+        arr.push(absence);
+        map.set(key, arr);
+        cursor = addDays(cursor, 1);
+      }
+    }
+    for (const list of map.values()) list.sort((a, b) => a.startAt - b.startAt);
+    return map;
+  }, [absences]);
+
+  /** Jours posés par motif RH sur la semaine : ce que résume chaque carte. */
+  const absenceDaysByKind = useMemo(() => {
+    const weekKeys = new Set(days.map((day) => format(day, "yyyy-MM-dd")));
+    const counts = new Map<string, number>();
+    for (const absence of absences ?? []) {
+      let cursor = startOfDay(new Date(absence.startAt));
+      const last = startOfDay(new Date(absence.endAt));
+      while (cursor <= last) {
+        if (weekKeys.has(format(cursor, "yyyy-MM-dd"))) {
+          counts.set(absence.kind, (counts.get(absence.kind) ?? 0) + 1);
+        }
+        cursor = addDays(cursor, 1);
+      }
+    }
+    return counts;
+  }, [absences, days]);
 
   /** Évènements de la semaine auxquels personne n'est encore affecté. */
   const unstaffedEvents = useMemo(
@@ -2536,7 +2582,29 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       openSlotDraft(workerId, day, drag.taskId);
       return;
     }
+    if (drag.kind === "rh") {
+      // Une indisponibilité vise toujours quelqu'un : la ligne « non affecté »
+      // n'a personne à rendre indisponible.
+      if (!canCreate || !workerId) return;
+      setPlannerError(null);
+      setSlotDraft({ absenceKind: drag.absenceKind, workerId, day, start: "09:00", end: "17:00" });
+      return;
+    }
     if (!canUpdate) return;
+    if (drag.kind === "absence") {
+      if (!workerId) return;
+      const startAt = dayAtClock(day, new Date(drag.absence.startAt));
+      setPlannerError(null);
+      void moveAbsence({
+        id: drag.absence._id,
+        workerId,
+        startAt,
+        endAt: startAt + (drag.absence.endAt - drag.absence.startAt),
+      }).catch((error: unknown) => {
+        setPlannerError(error instanceof Error ? error.message : "Déplacement impossible.");
+      });
+      return;
+    }
     if (drag.kind === "event") {
       // La date d'un évènement appartient au calendrier qui l'a créé : le dépôt
       // ne change que l'équipe. Le jour visé est donc sans effet, seule compte
@@ -2687,6 +2755,36 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
               </div>
             )}
           </div>
+
+          {canCreate ? (
+            <div className="flex items-start gap-3 p-2.5">
+              <span className="w-28 shrink-0 pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                RH
+              </span>
+              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+                {ABSENCE_KINDS.map((entry) => (
+                  <PaletteCard
+                    key={entry.kind}
+                    dotColor={entry.color}
+                    tone={entry.color}
+                    title={entry.label}
+                    hint={`${entry.hint} Glissez-le sur la case d'un salarié.`}
+                    draggable
+                    onDragStart={() => setDragged({ kind: "rh", absenceKind: entry.kind })}
+                    onDragEnd={() => {
+                      setDragged(null);
+                      setHoveredCell(null);
+                    }}
+                    meta={
+                      absenceDaysByKind.get(entry.kind)
+                        ? `${absenceDaysByKind.get(entry.kind)} jour${(absenceDaysByKind.get(entry.kind) ?? 0) > 1 ? "s" : ""} cette semaine`
+                        : "Aucun jour posé"
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {plannerError ? (
@@ -2724,7 +2822,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 days={days}
                 byWorkerDay={byWorkerDay}
                 eventsByWorkerDay={eventsByWorkerDay}
+                absencesByWorkerDay={absencesByWorkerDay}
                 onOpenEvent={canUpdate ? setEventToStaff : undefined}
+                onDeleteAbsence={canDelete ? setAbsenceToRemove : undefined}
                 staffing={staffing}
                 schedules={schedules ?? []}
                 canUpdate={canUpdate}
@@ -2753,7 +2853,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 days={days}
                 byWorkerDay={byWorkerDay}
                 eventsByWorkerDay={eventsByWorkerDay}
+                absencesByWorkerDay={absencesByWorkerDay}
                 onOpenEvent={canUpdate ? setEventToStaff : undefined}
+                onDeleteAbsence={canDelete ? setAbsenceToRemove : undefined}
                 staffing={staffing}
                 schedules={schedules ?? []}
                 canUpdate={canUpdate}
@@ -2799,19 +2901,54 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
         }}
       />
 
+      <ConfirmDialog
+        open={absenceToRemove !== null}
+        onClose={() => setAbsenceToRemove(null)}
+        onConfirm={() => {
+          if (!absenceToRemove) return;
+          setPlannerError(null);
+          void removeAbsence({ id: absenceToRemove._id }).catch((error: unknown) => {
+            setPlannerError(error instanceof Error ? error.message : "Suppression impossible.");
+          });
+          setAbsenceToRemove(null);
+        }}
+        title="Retirer cette indisponibilité ?"
+        description={
+          absenceToRemove
+            ? `${ABSENCE_BY_KIND.get(absenceToRemove.kind)?.label ?? absenceToRemove.kind} de ${absenceToRemove.workerName}, le ${format(new Date(absenceToRemove.startAt), "EEEE d MMMM", { locale: fr })}.`
+            : ""
+        }
+        confirmLabel="Retirer"
+      />
+
       {slotDraft ? (
         <SlotTimingModal
           draft={slotDraft}
-          taskName={taskById.get(String(slotDraft.taskId))?.name ?? "Tâche"}
+          taskName={
+            slotDraft.absenceKind
+              ? ABSENCE_BY_KIND.get(slotDraft.absenceKind)?.label ?? "Indisponibilité"
+              : taskById.get(String(slotDraft.taskId))?.name ?? "Tâche"
+          }
           workerName={workerName(rows, slotDraft.workerId)}
           onClose={() => setSlotDraft(null)}
           onConfirm={async (start, end) => {
-            await createActivity({
-              taskId: slotDraft.taskId,
-              workerId: slotDraft.workerId ?? undefined,
-              startAt: dayAtTime(slotDraft.day, start),
-              endAt: dayAtTime(slotDraft.day, end),
-            });
+            const startAt = dayAtTime(slotDraft.day, start);
+            const endAt = dayAtTime(slotDraft.day, end);
+            if (slotDraft.absenceKind && slotDraft.workerId) {
+              await createAbsence({
+                workerId: slotDraft.workerId,
+                kind: slotDraft.absenceKind,
+                startAt,
+                endAt,
+              });
+            } else if (slotDraft.taskId) {
+              await createActivity({
+                taskId: slotDraft.taskId,
+                workerId: slotDraft.workerId ?? undefined,
+                startAt,
+                endAt,
+              });
+            }
             setSlotDraft(null);
           }}
         />
@@ -2847,6 +2984,29 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   );
 }
 
+/** Indisponibilité RH d'un salarié, posée sur la grille. */
+type PlannerAbsence = NonNullable<
+  ReturnType<typeof useQuery<typeof api.polyvalents.listAbsences>>
+>[number];
+
+type AbsenceKind = PlannerAbsence["kind"];
+
+/**
+ * Motifs RH, dans l'ordre où ils se posent au planning.
+ *
+ * Chacun a sa couleur : sur la grille, une indisponibilité doit se distinguer
+ * d'un créneau de travail au premier coup d'œil, et les motifs entre eux aussi.
+ */
+const ABSENCE_KINDS: Array<{ kind: AbsenceKind; label: string; color: string; hint: string }> = [
+  { kind: "conge", label: "Congé", color: "#2563eb", hint: "Congé payé ou sans solde." },
+  { kind: "absence", label: "Absence", color: "#dc2626", hint: "Absence non prévue (maladie, imprévu)." },
+  { kind: "formation", label: "Formation", color: "#7c3aed", hint: "Formation suivie hors poste." },
+  { kind: "pmsmp", label: "PMSMP", color: "#0891b2", hint: "Période de mise en situation en milieu professionnel." },
+  { kind: "recup", label: "Récup", color: "#65a30d", hint: "Récupération d'heures." },
+];
+
+const ABSENCE_BY_KIND = new Map(ABSENCE_KINDS.map((entry) => [entry.kind, entry]));
+
 /** Évènement à staffer, issu de l'un ou l'autre des deux calendriers. */
 type PlannerEvent = NonNullable<
   ReturnType<typeof useQuery<typeof api.polyvalents.listPlannerEvents>>
@@ -2867,11 +3027,17 @@ type PlannerDrag =
       event: PlannerEvent;
       /** Salarié depuis la case duquel on glisse : il cède sa place à la cible. */
       fromWorkerId?: Id<"polyvalentWorkers">;
-    };
+    }
+  | { kind: "rh"; absenceKind: AbsenceKind }
+  | { kind: "absence"; absence: PlannerAbsence };
 
-/** Tâche déposée sur une case, en attente de ses horaires. */
+/**
+ * Ce qu'on vient de déposer sur une case, en attente de ses horaires : une
+ * tâche à planifier, ou une indisponibilité RH à poser.
+ */
 type SlotDraft = {
-  taskId: Id<"polyvalentTasks">;
+  taskId?: Id<"polyvalentTasks">;
+  absenceKind?: AbsenceKind;
   workerId: Id<"polyvalentWorkers"> | null;
   day: Date;
   start: string;
@@ -3169,7 +3335,9 @@ function PlannerRow({
   days,
   byWorkerDay,
   eventsByWorkerDay,
+  absencesByWorkerDay,
   onOpenEvent,
+  onDeleteAbsence,
   staffing,
   schedules,
   canUpdate,
@@ -3187,8 +3355,10 @@ function PlannerRow({
   days: Date[];
   byWorkerDay: Map<string, DisplayActivity[]>;
   eventsByWorkerDay: Map<string, PlannerEvent[]>;
+  absencesByWorkerDay: Map<string, PlannerAbsence[]>;
   /** Absent sans droit de modification : l'affectation serait refusée. */
   onOpenEvent?: (event: PlannerEvent) => void;
+  onDeleteAbsence?: (absence: PlannerAbsence) => void;
   staffing: Map<string, Staffing>;
   schedules: ScheduleList;
   canUpdate: boolean;
@@ -3225,6 +3395,7 @@ function PlannerRow({
         const key = cellKey(workerId, dayKey);
         const cellActivities = byWorkerDay.get(key) ?? [];
         const cellEvents = eventsByWorkerDay.get(key) ?? [];
+        const cellAbsences = absencesByWorkerDay.get(key) ?? [];
         const available = workerId
           ? schedules
               .find((schedule) => schedule.workerId === workerId)
@@ -3252,6 +3423,30 @@ function PlannerRow({
                   : ""
             }`}
           >
+            {cellAbsences.map((absence) => {
+              const entry = ABSENCE_BY_KIND.get(absence.kind);
+              return (
+                <button
+                  key={absence._id}
+                  type="button"
+                  draggable={Boolean(onDeleteAbsence)}
+                  onDragStart={() => {
+                    if (!onDeleteAbsence) return;
+                    onDragItem({ kind: "absence", absence });
+                  }}
+                  onClick={() => onDeleteAbsence?.(absence)}
+                  disabled={!onDeleteAbsence}
+                  className="block w-full rounded-lg px-2 py-1 text-left text-[11px] font-semibold leading-tight text-white shadow-sm transition hover:brightness-110 disabled:cursor-default"
+                  style={{ backgroundColor: entry?.color ?? "#475569" }}
+                  title={`${entry?.label ?? absence.kind} — cliquez pour retirer, glissez pour déplacer`}
+                >
+                  <span className="block truncate">{entry?.label ?? absence.kind}</span>
+                  <span className="block tabular-nums opacity-85">
+                    {format(new Date(absence.startAt), "HH:mm")} – {format(new Date(absence.endAt), "HH:mm")}
+                  </span>
+                </button>
+              );
+            })}
             {cellActivities.map((activity) => {
               const crew = staffing.get(
                 `${activity.taskId}-${activity.startAt}-${activity.endAt}`,

@@ -2081,6 +2081,25 @@ export default defineSchema(
     // Nombre de fois où l'annonce Vinted a été prolongée après l'alerte de 3 semaines.
     vintedExtensionCount: v.optional(v.number()),
     vintedLastExtendedAt: v.optional(v.number()),
+    /**
+     * Vente annulée : l'article revient, ou l'acheteur est remboursé.
+     *
+     * - `retour_client` : retour aux frais de l'acheteur — ni gain ni perte ;
+     * - `retour_vendeur` : retour à nos frais (erreur de notre côté) — le port
+     *   reste à notre charge ;
+     * - `remboursement` : somme rendue intégralement, l'acheteur garde l'article.
+     *
+     * Dans tous les cas la vente sort du chiffre d'affaires ; `returnAmount`
+     * porte ce qui reste réellement à notre charge (nul pour `retour_client`).
+     */
+    returnKind: v.optional(v.union(
+      v.literal("retour_client"),
+      v.literal("retour_vendeur"),
+      v.literal("remboursement"),
+    )),
+    returnAmount: v.optional(v.number()),
+    returnedAt: v.optional(v.number()),
+    returnNote: v.optional(v.string()),
     /** Date historique d'encaissement, conservée pour les anciens articles. */
     soldAt: v.optional(v.number()),
     /**
@@ -2130,6 +2149,26 @@ export default defineSchema(
     .index("by_sku", ["sku"])
     .index("by_boutiquePublished", ["publishedOnBoutique"])
     .index("by_featured", ["featured"]),
+
+  /**
+   * Mode vacances de Klyd : la boutique Vinted tourne au ralenti.
+   *
+   * Une ligne par période, ouverte tant que `endedAt` est absent. Pendant une
+   * période, l'ancienneté des annonces cesse de courir et l'alerte des trois
+   * semaines ne part pas : rien ne sert de prévenir qu'un article traîne quand
+   * personne n'est là pour le retirer.
+   *
+   * L'historique est conservé plutôt que de décaler les dates de mise en ligne :
+   * une date de publication déplacée ne se retrouve plus, et deux congés
+   * successifs deviendraient impossibles à démêler.
+   */
+  klydeVacations: defineTable({
+    startedAt: v.number(),
+    endedAt: v.optional(v.number()),
+    note: v.optional(v.string()),
+    createdByClerkId: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_startedAt", ["startedAt"]),
 
   /** Visuels éditoriaux du header de la boutique Klyde. */
   klydeStorefront: defineTable({
@@ -2926,6 +2965,32 @@ export default defineSchema(
   })
     .index("by_originalStartAt", ["originalStartAt"])
     .index("by_recurrenceId_and_originalStartAt", ["recurrenceId", "originalStartAt"]),
+
+  /**
+   * Indisponibilités RH d'un salarié : ce qui l'empêche d'être planifié.
+   *
+   * Elles vivent à côté des créneaux de tâches plutôt que dedans : une absence
+   * n'est pas un travail, elle ne compte dans aucune charge et ne réclame aucun
+   * effectif. Les horaires sont stockés comme ceux d'un créneau, pour qu'une
+   * demi-journée reste possible.
+   */
+  polyvalentAbsences: defineTable({
+    workerId: v.id("polyvalentWorkers"),
+    kind: v.union(
+      v.literal("conge"),
+      v.literal("absence"),
+      v.literal("formation"),
+      v.literal("pmsmp"),
+      v.literal("recup"),
+    ),
+    startAt: v.number(),
+    endAt: v.number(),
+    note: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_startAt", ["startAt"])
+    .index("by_worker", ["workerId"]),
 
   polyvalentActivities: defineTable({
     taskId: v.id("polyvalentTasks"),
