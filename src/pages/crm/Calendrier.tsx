@@ -2537,6 +2537,28 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       return;
     }
     if (!canUpdate) return;
+    if (drag.kind === "event") {
+      // La date d'un évènement appartient au calendrier qui l'a créé : le dépôt
+      // ne change que l'équipe. Le jour visé est donc sans effet, seule compte
+      // la ligne — et « non affecté » retire le salarié qu'on en sort.
+      const current = drag.event.workerIds;
+      const without = current.filter((id) => id !== drag.fromWorkerId);
+      const next = workerId
+        ? without.includes(workerId)
+          ? current
+          : [...without, workerId]
+        : without;
+      if (next.length === current.length && next.every((id, index) => id === current[index])) return;
+      setPlannerError(null);
+      void setEventWorkers({
+        source: drag.event.source,
+        eventId: drag.event.id,
+        workerIds: next,
+      }).catch((error: unknown) => {
+        setPlannerError(error instanceof Error ? error.message : "Affectation impossible.");
+      });
+      return;
+    }
     // Déplacement : on garde l'heure et la durée, on change de jour et de salarié.
     const startAt = dayAtClock(day, new Date(drag.startAt));
     setPlannerError(null);
@@ -2655,6 +2677,11 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                     key={`${event.source}-${event.id}`}
                     event={event}
                     onClick={canUpdate ? () => setEventToStaff(event) : undefined}
+                    onDragStart={canUpdate ? () => setDragged({ kind: "event", event }) : undefined}
+                    onDragEnd={() => {
+                      setDragged(null);
+                      setHoveredCell(null);
+                    }}
                   />
                 ))}
               </div>
@@ -2705,7 +2732,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 dragging={dragged !== null}
                 onHover={setHoveredCell}
                 onDrop={handleDrop}
-                onDragActivity={setDragged}
+                onDragItem={setDragged}
                 onOpenActivity={(activity) =>
                   setActivityToEdit(buildEventData(activity, occurrenceGroups, taskById))
                 }
@@ -2734,7 +2761,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 dragging={dragged !== null}
                 onHover={setHoveredCell}
                 onDrop={handleDrop}
-                onDragActivity={setDragged}
+                onDragItem={setDragged}
                 onOpenActivity={(activity) =>
                   setActivityToEdit(buildEventData(activity, occurrenceGroups, taskById))
                 }
@@ -2834,6 +2861,12 @@ type PlannerDrag =
       taskId: Id<"polyvalentTasks">;
       startAt: number;
       endAt: number;
+    }
+  | {
+      kind: "event";
+      event: PlannerEvent;
+      /** Salarié depuis la case duquel on glisse : il cède sa place à la cible. */
+      fromWorkerId?: Id<"polyvalentWorkers">;
     };
 
 /** Tâche déposée sur une case, en attente de ses horaires. */
@@ -3006,7 +3039,17 @@ function TaskChip({
  * évènement est soit pourvu, soit à compléter. La piste est donc pleine ou
  * vide, et le clic ouvre le sélecteur de salariés.
  */
-function EventChip({ event, onClick }: { event: PlannerEvent; onClick?: () => void }) {
+function EventChip({
+  event,
+  onClick,
+  onDragStart,
+  onDragEnd,
+}: {
+  event: PlannerEvent;
+  onClick?: () => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+}) {
   const staffed = event.workerIds.length > 0;
   const tone = staffed ? "#059669" : "#d97706";
 
@@ -3017,10 +3060,13 @@ function EventChip({ event, onClick }: { event: PlannerEvent; onClick?: () => vo
       tone={tone}
       ratio={staffed ? 1 : 0}
       onClick={onClick}
+      draggable={Boolean(onDragStart)}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       hint={
         staffed
-          ? `${event.title} — ${event.workerNames.join(", ")}`
-          : `${event.title} — aucun salarié mobilisé, cliquez pour compléter`
+          ? `${event.title} — ${event.workerNames.join(", ")} · glissez-le sur un salarié pour l'y ajouter`
+          : `${event.title} — aucun salarié mobilisé, glissez-le sur un salarié ou cliquez pour compléter`
       }
       meta={
         <>
@@ -3131,7 +3177,7 @@ function PlannerRow({
   dragging,
   onHover,
   onDrop,
-  onDragActivity,
+  onDragItem,
   onOpenActivity,
   onPrint,
 }: {
@@ -3150,7 +3196,7 @@ function PlannerRow({
   dragging: boolean;
   onHover: (key: string | null) => void;
   onDrop: (workerId: Id<"polyvalentWorkers"> | null, day: Date) => void;
-  onDragActivity: (drag: PlannerDrag) => void;
+  onDragItem: (drag: PlannerDrag) => void;
   onOpenActivity: (activity: DisplayActivity) => void;
   /** Absent sur la ligne « non affecté » : elle ne se distribue à personne. */
   onPrint?: () => void;
@@ -3218,7 +3264,7 @@ function PlannerRow({
                   draggable={canUpdate && !activity.recurrenceId}
                   onDragStart={() => {
                     if (!canUpdate || activity.recurrenceId) return;
-                    onDragActivity({
+                    onDragItem({
                       kind: "activity",
                       activityId: activity._id,
                       taskId: activity.taskId,
@@ -3251,6 +3297,11 @@ function PlannerRow({
                 <button
                   key={`${event.source}-${event.id}`}
                   type="button"
+                  draggable={Boolean(onOpenEvent)}
+                  onDragStart={() => {
+                    if (!onOpenEvent) return;
+                    onDragItem({ kind: "event", event, fromWorkerId: workerId ?? undefined });
+                  }}
                   onClick={() => onOpenEvent?.(event)}
                   disabled={!onOpenEvent}
                   className={`block w-full rounded-lg border border-dashed px-2 py-1 text-left text-[11px] font-semibold leading-tight transition disabled:cursor-default ${
@@ -3260,8 +3311,8 @@ function PlannerRow({
                   }`}
                   title={
                     unstaffed
-                      ? `${event.title} — aucun salarié mobilisé, cliquez pour compléter`
-                      : `${event.title} — ${event.workerNames.join(", ")}`
+                      ? `${event.title} — aucun salarié mobilisé, glissez-le sur un salarié ou cliquez pour compléter`
+                      : `${event.title} — ${event.workerNames.join(", ")} · glissez-le vers un autre salarié, ou vers « Non affecté » pour l'en retirer`
                   }
                 >
                   <span className="flex min-w-0 items-center gap-1">
