@@ -25,11 +25,12 @@ import { GeneralCalendar, ResourceCalendar } from "./Calendrier";
 
 type Tab = "planning" | "ouvriers" | "taches";
 /**
- * Deux lectures du même planning : « Général » montre ce qui a une heure fixe
- * sur une grille horaire (tâches récurrentes, créneaux ponctuels, demandes déjà
- * datées), « Planning » montre qui fait quoi, salarié par salarié.
+ * Trois lectures du même planning : « Général » montre sur une grille horaire
+ * tout ce qui a une date — tâches récurrentes, créneaux ponctuels, demandes
+ * planifiées et évènements ; « Planning » montre qui fait quoi, salarié par
+ * salarié ; « RH » pose les indisponibilités sur la même grille.
  */
-type PlanningView = "general" | "planning";
+type PlanningView = "general" | "planning" | "rh";
 
 /**
  * Recyclerie couverte par cet espace. La Recyclerie 76 sera servie par un
@@ -123,6 +124,7 @@ export function Taches() {
               items={[
                 { key: "general", label: "Général" },
                 { key: "planning", label: "Planning" },
+                { key: "rh", label: "RH" },
               ]}
               value={planningView}
               onChange={setPlanningView}
@@ -130,7 +132,10 @@ export function Taches() {
             {planningView === "general" ? (
               <GeneralCalendar siteFilter={GESTION_SITE} />
             ) : (
-              <ResourceCalendar siteFilter={GESTION_SITE} />
+              <ResourceCalendar
+                siteFilter={GESTION_SITE}
+                mode={planningView === "rh" ? "rh" : "taches"}
+              />
             )}
           </>
         ) : tab === "ouvriers" ? (

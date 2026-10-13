@@ -2273,6 +2273,18 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
       : "skip",
   );
 
+  /**
+   * Évènements des deux calendriers (Recyclerie et espace partagé de Mes
+   * Outils). Ils se placent tout seuls, d'après leurs dates de début et de fin
+   * saisies à la création : rien à reporter au planning.
+   */
+  const calendarEvents = useQuery(
+    api.polyvalents.listPlannerEvents,
+    canRead
+      ? { from: days[0].getTime(), to: addDays(days[days.length - 1], 1).getTime() }
+      : "skip",
+  );
+
   const recurrenceExceptions = useQuery(
     api.polyvalents.listRecurrenceExceptions,
     canRead ? { startAt: days[0].getTime(), endAt: addDays(days[days.length - 1], 1).getTime() } : "skip",
@@ -2386,8 +2398,18 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
       resizable: false,
     } satisfies ReuiCalendarEvent<PlannerEventData>));
 
-    return [...activityEvents, ...requestEvents];
-  }, [byDay, taskById, canUpdate, foregroundActivityId, scheduledRequests]);
+    const eventEntries = (calendarEvents ?? []).map((event) => ({
+      id: `event-${event.source}-${event.id}`,
+      title: event.title,
+      start: new Date(event.startAt),
+      end: new Date(event.endAt),
+      color: "#d97706",
+      draggable: false,
+      resizable: false,
+    } satisfies ReuiCalendarEvent<PlannerEventData>));
+
+    return [...activityEvents, ...requestEvents, ...eventEntries];
+  }, [byDay, taskById, canUpdate, foregroundActivityId, scheduledRequests, calendarEvents]);
 
   if (!canRead) {
     return (
@@ -2488,7 +2510,8 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden text-left leading-tight text-[var(--foreground)]">
                   <span className="truncate font-bold">{occurrence.event.title}</span>
                   <span className="text-[10px] tabular-nums opacity-80">
-                    {format(occurrence.start, "HH:mm")} · demande planifiée
+                    {format(occurrence.start, "HH:mm")} – {format(occurrence.end, "HH:mm")} ·{" "}
+                    {String(occurrence.event.id).startsWith("event-") ? "évènement" : "demande planifiée"}
                   </span>
                 </span>
               );
@@ -2583,7 +2606,18 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
  * (salarié × jour) voulue ; les horaires se choisissent ensuite. Une tâche
  * déjà posée se déplace de la même façon, en conservant sa durée.
  */
-export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
+export function ResourceCalendar({
+  siteFilter,
+  mode = "taches",
+}: {
+  siteFilter: Site | null;
+  /**
+   * « taches » planifie le travail, « rh » pose les indisponibilités. Deux
+   * onglets, une seule grille : réunir les deux bandeaux obligeait à chercher
+   * la bonne carte au milieu de vingt-quatre.
+   */
+  mode?: "taches" | "rh";
+}) {
   const access = useCrmAccess();
   const canRead = canAccess(access, "agents-polyvalents", "read");
   const canCreate = canAccess(access, "agents-polyvalents", "create");
@@ -2610,7 +2644,6 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const createActivity = useMutation(api.polyvalents.createActivity);
   const updateActivity = useMutation(api.polyvalents.updateActivity);
   const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
-  const setEventWorkers = useMutation(api.polyvalents.setEventWorkers);
   const createAbsence = useMutation(api.polyvalents.createAbsence);
   const moveAbsence = useMutation(api.polyvalents.moveAbsence);
   const removeAbsence = useMutation(api.polyvalents.deleteAbsence);
@@ -2649,14 +2682,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
   const [slotDraft, setSlotDraft] = useState<SlotDraft | null>(null);
   const [plannerError, setPlannerError] = useState<string | null>(null);
-  const [eventToStaff, setEventToStaff] = useState<PlannerEvent | null>(null);
-  const [savingEventTeam, setSavingEventTeam] = useState(false);
   const [absenceToRemove, setAbsenceToRemove] = useState<PlannerAbsence | null>(null);
-  const assignableForEvents = useQuery(
-    api.recycappCalendar.assignableWorkers,
-    eventToStaff ? {} : "skip",
-  );
-
   useEffect(() => {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
   }, [canCreate, ensurePlannerTasks, siteFilter]);
@@ -2675,91 +2701,6 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const excludedOccurrences = useMemo(
     () => new Set((recurrenceExceptions ?? []).map((item) => `${item.recurrenceId}:${item.originalStartAt}`)),
     [recurrenceExceptions],
-  );
-
-  /**
-   * Évènements des deux calendriers (Recyclerie et espace partagé de Mes
-   * Outils) sur la semaine affichée : c'est ici qu'on leur affecte une équipe.
-   */
-  const plannerEvents = useQuery(
-    api.polyvalents.listPlannerEvents,
-    canRead
-      ? { from: days[0].getTime(), to: addDays(days[days.length - 1], 1).getTime() }
-      : "skip",
-  );
-
-  /** Évènements par case, dupliqués sur chaque jour couvert et chaque salarié. */
-  const eventsByWorkerDay = useMemo(() => {
-    const map = new Map<string, PlannerEvent[]>();
-    for (const event of plannerEvents ?? []) {
-      let cursor = startOfDay(new Date(event.startAt));
-      const last = startOfDay(new Date(event.endAt));
-      while (cursor <= last) {
-        const dayKey = format(cursor, "yyyy-MM-dd");
-        // Sans salarié mobilisé, l'évènement se range dans « non affecté » :
-        // il doit rester sous les yeux tant que personne n'y est.
-        const owners: Array<Id<"polyvalentWorkers"> | null> = event.workerIds.length
-          ? event.workerIds
-          : [null];
-        for (const owner of owners) {
-          const key = cellKey(owner, dayKey);
-          const arr = map.get(key) ?? [];
-          arr.push(event);
-          map.set(key, arr);
-        }
-        cursor = addDays(cursor, 1);
-      }
-    }
-    for (const list of map.values()) list.sort((a, b) => a.startAt - b.startAt);
-    return map;
-  }, [plannerEvents]);
-
-  /** Indisponibilités RH de la semaine : congés, formations, récupérations… */
-  const absences = useQuery(
-    api.polyvalents.listAbsences,
-    canRead
-      ? { from: days[0].getTime(), to: addDays(days[days.length - 1], 1).getTime() }
-      : "skip",
-  );
-
-  const absencesByWorkerDay = useMemo(() => {
-    const map = new Map<string, PlannerAbsence[]>();
-    for (const absence of absences ?? []) {
-      let cursor = startOfDay(new Date(absence.startAt));
-      const last = startOfDay(new Date(absence.endAt));
-      while (cursor <= last) {
-        const key = cellKey(absence.workerId, format(cursor, "yyyy-MM-dd"));
-        const arr = map.get(key) ?? [];
-        arr.push(absence);
-        map.set(key, arr);
-        cursor = addDays(cursor, 1);
-      }
-    }
-    for (const list of map.values()) list.sort((a, b) => a.startAt - b.startAt);
-    return map;
-  }, [absences]);
-
-  /** Jours posés par motif RH sur la semaine : ce que résume chaque carte. */
-  const absenceDaysByKind = useMemo(() => {
-    const weekKeys = new Set(days.map((day) => format(day, "yyyy-MM-dd")));
-    const counts = new Map<string, number>();
-    for (const absence of absences ?? []) {
-      let cursor = startOfDay(new Date(absence.startAt));
-      const last = startOfDay(new Date(absence.endAt));
-      while (cursor <= last) {
-        if (weekKeys.has(format(cursor, "yyyy-MM-dd"))) {
-          counts.set(absence.kind, (counts.get(absence.kind) ?? 0) + 1);
-        }
-        cursor = addDays(cursor, 1);
-      }
-    }
-    return counts;
-  }, [absences, days]);
-
-  /** Évènements de la semaine auxquels personne n'est encore affecté. */
-  const unstaffedEvents = useMemo(
-    () => (plannerEvents ?? []).filter((event) => event.workerIds.length === 0),
-    [plannerEvents],
   );
 
   // Une activité s'affiche sur chaque jour compris entre sa date de début et sa
@@ -2864,6 +2805,48 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     return hours;
   }, [byDay, days]);
 
+  /** Indisponibilités RH de la semaine : congés, formations, récupérations… */
+  const absences = useQuery(
+    api.polyvalents.listAbsences,
+    canRead
+      ? { from: days[0].getTime(), to: addDays(days[days.length - 1], 1).getTime() }
+      : "skip",
+  );
+
+  const absencesByWorkerDay = useMemo(() => {
+    const map = new Map<string, PlannerAbsence[]>();
+    for (const absence of absences ?? []) {
+      let cursor = startOfDay(new Date(absence.startAt));
+      const last = startOfDay(new Date(absence.endAt));
+      while (cursor <= last) {
+        const key = cellKey(absence.workerId, format(cursor, "yyyy-MM-dd"));
+        const arr = map.get(key) ?? [];
+        arr.push(absence);
+        map.set(key, arr);
+        cursor = addDays(cursor, 1);
+      }
+    }
+    for (const list of map.values()) list.sort((a, b) => a.startAt - b.startAt);
+    return map;
+  }, [absences]);
+
+  /** Jours posés par motif RH sur la semaine : ce que résume chaque carte. */
+  const absenceDaysByKind = useMemo(() => {
+    const weekKeys = new Set(days.map((day) => format(day, "yyyy-MM-dd")));
+    const counts = new Map<string, number>();
+    for (const absence of absences ?? []) {
+      let cursor = startOfDay(new Date(absence.startAt));
+      const last = startOfDay(new Date(absence.endAt));
+      while (cursor <= last) {
+        if (weekKeys.has(format(cursor, "yyyy-MM-dd"))) {
+          counts.set(absence.kind, (counts.get(absence.kind) ?? 0) + 1);
+        }
+        cursor = addDays(cursor, 1);
+      }
+    }
+    return counts;
+  }, [absences, days]);
+
   /**
    * Un même créneau peut porter plusieurs salariés : la fiche récapitulative
    * les affiche ensemble, comme avant le passage à la grille par salarié.
@@ -2922,9 +2905,9 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
     () =>
       days.some((day) => {
         const key = cellKey(null, format(day, "yyyy-MM-dd"));
-        return (byWorkerDay.get(key) ?? []).length > 0 || (eventsByWorkerDay.get(key) ?? []).length > 0;
+        return (byWorkerDay.get(key) ?? []).length > 0 || (absencesByWorkerDay.get(key) ?? []).length > 0;
       }),
-    [days, byWorkerDay, eventsByWorkerDay],
+    [days, byWorkerDay, absencesByWorkerDay],
   );
 
   const periodLabel = `${format(weekStart, "d MMMM", { locale: fr })} au ${format(addDays(weekStart, 6), "d MMMM yyyy", { locale: fr })}`;
@@ -3023,28 +3006,6 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
       });
       return;
     }
-    if (drag.kind === "event") {
-      // La date d'un évènement appartient au calendrier qui l'a créé : le dépôt
-      // ne change que l'équipe. Le jour visé est donc sans effet, seule compte
-      // la ligne — et « non affecté » retire le salarié qu'on en sort.
-      const current = drag.event.workerIds;
-      const without = current.filter((id) => id !== drag.fromWorkerId);
-      const next = workerId
-        ? without.includes(workerId)
-          ? current
-          : [...without, workerId]
-        : without;
-      if (next.length === current.length && next.every((id, index) => id === current[index])) return;
-      setPlannerError(null);
-      void setEventWorkers({
-        source: drag.event.source,
-        eventId: drag.event.id,
-        workerIds: next,
-      }).catch((error: unknown) => {
-        setPlannerError(error instanceof Error ? error.message : "Affectation impossible.");
-      });
-      return;
-    }
     // Déplacement : on garde l'heure et la durée, on change de jour et de salarié.
     const startAt = dayAtClock(day, new Date(drag.startAt));
     setPlannerError(null);
@@ -3114,7 +3075,7 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             qui défile horizontalement : wrappées, dix-neuf tâches repoussaient
             la grille hors de l'écran. */}
         <div className="shrink-0 divide-y divide-[var(--crm-border)] rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
-          {canCreate ? (
+          {canCreate && mode === "taches" ? (
             <div className="flex items-start gap-3 p-2.5">
               <div className="flex w-28 shrink-0 flex-col gap-1 pt-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -3147,37 +3108,10 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
             </div>
           ) : null}
 
-          <div className="flex items-start gap-3 p-2.5">
-            <span className="w-28 shrink-0 pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Évènements{" "}
-              <span className={unstaffedEvents.length > 0 ? "font-bold text-amber-400" : "text-zinc-600"}>
-                {unstaffedEvents.length > 0 ? unstaffedEvents.length : (plannerEvents ?? []).length}
-              </span>
-            </span>
-            {(plannerEvents ?? []).length === 0 ? (
-              <span className="py-3 text-sm text-zinc-500">Aucun évènement cette semaine.</span>
-            ) : (
-              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
-                {(plannerEvents ?? []).map((event) => (
-                  <EventChip
-                    key={`${event.source}-${event.id}`}
-                    event={event}
-                    onClick={canUpdate ? () => setEventToStaff(event) : undefined}
-                    onDragStart={canUpdate ? () => setDragged({ kind: "event", event }) : undefined}
-                    onDragEnd={() => {
-                      setDragged(null);
-                      setHoveredCell(null);
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {canCreate ? (
+          {canCreate && mode === "rh" ? (
             <div className="flex items-start gap-3 p-2.5">
               <span className="w-28 shrink-0 pt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                RH
+                Motifs
               </span>
               <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
                 {ABSENCE_KINDS.map((entry) => (
@@ -3239,10 +3173,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 workerId={worker._id}
                 days={days}
                 byWorkerDay={byWorkerDay}
-                eventsByWorkerDay={eventsByWorkerDay}
                 absencesByWorkerDay={absencesByWorkerDay}
-                onOpenEvent={canUpdate ? setEventToStaff : undefined}
-                onDeleteAbsence={canDelete ? setAbsenceToRemove : undefined}
+                onDeleteAbsence={canDelete && mode === "rh" ? setAbsenceToRemove : undefined}
                 staffing={staffing}
                 schedules={schedules ?? []}
                 canUpdate={canUpdate}
@@ -3270,10 +3202,8 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
                 workerId={null}
                 days={days}
                 byWorkerDay={byWorkerDay}
-                eventsByWorkerDay={eventsByWorkerDay}
                 absencesByWorkerDay={absencesByWorkerDay}
-                onOpenEvent={canUpdate ? setEventToStaff : undefined}
-                onDeleteAbsence={canDelete ? setAbsenceToRemove : undefined}
+                onDeleteAbsence={canDelete && mode === "rh" ? setAbsenceToRemove : undefined}
                 staffing={staffing}
                 schedules={schedules ?? []}
                 canUpdate={canUpdate}
@@ -3298,26 +3228,6 @@ export function ResourceCalendar({ siteFilter }: { siteFilter: Site | null }) {
           </div>
         </div>
       </div>
-
-      <WorkerPickerModal
-        open={eventToStaff !== null}
-        onClose={() => setEventToStaff(null)}
-        workers={assignableForEvents}
-        value={eventToStaff?.workerIds ?? []}
-        hours={eventToStaff ? (eventToStaff.endAt - eventToStaff.startAt) / 3_600_000 : 0}
-        saving={savingEventTeam}
-        onValidate={(next) => {
-          if (!eventToStaff) return;
-          setSavingEventTeam(true);
-          setPlannerError(null);
-          void setEventWorkers({ source: eventToStaff.source, eventId: eventToStaff.id, workerIds: next })
-            .then(() => setEventToStaff(null))
-            .catch((error: unknown) => {
-              setPlannerError(error instanceof Error ? error.message : "Affectation impossible.");
-            })
-            .finally(() => setSavingEventTeam(false));
-        }}
-      />
 
       <ConfirmDialog
         open={absenceToRemove !== null}
@@ -3425,11 +3335,6 @@ const ABSENCE_KINDS: Array<{ kind: AbsenceKind; label: string; color: string; hi
 
 const ABSENCE_BY_KIND = new Map(ABSENCE_KINDS.map((entry) => [entry.kind, entry]));
 
-/** Évènement à staffer, issu de l'un ou l'autre des deux calendriers. */
-type PlannerEvent = NonNullable<
-  ReturnType<typeof useQuery<typeof api.polyvalents.listPlannerEvents>>
->[number];
-
 /** Ce qu'on est en train de glisser : une tâche du bandeau, ou un créneau posé. */
 type PlannerDrag =
   | { kind: "task"; taskId: Id<"polyvalentTasks"> }
@@ -3439,12 +3344,6 @@ type PlannerDrag =
       taskId: Id<"polyvalentTasks">;
       startAt: number;
       endAt: number;
-    }
-  | {
-      kind: "event";
-      event: PlannerEvent;
-      /** Salarié depuis la case duquel on glisse : il cède sa place à la cible. */
-      fromWorkerId?: Id<"polyvalentWorkers">;
     }
   | { kind: "rh"; absenceKind: AbsenceKind }
   | { kind: "absence"; absence: PlannerAbsence };
@@ -3616,56 +3515,6 @@ function TaskChip({
   );
 }
 
-/**
- * Évènement du bandeau, présenté comme une tâche : même carte, même piste.
- *
- * Son avancement ne se mesure pas en heures mais en équipe affectée — un
- * évènement est soit pourvu, soit à compléter. La piste est donc pleine ou
- * vide, et le clic ouvre le sélecteur de salariés.
- */
-function EventChip({
-  event,
-  onClick,
-  onDragStart,
-  onDragEnd,
-}: {
-  event: PlannerEvent;
-  onClick?: () => void;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
-}) {
-  const staffed = event.workerIds.length > 0;
-  const tone = staffed ? "#059669" : "#d97706";
-
-  return (
-    <PaletteCard
-      dotColor={tone}
-      title={event.title}
-      tone={tone}
-      ratio={staffed ? 1 : 0}
-      onClick={onClick}
-      draggable={Boolean(onDragStart)}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      hint={
-        staffed
-          ? `${event.title} — ${event.workerNames.join(", ")} · glissez-le sur un salarié pour l'y ajouter`
-          : `${event.title} — aucun salarié mobilisé, glissez-le sur un salarié ou cliquez pour compléter`
-      }
-      meta={
-        <>
-          {format(new Date(event.startAt), "EEE d", { locale: fr })} ·{" "}
-          {format(new Date(event.startAt), "HH:mm")}–{format(new Date(event.endAt), "HH:mm")}
-          <span className="font-bold" style={{ color: tone }}>
-            {" · "}
-            {staffed ? `${event.workerIds.length} salarié${event.workerIds.length > 1 ? "s" : ""}` : "à compléter"}
-          </span>
-        </>
-      }
-    />
-  );
-}
-
 /** Pastille du code couleur, rappelé au-dessus de la grille. */
 function StaffingLegend({ color, label }: { color: string; label: string }) {
   return (
@@ -3752,9 +3601,7 @@ function PlannerRow({
   workerId,
   days,
   byWorkerDay,
-  eventsByWorkerDay,
   absencesByWorkerDay,
-  onOpenEvent,
   onDeleteAbsence,
   staffing,
   schedules,
@@ -3772,10 +3619,8 @@ function PlannerRow({
   workerId: Id<"polyvalentWorkers"> | null;
   days: Date[];
   byWorkerDay: Map<string, DisplayActivity[]>;
-  eventsByWorkerDay: Map<string, PlannerEvent[]>;
   absencesByWorkerDay: Map<string, PlannerAbsence[]>;
-  /** Absent sans droit de modification : l'affectation serait refusée. */
-  onOpenEvent?: (event: PlannerEvent) => void;
+  /** Absent sans droit de suppression : le retrait serait refusé. */
   onDeleteAbsence?: (absence: PlannerAbsence) => void;
   staffing: Map<string, Staffing>;
   schedules: ScheduleList;
@@ -3812,7 +3657,6 @@ function PlannerRow({
         const dayKey = format(day, "yyyy-MM-dd");
         const key = cellKey(workerId, dayKey);
         const cellActivities = byWorkerDay.get(key) ?? [];
-        const cellEvents = eventsByWorkerDay.get(key) ?? [];
         const cellAbsences = absencesByWorkerDay.get(key) ?? [];
         const available = workerId
           ? schedules
@@ -3900,41 +3744,6 @@ function PlannerRow({
                   <span className="block tabular-nums opacity-85">
                     {format(new Date(activity.startAt), "HH:mm")} – {format(new Date(activity.endAt), "HH:mm")}
                     {activity.recurrenceId ? " · ↻" : ""}
-                  </span>
-                </button>
-              );
-            })}
-            {cellEvents.map((event) => {
-              const unstaffed = event.workerIds.length === 0;
-              return (
-                <button
-                  key={`${event.source}-${event.id}`}
-                  type="button"
-                  draggable={Boolean(onOpenEvent)}
-                  onDragStart={() => {
-                    if (!onOpenEvent) return;
-                    onDragItem({ kind: "event", event, fromWorkerId: workerId ?? undefined });
-                  }}
-                  onClick={() => onOpenEvent?.(event)}
-                  disabled={!onOpenEvent}
-                  className={`block w-full rounded-lg border border-dashed px-2 py-1 text-left text-[11px] font-semibold leading-tight transition disabled:cursor-default ${
-                    unstaffed
-                      ? "border-amber-500 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25"
-                      : "border-sky-500/60 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
-                  }`}
-                  title={
-                    unstaffed
-                      ? `${event.title} — aucun salarié mobilisé, glissez-le sur un salarié ou cliquez pour compléter`
-                      : `${event.title} — ${event.workerNames.join(", ")} · glissez-le vers un autre salarié, ou vers « Non affecté » pour l'en retirer`
-                  }
-                >
-                  <span className="flex min-w-0 items-center gap-1">
-                    <CalendarPlus className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{event.title}</span>
-                  </span>
-                  <span className="block tabular-nums opacity-85">
-                    {format(new Date(event.startAt), "HH:mm")} – {format(new Date(event.endAt), "HH:mm")}
-                    {unstaffed ? " · à compléter" : ""}
                   </span>
                 </button>
               );
