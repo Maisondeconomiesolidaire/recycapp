@@ -3010,6 +3010,16 @@ export function ResourceCalendar({
     [rows, buildPlanning],
   );
 
+  /** Une journée couverte par un congé ne reçoit plus que des congés. */
+  function canDropOn(drag: PlannerDrag, workerId: Id<"polyvalentWorkers"> | null, day: Date) {
+    if (!workerId || isLeaveDrag(drag)) return true;
+    const cellAbsences = absencesByWorkerDay.get(cellKey(workerId, format(day, "yyyy-MM-dd"))) ?? [];
+    // Le congé qu'on déplace ne bloque pas sa propre case.
+    const others =
+      drag.kind === "absence" ? cellAbsences.filter((absence) => absence._id !== drag.absence._id) : cellAbsences;
+    return !coveredByLeave(schedules ?? [], workerId, day, others);
+  }
+
   function openSlotDraft(workerId: Id<"polyvalentWorkers"> | null, day: Date, taskId: Id<"polyvalentTasks">) {
     const slot = defaultSlot(schedules ?? [], workerId, day, taskById.get(String(taskId))?.name);
     setPlannerError(null);
@@ -3021,6 +3031,10 @@ export function ResourceCalendar({
     setDragged(null);
     setHoveredCell(null);
     if (!drag) return;
+    if (!canDropOn(drag, workerId, day)) {
+      setPlannerError("Ce salarié est en congé ce jour-là : seul un congé peut y être déposé.");
+      return;
+    }
     if (drag.kind === "task") {
       if (!canCreate) return;
       openSlotDraft(workerId, day, drag.taskId);
@@ -3223,6 +3237,7 @@ export function ResourceCalendar({
                 canUpdate={canUpdate}
                 hoveredCell={hoveredCell}
                 dragging={dragged !== null}
+                canDrop={(workerId, day) => !dragged || canDropOn(dragged, workerId, day)}
                 onHover={setHoveredCell}
                 onDrop={handleDrop}
                 onDragItem={setDragged}
@@ -3252,6 +3267,7 @@ export function ResourceCalendar({
                 canUpdate={canUpdate}
                 hoveredCell={hoveredCell}
                 dragging={dragged !== null}
+                canDrop={(workerId, day) => !dragged || canDropOn(dragged, workerId, day)}
                 onHover={setHoveredCell}
                 onDrop={handleDrop}
                 onDragItem={setDragged}
@@ -3635,6 +3651,40 @@ function defaultSlot(
   return { start: "09:00", end: "17:00" };
 }
 
+/**
+ * Le salarié est-il en congé sur ses horaires du jour ? Les congés posés ce
+ * jour-là doivent couvrir, bout à bout, toute sa plage de travail (ou la
+ * journée standard faute d'horaires renseignés).
+ */
+function coveredByLeave(
+  schedules: ScheduleList,
+  workerId: Id<"polyvalentWorkers">,
+  day: Date,
+  absences: PlannerAbsence[],
+) {
+  const leaves = absences
+    .filter((absence) => absence.kind === "conge")
+    .sort((a, b) => a.startAt - b.startAt);
+  if (leaves.length === 0) return false;
+  const slot = defaultSlot(schedules, workerId, day, undefined);
+  let coveredUntil = dayAtTime(day, slot.start);
+  const end = dayAtTime(day, slot.end);
+  for (const leave of leaves) {
+    if (leave.startAt > coveredUntil) return false;
+    coveredUntil = Math.max(coveredUntil, leave.endAt);
+    if (coveredUntil >= end) return true;
+  }
+  return coveredUntil >= end;
+}
+
+/** Seul un congé se dépose sur une journée déjà prise par un congé. */
+function isLeaveDrag(drag: PlannerDrag) {
+  return (
+    (drag.kind === "rh" && drag.absenceKind === "conge") ||
+    (drag.kind === "absence" && drag.absence.kind === "conge")
+  );
+}
+
 /** Reconstitue la fiche d'un créneau (tous les salariés qui y sont affectés). */
 function buildEventData(
   activity: DisplayActivity,
@@ -3664,6 +3714,7 @@ function PlannerRow({
   canUpdate,
   hoveredCell,
   dragging,
+  canDrop,
   onHover,
   onDrop,
   onDragItem,
@@ -3683,6 +3734,8 @@ function PlannerRow({
   canUpdate: boolean;
   hoveredCell: string | null;
   dragging: boolean;
+  /** Faux sur une journée de congé quand on glisse autre chose qu'un congé. */
+  canDrop: (workerId: Id<"polyvalentWorkers"> | null, day: Date) => boolean;
   onHover: (key: string | null) => void;
   onDrop: (workerId: Id<"polyvalentWorkers"> | null, day: Date) => void;
   onDragItem: (drag: PlannerDrag) => void;
@@ -3719,10 +3772,16 @@ function PlannerRow({
               .find((schedule) => schedule.workerId === workerId)
               ?.availability.some((item) => item.weekday === (day.getDay() || 7))
           : undefined;
+        const droppable = !dragging || canDrop(workerId, day);
         return (
           <div
             key={key}
             onDragOver={(event) => {
+              // Sans preventDefault, le navigateur refuse le dépôt (curseur interdit).
+              if (!droppable) {
+                event.dataTransfer.dropEffect = "none";
+                return;
+              }
               event.preventDefault();
               if (hoveredCell !== key) onHover(key);
             }}
@@ -3734,11 +3793,13 @@ function PlannerRow({
               onDrop(workerId, day);
             }}
             className={`min-h-[72px] space-y-1 border-b border-r border-[var(--crm-border)] p-1.5 transition ${
-              hoveredCell === key
-                ? "bg-brand-500/20 ring-2 ring-inset ring-brand-500"
-                : dragging && available === false
-                  ? "bg-zinc-500/5"
-                  : ""
+              !droppable
+                ? "cursor-not-allowed bg-blue-500/10"
+                : hoveredCell === key
+                  ? "bg-brand-500/20 ring-2 ring-inset ring-brand-500"
+                  : dragging && available === false
+                    ? "bg-zinc-500/5"
+                    : ""
             }`}
           >
             {cellAbsences.map((absence) => {
