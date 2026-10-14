@@ -2220,6 +2220,7 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
     canRead ? {} : "skip",
   );
   const updatePlannerTiming = useMutation(api.polyvalents.updatePlannerTiming);
+  const setRequestWorkers = useMutation(api.polyvalents.setRequestWorkers);
   const ensurePlannerTasks = useMutation(api.polyvalents.ensurePlannerTasks);
 
   // Le filtre principal de la page restreint tout le planning à une recyclerie :
@@ -2255,6 +2256,13 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
   const [activityToEdit, setActivityToEdit] = useState<PlannerEventData | null>(null);
   const [timingError, setTimingError] = useState<string | null>(null);
   const [pendingTiming, setPendingTiming] = useState<Record<string, { start: Date; end: Date }>>({});
+  /** Demande dont on mobilise l'équipe, ouverte au clic sur son créneau. */
+  const [requestToStaff, setRequestToStaff] = useState<ScheduledRequest | null>(null);
+  const [savingRequestTeam, setSavingRequestTeam] = useState(false);
+  const assignableForRequests = useQuery(
+    api.recycappCalendar.assignableWorkers,
+    requestToStaff ? {} : "skip",
+  );
 
   useEffect(() => {
     if (siteFilter && canCreate) void ensurePlannerTasks({ site: siteFilter }).catch(() => undefined);
@@ -2393,7 +2401,8 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
       title: `${TYPE_LABELS[request.type] ?? request.type}${request.customerName ? ` · ${request.customerName}` : ""}`,
       start: new Date(request.scheduledDate),
       end: new Date(request.scheduledDate + 2 * 60 * 60_000),
-      color: "#0ea5e9",
+      // Une demande sans équipe se signale : c'est elle qui réclame une action.
+      color: request.workerIds.length ? "#0ea5e9" : "#dc2626",
       draggable: false,
       resizable: false,
     } satisfies ReuiCalendarEvent<PlannerEventData>));
@@ -2477,6 +2486,16 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
             setDroppedTask({ taskId: tasks[0]._id, startAt: slot.start.getTime(), endAt: slot.end.getTime() });
           }}
           onEventClick={(occurrence) => {
+            // Une demande n'a pas de données d'activité : son clic ouvre le
+            // sélecteur de salariés plutôt que la fiche d'un créneau.
+            const requestId = String(occurrence.event.id).startsWith("request-")
+              ? String(occurrence.event.id).slice("request-".length)
+              : null;
+            if (requestId) {
+              const request = (scheduledRequests ?? []).find((item) => item.id === requestId);
+              if (request && canUpdate) setRequestToStaff(request);
+              return;
+            }
             setForegroundActivityId(String(occurrence.event.data?.activity._id));
             setActivityToEdit(occurrence.event.data ?? null);
           }}
@@ -2511,7 +2530,9 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
                   <span className="truncate font-bold">{occurrence.event.title}</span>
                   <span className="text-[10px] tabular-nums opacity-80">
                     {format(occurrence.start, "HH:mm")} – {format(occurrence.end, "HH:mm")} ·{" "}
-                    {String(occurrence.event.id).startsWith("event-") ? "évènement" : "demande planifiée"}
+                    {String(occurrence.event.id).startsWith("event-")
+                      ? "évènement"
+                      : requestCrewLabel(scheduledRequests, String(occurrence.event.id))}
                   </span>
                 </span>
               );
@@ -2568,6 +2589,28 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
           <EventCalendarContent />
         </EventCalendar>
       </div>
+      <WorkerPickerModal
+        open={requestToStaff !== null}
+        onClose={() => setRequestToStaff(null)}
+        workers={assignableForRequests}
+        value={requestToStaff?.workerIds ?? []}
+        hours={2}
+        saving={savingRequestTeam}
+        onValidate={(next) => {
+          if (!requestToStaff) return;
+          setSavingRequestTeam(true);
+          setTimingError(null);
+          void setRequestWorkers({
+            requestId: requestToStaff.id as Id<"requests">,
+            workerIds: next,
+          })
+            .then(() => setRequestToStaff(null))
+            .catch((error: unknown) => {
+              setTimingError(error instanceof Error ? error.message : "Affectation impossible.");
+            })
+            .finally(() => setSavingRequestTeam(false));
+        }}
+      />
       <Drawer
         open={selectedDay !== null}
         onClose={() => {
@@ -3310,6 +3353,19 @@ export function ResourceCalendar({
       ) : null}
     </>
   );
+}
+
+/** Demande déjà datée, telle que la vue générale la lit. */
+type ScheduledRequest = NonNullable<
+  ReturnType<typeof useQuery<typeof api.polyvalents.listScheduledRequests>>
+>[number];
+
+/** Ce que porte un créneau de demande : son équipe, ou l'appel à en poser une. */
+function requestCrewLabel(requests: ScheduledRequest[] | undefined, eventId: string) {
+  const request = (requests ?? []).find((item) => `request-${item.id}` === eventId);
+  if (!request) return "demande planifiée";
+  if (request.workerIds.length === 0) return "aucun salarié · cliquez pour affecter";
+  return request.workerNames.join(", ");
 }
 
 /** Indisponibilité RH d'un salarié, posée sur la grille. */
