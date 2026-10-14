@@ -51,7 +51,7 @@ export function WeeklyEmployeePlanner({ site }: { site: "60" | "76" }) {
 
   useEffect(() => { void syncFromHr({}).catch(() => undefined); }, [syncFromHr]);
   const days = useMemo(() => Array.from({ length: 6 }, (_, index) => addDays(weekStart, index)), [weekStart]);
-  const visibleWorkers = useMemo(() => (workers ?? []).filter((worker) => worker.active !== false && worker.sites?.includes(site)), [workers, site]);
+  const visibleWorkers = useMemo(() => (workers ?? []).filter((worker) => (worker.activeOverride ?? worker.active ?? true) && worker.sites?.includes(site)), [workers, site]);
   const visibleTasks = useMemo(() => (tasks ?? []).filter((task) => task.site === site && !isRequestDrivenTask(task.name)), [tasks, site]);
   const activitiesByCell = useMemo(() => {
     const map = new Map<string, NonNullable<typeof activities>[number][]>();

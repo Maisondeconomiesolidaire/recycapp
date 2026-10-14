@@ -3711,6 +3711,14 @@ function buildEventData(
   };
 }
 
+/**
+ * Salarié encore en poste, selon la même règle que le serveur : le choix
+ * manuel prime sur le statut repris des RH. Seuls ceux-là s'affectent.
+ */
+function isActiveWorker(worker: WorkerList[number]) {
+  return worker.activeOverride ?? worker.active ?? true;
+}
+
 /** Une ligne de la grille : le salarié à gauche, puis une case par jour. */
 function PlannerRow({
   label,
@@ -4056,7 +4064,7 @@ function ActivityWorkerModal({
           <Field label="Ajouter un salarié">
             <Select value={workerId} onChange={(event) => setWorkerId(event.target.value as Id<"polyvalentWorkers">)}>
               <option value="">Choisir un salarié</option>
-              {workers.map((worker) => <option key={worker._id} value={worker._id}>{worker.firstName} {worker.lastName}</option>)}
+              {workers.filter(isActiveWorker).map((worker) => <option key={worker._id} value={worker._id}>{worker.firstName} {worker.lastName}</option>)}
             </Select>
           </Field>
         ) : null}
@@ -4282,7 +4290,8 @@ function ResourceDayPanel({
                 }
               >
                 <option value="">Aucun salarié affecté</option>
-                {workers.map((worker) => (
+                {/* Le salarié déjà affecté reste visible, même parti depuis. */}
+                {workers.filter((worker) => isActiveWorker(worker) || worker._id === workerId).map((worker) => (
                   <option key={worker._id} value={worker._id}>
                     {worker.firstName} {worker.lastName}
                     {availabilityLabel(schedules, worker._id, day)}
