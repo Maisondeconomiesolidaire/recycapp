@@ -11,6 +11,7 @@ import { Modal } from "../ui/Modal";
 import { FullSpinner } from "../ui/Spinner";
 import { useCrmAccess } from "./RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { isRequestDrivenTask } from "../../lib/requestDrivenTasks";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 const TIME_SLOTS = Array.from({ length: 20 }, (_, index) => {
@@ -51,7 +52,7 @@ export function WeeklyEmployeePlanner({ site }: { site: "60" | "76" }) {
   useEffect(() => { void syncFromHr({}).catch(() => undefined); }, [syncFromHr]);
   const days = useMemo(() => Array.from({ length: 6 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const visibleWorkers = useMemo(() => (workers ?? []).filter((worker) => worker.active !== false && worker.sites?.includes(site)), [workers, site]);
-  const visibleTasks = useMemo(() => (tasks ?? []).filter((task) => task.site === site), [tasks, site]);
+  const visibleTasks = useMemo(() => (tasks ?? []).filter((task) => task.site === site && !isRequestDrivenTask(task.name)), [tasks, site]);
   const activitiesByCell = useMemo(() => {
     const map = new Map<string, NonNullable<typeof activities>[number][]>();
     for (const activity of activities ?? []) {

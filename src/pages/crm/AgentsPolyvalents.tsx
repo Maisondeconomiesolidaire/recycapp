@@ -21,6 +21,7 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { isRequestDrivenTask } from "../../lib/requestDrivenTasks";
 import { GeneralCalendar, ResourceCalendar } from "./Calendrier";
 
 type Tab = "planning" | "ouvriers" | "taches";
@@ -95,7 +96,7 @@ export function Taches() {
   // (« Caisse magasin »…) existe des deux côtés, les mélanger rendrait le
   // planning illisible. La Recyclerie 76 aura son propre espace.
   const visibleWorkers = workers.filter((worker) => worker.sites?.includes(GESTION_SITE));
-  const visibleTasks = tasks.filter((task) => task.site === GESTION_SITE);
+  const visibleTasks = tasks.filter((task) => task.site === GESTION_SITE && !isRequestDrivenTask(task.name));
 
   return (
     <div className="pb-16">
@@ -887,6 +888,10 @@ function TaskForm({
 
   async function save() {
     if (!name.trim()) return;
+    if (isRequestDrivenTask(name)) {
+      setError(`« ${name.trim()} » vient des demandes : une demande datée apparaît dans Planning › Général, affectez-y les salariés.`);
+      return;
+    }
     const weekly = weeklyHours.trim() ? Number(weeklyHours.replace(",", ".")) : undefined;
     if (weekly !== undefined && (!Number.isFinite(weekly) || weekly <= 0)) {
       setError("Les heures requises doivent être un nombre positif.");

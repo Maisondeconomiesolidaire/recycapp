@@ -58,6 +58,7 @@ import { RequestDrawer } from "../../components/crm/RequestDrawer";
 import { NewRequestDrawer } from "../../components/crm/NewRequestDrawer";
 import { useCrmAccess } from "../../components/crm/RequireCrmPermission";
 import { canAccess } from "../../lib/crmPermissions";
+import { isRequestDrivenTask } from "../../lib/requestDrivenTasks";
 import { EventCalendar } from "../../components/reui/event-calendar/event-calendar";
 import { PLANNER_FRENCH } from "../../components/reui/event-calendar/planner-french";
 import { EventCalendarContent } from "../../components/reui/event-calendar/event-calendar-content";
@@ -2234,7 +2235,9 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
   );
   const tasks = useMemo(
     () =>
-      (allTasks ?? []).filter((task) => !siteFilter || task.site === siteFilter),
+      (allTasks ?? []).filter(
+        (task) => (!siteFilter || task.site === siteFilter) && !isRequestDrivenTask(task.name),
+      ),
     [allTasks, siteFilter],
   );
   const taskById = useMemo(
@@ -2309,7 +2312,7 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
     const matchesSite = (taskSite: Site | null | undefined) =>
       !siteFilter || taskSite === siteFilter;
     for (const activity of activities ?? []) {
-      if (!matchesSite(activity.taskSite)) continue;
+      if (!matchesSite(activity.taskSite) || isRequestDrivenTask(activity.taskName)) continue;
       let cursor = startOfDay(new Date(activity.startAt));
       const last = startOfDay(new Date(activity.endAt));
       while (cursor <= last) {
@@ -2321,7 +2324,11 @@ export function GeneralCalendar({ siteFilter }: { siteFilter: Site | null }) {
       }
     }
     for (const recurrence of recurrences ?? []) {
-      if (!matchesSite(recurrence.taskSite) || recurrenceExceptions === undefined) continue;
+      if (
+        !matchesSite(recurrence.taskSite) ||
+        isRequestDrivenTask(recurrence.taskName) ||
+        recurrenceExceptions === undefined
+      ) continue;
       for (const day of days) {
         const weekday = day.getDay() || 7;
         for (const slot of recurrence.slots.filter(
@@ -2706,7 +2713,7 @@ export function ResourceCalendar({
   const tasks = useMemo(
     () =>
       (allTasks ?? [])
-        .filter((task) => !siteFilter || task.site === siteFilter)
+        .filter((task) => (!siteFilter || task.site === siteFilter) && !isRequestDrivenTask(task.name))
         .sort((a, b) => a.name.localeCompare(b.name, "fr")),
     [allTasks, siteFilter],
   );
@@ -2753,7 +2760,7 @@ export function ResourceCalendar({
     const matchesSite = (taskSite: Site | null | undefined) =>
       !siteFilter || taskSite === siteFilter;
     for (const activity of activities ?? []) {
-      if (!matchesSite(activity.taskSite)) continue;
+      if (!matchesSite(activity.taskSite) || isRequestDrivenTask(activity.taskName)) continue;
       let cursor = startOfDay(new Date(activity.startAt));
       const last = startOfDay(new Date(activity.endAt));
       while (cursor <= last) {
@@ -2765,7 +2772,11 @@ export function ResourceCalendar({
       }
     }
     for (const recurrence of recurrences ?? []) {
-      if (!matchesSite(recurrence.taskSite) || recurrenceExceptions === undefined) continue;
+      if (
+        !matchesSite(recurrence.taskSite) ||
+        isRequestDrivenTask(recurrence.taskName) ||
+        recurrenceExceptions === undefined
+      ) continue;
       for (const day of days) {
         const weekday = day.getDay() || 7;
         for (const slot of recurrence.slots.filter(
