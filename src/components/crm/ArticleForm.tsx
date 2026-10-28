@@ -491,47 +491,6 @@ export function ArticleForm({
     <>
       <div className="space-y-4">
 
-        {/* ── Rédiger : génération de tous les champs depuis des mots-clés ── */}
-        <div className="rounded-2xl border border-brand-500/30 bg-brand-500/5 p-4">
-          <p className="text-sm font-medium text-zinc-200">
-            Rédiger l'article avec l'IA
-          </p>
-          <p className="mb-3 mt-0.5 text-xs text-zinc-500">
-            Saisissez des mots-clés (un par ligne ou séparés par des virgules) :
-            l'IA génère le titre, la description, le prix et tous les autres
-            champs — sauf les photos.
-          </p>
-          <Textarea
-            value={aiBrief}
-            onChange={(e) => setAiBrief(e.target.value)}
-            placeholder={"Ex :\nveste en jean Levi's taille M\névénement, textile, tout à -50%, déstockage\nlot de 3 cadres photo bois"}
-            rows={4}
-          />
-          <button
-            type="button"
-            onClick={runKeywordGeneration}
-            disabled={generatingStep !== null || !aiBrief.trim()}
-            className={cn(
-              "mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3.5 text-sm font-medium transition-colors",
-              generatingStep !== null || !aiBrief.trim()
-                ? "cursor-not-allowed border-brand-500/40 bg-brand-500/8 text-brand-300/70"
-                : "border-brand-500/50 bg-brand-500/10 text-brand-200 hover:border-brand-500/80 hover:bg-brand-500/15",
-            )}
-          >
-            {generatingStep === "champs" ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Génération des champs…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                Générer tous les champs
-              </>
-            )}
-          </button>
-        </div>
-
         {/* ── Photos ─────────────────────────────────────────── */}
         <div>
           <p className="text-sm font-medium text-zinc-300 mb-1.5">Photos</p>
@@ -839,6 +798,45 @@ export function ArticleForm({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="État, dimensions, particularités…"
           />
+          <div className="mt-3 rounded-2xl border border-brand-500/30 bg-brand-500/5 p-4">
+            <p className="text-sm font-medium text-zinc-200">
+              Rédiger l'article avec l'IA
+            </p>
+            <p className="mb-3 mt-0.5 text-xs text-zinc-500">
+              Saisissez des mots-clés (un par ligne ou séparés par des virgules) :
+              l'IA génère le titre, la description, le prix et tous les autres
+              champs — sauf les photos.
+            </p>
+            <Textarea
+              value={aiBrief}
+              onChange={(e) => setAiBrief(e.target.value)}
+              placeholder={"Ex :\nveste en jean Levi's taille M\névénement, textile, tout à -50%, déstockage\nlot de 3 cadres photo bois"}
+              rows={4}
+            />
+            <button
+              type="button"
+              onClick={runKeywordGeneration}
+              disabled={generatingStep !== null || !aiBrief.trim()}
+              className={cn(
+                "mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3.5 text-sm font-medium transition-colors",
+                generatingStep !== null || !aiBrief.trim()
+                  ? "cursor-not-allowed border-brand-500/40 bg-brand-500/8 text-brand-300/70"
+                  : "border-brand-500/50 bg-brand-500/10 text-brand-200 hover:border-brand-500/80 hover:bg-brand-500/15",
+              )}
+            >
+              {generatingStep === "champs" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Génération des champs…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Générer tous les champs
+                </>
+              )}
+            </button>
+          </div>
         </Field>
 
         {/* ── Grid fields ─────────────────────────────────────── */}
