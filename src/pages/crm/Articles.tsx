@@ -186,12 +186,25 @@ function readStoredStockView(): StockView {
     : "grid";
 }
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "stock", label: "Stock" },
-  { key: "caisses", label: "Caisses" },
-  { key: "lots", label: "Lots potentiels" },
-  { key: "dashboard", label: "Tableau de bord" },
-];
+/**
+ * Boutique simplifiée : pas de paiement en ligne, la vente se fait avec un
+ * encadrant qui passe ensuite l'article en « vendu ». Les outils de la
+ * boutique complète (caisses, lots, QR codes, bons de réduction, runs IA,
+ * synchro Stripe…) restent dans le code, masqués, pour être réactivés plus tard.
+ */
+const SHOW_SHOP_TOOLS = false;
+
+const TABS: { key: Tab; label: string }[] = SHOW_SHOP_TOOLS
+  ? [
+      { key: "stock", label: "Stock" },
+      { key: "caisses", label: "Caisses" },
+      { key: "lots", label: "Lots potentiels" },
+      { key: "dashboard", label: "Tableau de bord" },
+    ]
+  : [
+      { key: "stock", label: "Stock" },
+      { key: "dashboard", label: "Tableau de bord" },
+    ];
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
@@ -220,8 +233,10 @@ export function Articles() {
   const [selectedCaisse, setSelectedCaisse] = useState("");
   const articles = useQuery(api.articles.listAll, {});
   const remove = useMutation(api.articles.remove);
+  const patchStatus = useMutation(api.articles.patchStatus);
+  const [confirmSoldOpen, setConfirmSoldOpen] = useState(false);
   const createPaymentLink = useMutation(api.paymentLinks.create);
-  const [paymentLinkNotice, setPaymentLinkNotice] = useState("");
+  const [notice, setNotice] = useState("");
   const publishLot = useMutation(api.articles.publishLot);
   const toggleProductOfDay = useMutation(api.articles.toggleProductOfDay);
   const analyzePotentialLots = useAction(api.ai.analyzePotentialLots);
@@ -298,6 +313,7 @@ export function Articles() {
         article.category,
         article.subcategory,
         article.internalReference,
+        article.gdrReference,
       ]
         .filter((value): value is string => Boolean(value))
         .map(normalizeText);
@@ -305,7 +321,7 @@ export function Articles() {
       const textMatch = haystack.some((value) => value.includes(normalizedSearch));
       const digitMatch =
         digitSearch.length > 0 &&
-        [article.internalReference]
+        [article.internalReference, article.gdrReference]
           .filter((value): value is string => Boolean(value))
           .map(normalizeDigits)
           .some((value) => value.includes(digitSearch));
@@ -339,6 +355,30 @@ export function Articles() {
     });
   }
 
+  /** Articles cochés pas encore vendus : la cible de « Marquer vendu ». */
+  const unsoldSelection = selectedArticles.filter((article) => article.status !== "vendu");
+
+  async function markSelectedSold() {
+    const targets = unsoldSelection;
+    let failed = 0;
+    for (const article of targets) {
+      try {
+        await patchStatus({ id: article._id, status: "vendu" });
+      } catch {
+        failed++;
+      }
+    }
+    setSelectedIds(new Set());
+    setConfirmSoldOpen(false);
+    const done = targets.length - failed;
+    setNotice(
+      failed > 0
+        ? `${done} article${done > 1 ? "s" : ""} marqué${done > 1 ? "s" : ""} vendu${done > 1 ? "s" : ""}, ${failed} en échec.`
+        : `${done} article${done > 1 ? "s" : ""} marqué${done > 1 ? "s" : ""} vendu${done > 1 ? "s" : ""}.`,
+    );
+    window.setTimeout(() => setNotice(""), 4000);
+  }
+
   const handleCaisseCodeHandled = useCallback(() => setScannedCaisseCode(null), []);
 
   function printQrCodes() {
@@ -357,13 +397,13 @@ export function Articles() {
       const { token } = await createPaymentLink({ articleIds });
       const url = `${window.location.origin}/paiement/${token}`;
       await navigator.clipboard.writeText(url);
-      setPaymentLinkNotice(
+      setNotice(
         `Lien de paiement copié (${articleIds.length} article${articleIds.length > 1 ? "s" : ""}).`,
       );
     } catch (err) {
-      setPaymentLinkNotice(errorMessage(err, "Lien de paiement impossible."));
+      setNotice(errorMessage(err, "Lien de paiement impossible."));
     }
-    window.setTimeout(() => setPaymentLinkNotice(""), 4000);
+    window.setTimeout(() => setNotice(""), 4000);
   }
 
   function changeStockView(next: StockView) {
@@ -563,8 +603,9 @@ export function Articles() {
   ];
 
   const inlineActionCount = wideHeader ? 3 : 0;
-  const inlineActions = stockActions.slice(0, inlineActionCount);
-  const menuActions = stockActions.slice(inlineActionCount);
+  const visibleActions = SHOW_SHOP_TOOLS ? stockActions : [];
+  const inlineActions = visibleActions.slice(0, inlineActionCount);
+  const menuActions = visibleActions.slice(inlineActionCount);
 
   return (
     <div>
@@ -674,7 +715,7 @@ export function Articles() {
                 <Input
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  placeholder="Rechercher par titre, réf. interne ou réf. externe…"
+                  placeholder="Rechercher par titre, réf. interne ou réf. GDR…"
                   className="pl-9 dark:bg-[var(--crm-surface)]"
                 />
               </div>
@@ -761,13 +802,27 @@ export function Articles() {
                   >
                     Tout désélectionner
                   </button>
-                  {canPrint && (
+                  {canUpdate && (
+                    <Button
+                      onClick={() => setConfirmSoldOpen(true)}
+                      disabled={unsoldSelection.length === 0}
+                      title={
+                        unsoldSelection.length === 0
+                          ? "Les articles sélectionnés sont déjà vendus"
+                          : undefined
+                      }
+                    >
+                      <Check className="h-4 w-4" />
+                      Marquer vendu{unsoldSelection.length > 1 ? "s" : ""} ({unsoldSelection.length})
+                    </Button>
+                  )}
+                  {SHOW_SHOP_TOOLS && canPrint && (
                     <Button variant="outline" onClick={printQrCodes}>
                       <QrCodeIcon className="h-4 w-4" />
                       Imprimer les QR codes
                     </Button>
                   )}
-                  {canUpdate && (
+                  {SHOW_SHOP_TOOLS && canUpdate && (
                     <Button
                       variant="outline"
                       onClick={() => copyPaymentLink([...selectedIds] as Id<"articles">[])}
@@ -776,7 +831,7 @@ export function Articles() {
                       Lien de paiement
                     </Button>
                   )}
-                  {canAnalyze && (
+                  {SHOW_SHOP_TOOLS && canAnalyze && (
                     <Button onClick={() => setRunOpen(true)}>
                       <Play className="h-4 w-4" />
                       Nouveau run
@@ -823,11 +878,11 @@ export function Articles() {
                       onToggleSelected={() => toggleSelected(a._id)}
                       canUpdate={canUpdate}
                       canDelete={canDelete}
-                      canPrint={canPrint}
+                      canPrint={SHOW_SHOP_TOOLS && canPrint}
                       onEdit={() => openEdit(a)}
                       onDelete={() => setDeleting(a)}
                       onPrint={() => setPrintRequest([a])}
-                      onPaymentLink={() => void copyPaymentLink([a._id])}
+                      onPaymentLink={SHOW_SHOP_TOOLS ? () => void copyPaymentLink([a._id]) : undefined}
                       onToggleProductOfDay={() => toggleProductOfDay({ articleId: a._id })}
                     />
                   ))}
@@ -918,6 +973,7 @@ export function Articles() {
                         <td className="px-4 py-3 text-zinc-400">
                           <div className="space-y-0.5">
                             <p>Interne : {a.internalReference ?? "—"}</p>
+                            <p>GDR : {a.gdrReference ?? "—"}</p>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-zinc-400">
@@ -957,7 +1013,7 @@ export function Articles() {
                                 <Star className={`h-4 w-4 ${a.productOfDay ? "fill-current" : ""}`} />
                               </button>
                             )}
-                            {canPrint && (
+                            {SHOW_SHOP_TOOLS && canPrint && (
                               <button
                                 onClick={() => setPrintRequest([a])}
                                 className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"
@@ -1012,10 +1068,19 @@ export function Articles() {
         confirmLabel="Supprimer"
       />
 
+      <ConfirmDialog
+        open={confirmSoldOpen}
+        onClose={() => setConfirmSoldOpen(false)}
+        onConfirm={markSelectedSold}
+        title="Marquer ces articles comme vendus ?"
+        description={`${unsoldSelection.length} article${unsoldSelection.length > 1 ? "s" : ""} passer${unsoldSelection.length > 1 ? "ont" : "a"} en « vendu » et quitter${unsoldSelection.length > 1 ? "ont" : "a"} la vitrine.`}
+        confirmLabel="Marquer vendu"
+      />
+
       {/* Impression des QR codes : QR + référence, rien d'autre. */}
-      {paymentLinkNotice && (
+      {notice && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] px-4 py-2.5 text-sm text-zinc-100 shadow-xl">
-          {paymentLinkNotice}
+          {notice}
         </div>
       )}
 
@@ -1225,7 +1290,8 @@ function ArticleGridCard({
   onEdit: () => void;
   onDelete: () => void;
   onPrint: () => void;
-  onPaymentLink: () => void;
+  /** Absent : pas de paiement en ligne, le bouton disparaît. */
+  onPaymentLink?: () => void;
   onToggleProductOfDay: () => void;
 }) {
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -1386,7 +1452,7 @@ function ArticleGridCard({
               <Printer className="h-4 w-4" />
             </button>
           )}
-          {canUpdate && article.status !== "vendu" && (
+          {onPaymentLink && canUpdate && article.status !== "vendu" && (
             <button
               onClick={onPaymentLink}
               className="rounded-lg p-2 text-zinc-400 hover:bg-[var(--crm-surface-3)] hover:text-zinc-200"

@@ -9,8 +9,14 @@ const PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as
   | string
   | undefined;
 
-/** Le paiement en ligne n'est proposé que si la clé est configurée. */
-export const stripeEnabled = Boolean(PUBLISHABLE_KEY);
+/**
+ * Paiement en ligne suspendu : la boutique est une vitrine, la vente se fait
+ * avec un encadrant. Le panier ne propose plus que la réservation, et les liens
+ * de paiement sont désactivés. Repasser à `Boolean(PUBLISHABLE_KEY)` pour le
+ * réactiver.
+ */
+const ONLINE_PAYMENT_SUSPENDED = true;
+export const stripeEnabled = !ONLINE_PAYMENT_SUSPENDED && Boolean(PUBLISHABLE_KEY);
 
 let stripePromise: Promise<Stripe | null> | null = null;
 

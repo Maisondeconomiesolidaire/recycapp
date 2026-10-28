@@ -205,6 +205,14 @@ export const bpBilling = v.object({
     ),
   ),
   paidAt: v.optional(v.number()),
+  /**
+   * Statut posé à la main que Stripe ne peut pas refléter (ex. facture payée
+   * remise « en attente ») : l'actualisation depuis Stripe ne l'écrase pas.
+   */
+  paymentStatusManual: v.optional(v.boolean()),
+  /** Dernier changement manuel du statut de règlement : qui et quand. */
+  paymentStatusUpdatedBy: v.optional(v.string()),
+  paymentStatusUpdatedAt: v.optional(v.number()),
   /** Horodatage de la dernière relance de règlement envoyée par email. */
   lastReminderAt: v.optional(v.number()),
   error: v.optional(v.string()),
@@ -516,6 +524,8 @@ export default defineSchema(
     caisseId: v.optional(v.id("caisses")),
     originalPrice: v.optional(v.number()),
     internalReference: v.optional(v.string()),
+    /** Référence GDR de l'article (logiciel de gestion), saisie à la main. */
+    gdrReference: v.optional(v.string()),
     /**
      * Recyclerie qui détient physiquement l'article : le client vient le
      * retirer sur ce site, et la boutique en ligne permet de filtrer dessus.

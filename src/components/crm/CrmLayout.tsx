@@ -35,6 +35,9 @@ const HIDDEN_NAV_KEYS: CrmPageKey[] = [
   "sorties",
   "ateliers",
   "documents",
+  // Boutique simplifiée : la vente se conclut avec un encadrant, qui passe
+  // l'article en « vendu » depuis le stock.
+  "caisse",
 ];
 
 function visibleNav(access: ReturnType<typeof useQuery<typeof api.permissions.myAccess>>) {

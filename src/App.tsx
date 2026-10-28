@@ -1,10 +1,9 @@
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { PublicLayout } from "./components/public/PublicLayout";
 import { RequirePublicAccount } from "./components/public/RequirePublicAccount";
 import { Boutique } from "./pages/public/Boutique";
 import { Kiosk } from "./pages/public/Kiosk";
 import { KioskArticle } from "./pages/public/KioskArticle";
-import { AcheterArticle } from "./pages/public/AcheterArticle";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
 import { CartPage } from "./pages/public/CartPage";
 import { CheckoutPage } from "./pages/public/CheckoutPage";
@@ -65,9 +64,10 @@ export default function App() {
       <Route path="/kiosk" element={<Kiosk />} />
       <Route path="/kiosk/:id" element={<KioskArticle />} />
 
-      {/* Achat d'un article scanné en vitrine, sur le téléphone du client :
-          aucun compte n'est demandé, le paiement passe par Stripe Checkout. */}
-      <Route path="/acheter/:id" element={<AcheterArticle />} />
+      {/* Achat en ligne suspendu : un ancien QR code d'achat mène à la fiche
+          de l'article. `AcheterArticle` (Stripe Checkout) reste disponible
+          pour la réactivation. */}
+      <Route path="/acheter/:id" element={<PurchaseRedirect />} />
 
       {/* Public (light mode) */}
       {/* Page dédiée de connexion : hors du shell boutique, comme sur Mes
@@ -214,4 +214,10 @@ function LegacyAuthRedirect() {
   const location = useLocation();
   const target = location.hash === "#sign-up" ? "/inscription" : "/connexion";
   return <Navigate to={`${target}${location.search}`} replace />;
+}
+
+/** Ancien lien d'achat d'un article : renvoie vers sa fiche boutique. */
+function PurchaseRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/boutique/${id}` : "/boutique"} replace />;
 }

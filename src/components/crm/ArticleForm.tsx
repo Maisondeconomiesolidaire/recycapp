@@ -190,6 +190,7 @@ export function ArticleForm({
   const [originalPrice, setOriginalPrice] = useState(
     article?.originalPrice !== undefined ? String(article.originalPrice) : "",
   );
+  const [gdrReference, setGdrReference] = useState(article?.gdrReference ?? "");
   const [internalReference, setInternalReference] = useState(
     article?.internalReference ?? "",
   );
@@ -438,6 +439,7 @@ export function ArticleForm({
           site: site || undefined,
           originalPrice: originalPriceNum,
           internalReference,
+          gdrReference: gdrReference.trim(),
           category,
           subcategory: subcategory || undefined,
           condition,
@@ -459,6 +461,7 @@ export function ArticleForm({
           site: site || undefined,
           qrReference: qrReference || undefined,
           originalPrice: originalPriceNum,
+          gdrReference: gdrReference.trim() || undefined,
           category,
           subcategory: subcategory || undefined,
           condition,
@@ -971,6 +974,13 @@ export function ArticleForm({
               )}
             </Field>
           )}
+          <Field label="Réf. GDR" hint="Facultatif.">
+            <Input
+              value={gdrReference}
+              onChange={(e) => setGdrReference(e.target.value)}
+              placeholder="Référence GDR"
+            />
+          </Field>
           <Field label="Catégorie">
             <Select
               value={category}

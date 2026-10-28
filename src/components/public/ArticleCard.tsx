@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Check, Heart, PackageOpen, ShoppingCart, X } from "lucide-react";
-import { QrCode } from "../ui/QrCode";
+import { ArrowRight, Check, Heart, PackageOpen, ShoppingCart, UserRound, X } from "lucide-react";
 import { formatPrice } from "../../lib/format";
 import { useCart } from "../../lib/useCart";
 
@@ -12,17 +11,12 @@ const ORANGE = "#f97316";
 const ORANGE_DARK = "#ea6a0c";
 
 /**
- * Consigne d'achat en vitrine : le client scanne et paie sur son téléphone.
+ * Consigne de la vitrine : on n'achète pas sur l'écran, un encadrant conclut
+ * la vente puis passe l'article en « vendu » depuis le CRM.
  */
-export const KIOSK_CALL_MESSAGE_GENERAL =
-  "Intéressé par un produit ? Scannez son QR code pour l'acheter depuis votre téléphone.";
+export const KIOSK_CALL_MESSAGE_GENERAL = "Intéressé(e) ? Faites appel à un encadrant.";
 
-export const KIOSK_SCAN_LABEL = "Scannez pour acheter cet article";
-
-/** Lien d'achat d'un article, encodé dans le QR code de la vitrine. */
-export function purchaseUrl(articleId: string) {
-  return `${window.location.origin}/acheter/${articleId}`;
-}
+export const KIOSK_SCAN_LABEL = "Intéressé(e) ? Faites appel à un encadrant";
 
 export type ShopArticleCard = {
   _id: string;
@@ -192,11 +186,9 @@ export function ArticleCard({
         </div>
 
         {kiosk ? (
-          /* Le QR code porte le lien d'achat de CET article : le client le
-             scanne avec son appareil photo et paie sur son propre téléphone. */
           <div className="mt-3 flex items-center gap-3 rounded-2xl bg-zinc-50 p-3">
-            <span className="shrink-0 rounded-lg bg-white p-1.5 text-black">
-              <QrCode value={purchaseUrl(article._id)} size={72} />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-zinc-700">
+              <UserRound className="h-5 w-5" />
             </span>
             <span className="min-w-0 text-sm font-bold leading-5 text-zinc-700">
               {KIOSK_SCAN_LABEL}
