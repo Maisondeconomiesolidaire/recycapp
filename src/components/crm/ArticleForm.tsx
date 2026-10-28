@@ -3,7 +3,6 @@ import { useMutation, useAction, useQuery } from "convex/react";
 import {
   ArrowLeft,
   Camera,
-  ExternalLink,
   ImagePlus,
   Loader2,
   ScanLine,
@@ -28,7 +27,6 @@ import {
 import type { Site } from "../../lib/constants";
 import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
-import { buildDetouredPhotoFile } from "../../lib/backgroundRemoval";
 import { normalizeScanCode } from "../../lib/labels";
 
 const CameraScanner = lazy(() =>
@@ -37,95 +35,6 @@ const CameraScanner = lazy(() =>
 
 type ArticleDoc = Doc<"articles"> & { imageUrls: string[] };
 
-// Affiche un libellé lisible pour une URL source (domaine, sinon URL brute).
-function sourceLabel(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
-// Converts a hex color to a 0–100 position on the red→green gradient.
-// Red (#ef4444) ≈ hue 0°, Green (#22c55e) ≈ hue 142°.
-function hexToGradientPosition(hex: string): number {
-  const r = parseInt(hex.slice(1, 3), 16) / 255;
-  const g = parseInt(hex.slice(3, 5), 16) / 255;
-  const b = parseInt(hex.slice(5, 7), 16) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  if (max === min) return 0;
-  const d = max - min;
-  let h = 0;
-  if (max === r) h = ((g - b) / d + 6) % 6;
-  else if (max === g) h = (b - r) / d + 2;
-  else h = (r - g) / d + 4;
-  h = h * 60;
-  return Math.min(100, Math.max(0, (h / 142) * 100));
-}
-
-function ValueBar({
-  color,
-  label,
-  rationale,
-  justification,
-}: {
-  color: string;
-  label: string;
-  rationale?: string;
-  justification?: string;
-}) {
-  const pct = hexToGradientPosition(color);
-  return (
-    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] px-4 py-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Indice de valeur IA
-        </span>
-        <span className="text-xs font-semibold" style={{ color }}>
-          {label}
-        </span>
-      </div>
-
-      {/* Gradient track with thumb */}
-      <div className="relative flex items-center py-2">
-        <div
-          className="h-2.5 w-full rounded-full"
-          style={{
-            background:
-              "linear-gradient(to right, #ef4444 0%, #f97316 25%, #eab308 50%, #84cc16 75%, #22c55e 100%)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 rounded-full border-[3px] border-zinc-950 shadow-lg ring-1 ring-white/20"
-          style={{ left: `${pct}%`, backgroundColor: color }}
-        />
-      </div>
-
-      {/* Scale labels */}
-      <div className="mt-1 flex justify-between">
-        <span className="text-[10px] text-red-400">Faible valeur</span>
-        <span className="text-[10px] text-green-400">Grande valeur</span>
-      </div>
-
-      {(rationale || justification) && (
-        <div className="mt-3 space-y-2 border-t border-[var(--crm-border)] pt-3">
-          {rationale && (
-            <p className="text-[11px] leading-relaxed text-zinc-500">
-              <span className="font-semibold text-zinc-400">Source : </span>
-              {rationale}
-            </p>
-          )}
-          {justification && (
-            <p className="text-[11px] leading-relaxed text-zinc-400">
-              {justification}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 type ArticlePhoto = {
   id: Id<"_storage">;
   url: string;
@@ -153,7 +62,6 @@ export function ArticleForm({
   const create = useMutation(api.articles.create);
   const update = useMutation(api.articles.update);
   const analyzeImage = useAction(api.ai.analyzeArticleImage);
-  const generateFromKeywords = useAction(api.ai.generateArticleFromKeywords);
   const upload = useUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -185,8 +93,6 @@ export function ArticleForm({
     api.articleQrCodes.getByReference,
     qrReference.length === 6 ? { reference: qrReference } : "skip",
   );
-  const [aiDetails, setAiDetails] = useState("");
-  const [aiBrief, setAiBrief] = useState("");
   const [originalPrice, setOriginalPrice] = useState(
     article?.originalPrice !== undefined ? String(article.originalPrice) : "",
   );
@@ -201,7 +107,7 @@ export function ArticleForm({
   const [condition, setCondition] = useState(
     article?.condition ?? ARTICLE_CONDITIONS[1],
   );
-  const [keywords, setKeywords] = useState((article?.keywords ?? []).join(", "));
+  const [keywords] = useState((article?.keywords ?? []).join(", "));
   const [themeKey, setThemeKey] = useState(article?.themeKey ?? "");
   const [status, setStatus] = useState<Doc<"articles">["status"]>(
     article?.status ?? "disponible",
@@ -214,23 +120,11 @@ export function ArticleForm({
   );
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [generatingStep, setGeneratingStep] = useState<
-    null | "analyse" | "visuels" | "champs"
-  >(null);
+  const [generatingStep, setGeneratingStep] = useState<null | "analyse">(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [valueColor, setValueColor] = useState<string | null>(null);
-  const [valueLabel, setValueLabel] = useState<string | null>(null);
-  const [priceRationale, setPriceRationale] = useState<string | null>(null);
-  const [priceJustification, setPriceJustification] = useState<string | null>(null);
-  const [sources, setSources] = useState<string[]>([]);
-  const [listingRecommendation, setListingRecommendation] = useState<string | null>(null);
-  const [onlineEligible, setOnlineEligible] = useState<boolean | null>(null);
-  const [recommendedSaleMode, setRecommendedSaleMode] = useState<"single" | "bundle" | null>(null);
-  const [singleSaleNote, setSingleSaleNote] = useState<string | null>(null);
-  const [bundleSaleNote, setBundleSaleNote] = useState<string | null>(null);
 
   useEffect(() => {
     photosRef.current = photos;
@@ -291,113 +185,26 @@ export function ArticleForm({
     });
   }
 
-  function applyAnalysis(
-    result: Awaited<ReturnType<typeof generateFromKeywords>>,
+  function applyDescriptionSuggestion(
+    result: Awaited<ReturnType<typeof analyzeImage>>,
   ) {
-    setTitle(result.title);
     setDescription(result.description);
-    setPrice(String(result.price));
-    // prix barré = toujours notre prix × 1.7 (nos prix sont à -70% du prix barré)
-    setOriginalPrice(String(Math.round(result.price * 1.7)));
-    if (result.weightKg != null && result.weightKg > 0) {
-      setWeightKg(String(result.weightKg));
-    }
     setCategory(result.category);
     setSubcategory(result.subcategory ?? "");
-    setCondition(result.condition);
-    setKeywords((result.keywords ?? []).join(", "));
-    setThemeKey(result.themeKey ?? "");
-    setValueColor(result.valueColor);
-    setValueLabel(result.valueLabel);
-    setPriceRationale(result.priceRationale ?? null);
-    setPriceJustification(result.priceJustification ?? null);
-    setSources(result.sources ?? []);
-    setOnlineEligible(result.onlineEligible ?? true);
-    setRecommendedSaleMode(result.recommendedSaleMode ?? "single");
-    setSingleSaleNote(
-      result.singleSaleNote ??
-        "Peut être vendu seul si l'article est prêt pour la boutique.",
-    );
-    setBundleSaleNote(
-      result.bundleSaleNote ??
-        "Peut aussi renforcer un lot thématique si des articles proches existent.",
-    );
-    setListingRecommendation(
-      result.listingRecommendation ??
-        "Cet article peut être mis en ligne seul ou gardé en attente selon le choix de l'équipe.",
-    );
   }
 
-  async function runAnalysis() {
-    if (photos.length === 0) return;
-    setError("");
-    setGeneratingStep("analyse");
-    try {
-      const result = await analyzeImage({
-        storageId: photos[0].id,
-        extraDetails: aiDetails.trim() || undefined,
-      });
-      applyAnalysis(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de l'analyse IA.");
-    } finally {
-      setGeneratingStep(null);
-    }
-  }
-
-  async function runKeywordGeneration() {
-    if (!aiBrief.trim()) {
-      setError("Renseignez quelques mots-clés avant de générer.");
+  async function writeDescriptionWithAI() {
+    if (photos.length === 0) {
+      setError("Ajoutez au moins une photo avant de rédiger avec l’IA.");
       return;
     }
     setError("");
-    setGeneratingStep("champs");
+    setGeneratingStep("analyse");
     try {
-      const result = await generateFromKeywords({ keywords: aiBrief.trim() });
-      applyAnalysis(result);
+      const result = await analyzeImage({ storageId: photos[0].id });
+      applyDescriptionSuggestion(result);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Erreur lors de la génération IA.",
-      );
-    } finally {
-      setGeneratingStep(null);
-    }
-  }
-
-  async function handleGenerateListing() {
-    await runAnalysis();
-  }
-
-  async function processPhotoBackground(photo: ArticlePhoto, index: number) {
-    const file = await buildDetouredPhotoFile(photo.url, index);
-    const id = await upload(file);
-    return {
-      id,
-      url: URL.createObjectURL(file),
-      localPreview: true,
-    } satisfies ArticlePhoto;
-  }
-
-  async function handleGenerateVisuals() {
-    if (photos.length === 0) return;
-    setError("");
-    setGeneratingStep("visuels");
-    try {
-      const currentPhotos = photosRef.current;
-      const processedPhotos: ArticlePhoto[] = [];
-      for (let i = 0; i < currentPhotos.length; i += 1) {
-        processedPhotos.push(await processPhotoBackground(currentPhotos[i], i));
-      }
-      currentPhotos.forEach((photo) => {
-        if (photo.localPreview) URL.revokeObjectURL(photo.url);
-      });
-      setPhotos(processedPhotos);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? `Détourage : ${err.message}`
-          : "Erreur lors du détourage.",
-      );
+      setError(err instanceof Error ? err.message : "Erreur lors de l'analyse IA.");
     } finally {
       setGeneratingStep(null);
     }
@@ -482,7 +289,6 @@ export function ArticleForm({
     }
   }
 
-  const resolvedOnlineEligible = onlineEligible ?? null;
   const onlineDisabled = saving;
 
   const heading = article ? "Modifier l'article" : "Nouvel article";
@@ -623,167 +429,6 @@ export function ArticleForm({
           />
         </div>
 
-        {/* ── Actions IA séparées ─────────────────────────────── */}
-        {photos.length > 0 && (
-          <Field
-            label="Détails supplémentaires pour l'IA (facultatif)"
-            hint="Infos non visibles sur la photo : modèle exact, RAM, capacité, année, options… Elles priment sur la photo."
-          >
-            <Textarea
-              value={aiDetails}
-              onChange={(e) => setAiDetails(e.target.value)}
-              placeholder="Ex : marque, modèle, dimensions, matière, année, capacité/RAM, coloris, défauts…"
-              rows={2}
-            />
-          </Field>
-        )}
-        {photos.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={handleGenerateListing}
-              disabled={generatingStep !== null || uploading}
-              className={cn(
-                "flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3.5 text-sm font-medium transition-colors",
-                generatingStep !== null
-                  ? "cursor-not-allowed border-brand-500/40 bg-brand-500/8 text-brand-300"
-                  : "border-brand-500/40 bg-brand-500/5 text-brand-300 hover:border-brand-500/70 hover:bg-brand-500/10",
-              )}
-            >
-              {generatingStep === "analyse" ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Analyse IA en cours…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Générer l'annonce
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleGenerateVisuals}
-              disabled={generatingStep !== null || uploading}
-              className={cn(
-                "flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3.5 text-sm font-medium transition-colors",
-                generatingStep !== null
-                  ? "cursor-not-allowed border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-400"
-                  : "border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] text-zinc-200 hover:border-zinc-500 hover:bg-[var(--crm-surface-2)]",
-              )}
-            >
-              {generatingStep === "visuels" ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>
-                    Détourage en cours…
-                    <span className="ml-1.5 text-xs opacity-60">({photos.length} photo{photos.length > 1 ? "s" : ""})</span>
-                  </span>
-                </>
-              ) : (
-                <>
-                  <ImagePlus className="h-4 w-4" />
-                  Détourer les images
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
-        {/* ── Value gradient bar ──────────────────────────────── */}
-        {valueColor && valueLabel && (
-          <ValueBar
-            color={valueColor}
-            label={valueLabel}
-            rationale={priceRationale ?? undefined}
-            justification={priceJustification ?? undefined}
-          />
-        )}
-
-        {sources.length > 0 && (
-          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-300">
-              Sources consultées par l'IA
-            </p>
-            <ul className="mt-2 space-y-1.5">
-              {sources.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 break-all text-sm text-sky-300 transition hover:text-sky-200 hover:underline"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                    {sourceLabel(url)}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {(listingRecommendation || singleSaleNote || bundleSaleNote) && (
-          <div
-            className={cn(
-              "rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface-2)] p-4",
-            )}
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-300">
-              Recommandation IA
-            </p>
-            <p className="mt-2 text-sm leading-6 text-zinc-200">
-              {listingRecommendation ??
-                "Choisissez entre une mise en ligne seule ou une mise en attente selon le potentiel commercial."}
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div
-                className={cn(
-                  "rounded-2xl border p-3",
-                  recommendedSaleMode === "single"
-                    ? "border-emerald-500/45 bg-emerald-500/10"
-                    : "border-[var(--crm-border)] bg-[var(--crm-surface)]",
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-zinc-100">Mettre en ligne</p>
-                  {recommendedSaleMode === "single" && (
-                    <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
-                      Conseillé
-                    </span>
-                  )}
-                </div>
-                <p className="mt-2 text-xs leading-5 text-zinc-400">
-                  {singleSaleNote ?? "Option pertinente si l'article est assez fort pour être vendu seul."}
-                </p>
-              </div>
-              <div
-                className={cn(
-                  "rounded-2xl border p-3",
-                  recommendedSaleMode === "bundle" || resolvedOnlineEligible === false
-                    ? "border-amber-500/45 bg-amber-500/10"
-                    : "border-[var(--crm-border)] bg-[var(--crm-surface)]",
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-zinc-100">Mettre en attente</p>
-                  {(recommendedSaleMode === "bundle" || resolvedOnlineEligible === false) && (
-                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white">
-                      Conseillé
-                    </span>
-                  )}
-                </div>
-                <p className="mt-2 text-xs leading-5 text-zinc-400">
-                  {bundleSaleNote ??
-                    "L'article restera dans le stock en attente pour être analysé avec les futurs lots potentiels."}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── Text fields ─────────────────────────────────────── */}
         <Field label="Titre" required>
           <Input
@@ -793,46 +438,33 @@ export function ArticleForm({
           />
         </Field>
         <Field label="Description">
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="État, dimensions, particularités…"
-          />
-          <div className="mt-3 rounded-2xl border border-brand-500/30 bg-brand-500/5 p-4">
-            <p className="text-sm font-medium text-zinc-200">
-              Rédiger l'article avec l'IA
-            </p>
-            <p className="mb-3 mt-0.5 text-xs text-zinc-500">
-              Saisissez des mots-clés (un par ligne ou séparés par des virgules) :
-              l'IA génère le titre, la description, le prix et tous les autres
-              champs — sauf les photos.
-            </p>
+          <div className="relative">
             <Textarea
-              value={aiBrief}
-              onChange={(e) => setAiBrief(e.target.value)}
-              placeholder={"Ex :\nveste en jean Levi's taille M\névénement, textile, tout à -50%, déstockage\nlot de 3 cadres photo bois"}
-              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="État, dimensions, particularités…"
+              className="min-h-32 pb-12"
             />
             <button
               type="button"
-              onClick={runKeywordGeneration}
-              disabled={generatingStep !== null || !aiBrief.trim()}
+              onClick={writeDescriptionWithAI}
+              disabled={generatingStep !== null || uploading || photos.length === 0}
               className={cn(
-                "mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3.5 text-sm font-medium transition-colors",
-                generatingStep !== null || !aiBrief.trim()
-                  ? "cursor-not-allowed border-brand-500/40 bg-brand-500/8 text-brand-300/70"
+                "absolute bottom-2 right-2 flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                generatingStep !== null || uploading || photos.length === 0
+                  ? "cursor-not-allowed border-brand-500/30 bg-brand-500/5 text-brand-300/60"
                   : "border-brand-500/50 bg-brand-500/10 text-brand-200 hover:border-brand-500/80 hover:bg-brand-500/15",
               )}
             >
-              {generatingStep === "champs" ? (
+              {generatingStep === "analyse" ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Génération des champs…
+                  Rédaction…
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-4 w-4" />
-                  Générer tous les champs
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Rédiger avec l'IA
                 </>
               )}
             </button>
@@ -1012,13 +644,6 @@ export function ArticleForm({
                 <option key={c} value={c}>{c}</option>
               ))}
             </Select>
-          </Field>
-          <Field label="Mots-clés IA" hint="Séparés par des virgules.">
-            <Input
-              value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
-              placeholder="mario, nintendo, kart, figurine"
-            />
           </Field>
           <Field label="Thème du lot" hint="Ex : mario, playmobil-pirates.">
             <Input
