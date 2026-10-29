@@ -3,6 +3,8 @@ import { useMutation, useAction, useQuery } from "convex/react";
 import {
   ArrowLeft,
   Camera,
+  ChevronDown,
+  ChevronLeft,
   ImagePlus,
   Loader2,
   ScanLine,
@@ -97,6 +99,8 @@ export function ArticleForm({
       (value): value is string => Boolean(value),
     ),
   );
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [categoryPickerLevel, setCategoryPickerLevel] = useState(0);
   const [condition, setCondition] = useState(
     article?.condition ?? ARTICLE_CONDITIONS[1],
   );
@@ -570,27 +574,64 @@ export function ArticleForm({
               placeholder="Référence GDR"
             />
           </Field>
-          {Array.from({ length: 4 }, (_, level) => {
-            const prefix = categoryPath.slice(0, level);
-            const options = childCategories(emmausCategories, prefix);
-            if (level > 0 && options.length === 0) return null;
-            return (
-              <Field key={level} label={level === 0 ? "Catégorie" : `Niveau ${level + 1}`}>
-                <Select
-                  value={categoryPath[level] ?? ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setCategoryPath(value ? [...prefix, value] : prefix);
-                  }}
-                >
-                  <option value="">{level === 0 ? "— Choisir une catégorie —" : "— Aucune —"}</option>
-                  {options.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </Select>
-              </Field>
-            );
-          })}
+          <Field label="Catégorie">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryPickerLevel(0);
+                  setCategoryPickerOpen((open) => !open);
+                }}
+                className="flex h-11 w-full items-center justify-between rounded-lg border border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] px-3 text-left text-sm text-zinc-100 transition hover:border-brand-500/60"
+              >
+                <span className={categoryPath.length ? "truncate" : "text-zinc-500"}>
+                  {categoryPath.at(-1) ?? "Choisir une catégorie"}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
+              </button>
+              {categoryPickerOpen && (() => {
+                const prefix = categoryPath.slice(0, categoryPickerLevel);
+                const options = childCategories(emmausCategories, prefix);
+                return (
+                  <div className="absolute z-30 mt-2 w-[min(28rem,calc(100vw-3rem))] overflow-hidden rounded-xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)] shadow-2xl">
+                    <div className="flex items-center gap-2 border-b border-[var(--crm-border)] px-3 py-2 text-xs text-zinc-400">
+                      {categoryPickerLevel > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setCategoryPickerLevel((level) => level - 1)}
+                          className="rounded p-1 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
+                          aria-label="Revenir au niveau précédent"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                      )}
+                      <span className="truncate">{prefix.length ? prefix.join(" › ") : "Toutes les catégories"}</span>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto p-1">
+                      {options.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            const nextPath = [...prefix, option];
+                            setCategoryPath(nextPath);
+                            if (childCategories(emmausCategories, nextPath).length > 0) {
+                              setCategoryPickerLevel((level) => level + 1);
+                            } else {
+                              setCategoryPickerOpen(false);
+                            }
+                          }}
+                          className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-100 transition hover:bg-brand-500/15 hover:text-brand-100"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </Field>
           <Field label="État">
             <Select
               value={condition}
