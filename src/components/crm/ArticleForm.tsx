@@ -74,7 +74,10 @@ export function ArticleForm({
   const [description, setDescription] = useState(article?.description ?? "");
   const [price, setPrice] = useState(article ? String(article.price) : "");
   const [weightKg, setWeightKg] = useState(
-    article?.weightKg !== undefined ? String(article.weightKg) : "",
+    // Le poids n'est plus saisi à la création d'un article de stock. La
+    // mutation part tout de même avec une valeur neutre, requise par le
+    // backend partagé ; il reste modifiable pour les fiches existantes.
+    article?.weightKg !== undefined ? String(article.weightKg) : "0",
   );
   // Rangement : l'article vit dans une caisse, identifiée par son QR code.
   const [caisseId, setCaisseId] = useState<Id<"caisses"> | "">(
@@ -484,16 +487,18 @@ export function ArticleForm({
               placeholder="25"
             />
           </Field>
-          <Field label="Poids (kg)" required>
-            <Input
-              type="number"
-              step="0.001"
-              min="0"
-              value={weightKg}
-              onChange={(e) => setWeightKg(e.target.value)}
-              placeholder="0.850"
-            />
-          </Field>
+          {article && (
+            <Field label="Poids (kg)" required>
+              <Input
+                type="number"
+                step="0.001"
+                min="0"
+                value={weightKg}
+                onChange={(e) => setWeightKg(e.target.value)}
+                placeholder="0.850"
+              />
+            </Field>
+          )}
           <Field label="Prix barré (€)">
             <Input
               type="number"
