@@ -628,21 +628,12 @@ export function ArticleForm({
               {saving ? "Enregistrement…" : "Enregistrer"}
             </Button>
           ) : (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => handleSave("attente")}
-                disabled={saving}
-              >
-                {saving ? "Enregistrement…" : "Mettre en attente"}
-              </Button>
-              <Button
-                onClick={() => handleSave("disponible")}
-                disabled={onlineDisabled}
-              >
-                {saving ? "Enregistrement…" : "Mettre en ligne"}
-              </Button>
-            </>
+            <Button
+              onClick={() => handleSave("disponible")}
+              disabled={onlineDisabled}
+            >
+              {saving ? "Enregistrement…" : "Mettre en ligne"}
+            </Button>
           )}
         </div>
       </div>
