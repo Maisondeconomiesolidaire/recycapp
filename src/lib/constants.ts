@@ -256,15 +256,27 @@ export const COATING_OPTIONS = [
 ];
 
 export const ARTICLE_CATEGORIES = [
-  "Maison et Jardin",
-  "Électronique",
+  "Librairie",
+  "Maison",
+  "Mode",
   "Loisirs",
+  "High-Tech",
+  "Fait main",
+  "Nos sélections de produits",
+  "Cartes cadeaux",
+  "Bons plans",
 ];
 
 export const ARTICLE_CATEGORY_SLUGS: Record<string, string> = {
-  "Maison et Jardin": "maison-et-jardin",
-  "Électronique": "electronique",
+  Librairie: "librairie",
+  Maison: "maison",
+  Mode: "mode",
   Loisirs: "loisirs",
+  "High-Tech": "high-tech",
+  "Fait main": "fait-main",
+  "Nos sélections de produits": "selections",
+  "Cartes cadeaux": "cartes-cadeaux",
+  "Bons plans": "bons-plans",
 };
 
 export const ARTICLE_SLUG_TO_CATEGORY = Object.fromEntries(

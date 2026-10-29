@@ -18,12 +18,11 @@ import { Button } from "../ui/Button";
 import { Field, Input, Select, Textarea } from "../ui/Field";
 import { SearchableSelect } from "../ui/SearchableSelect";
 import {
-  ARTICLE_CATEGORIES,
-  ARTICLE_SUBCATEGORIES,
   ARTICLE_CONDITIONS,
   ARTICLE_SITES,
   ARTICLE_STATUS_LABELS,
 } from "../../lib/constants";
+import { childCategories, useEmmausCategories } from "../../lib/emmausCategories";
 import type { Site } from "../../lib/constants";
 import { useUpload } from "../../lib/useUpload";
 import { cn } from "../../lib/cn";
@@ -67,6 +66,7 @@ export function ArticleForm({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<ArticlePhoto[]>([]);
   const caisses = useQuery(api.caisses.list, {});
+  const emmausCategories = useEmmausCategories();
 
   const [title, setTitle] = useState(article?.title ?? "");
   const [description, setDescription] = useState(article?.description ?? "");
@@ -92,10 +92,11 @@ export function ArticleForm({
   const [internalReference, setInternalReference] = useState(
     article?.internalReference ?? "",
   );
-  const [category, setCategory] = useState(
-    article?.category ?? ARTICLE_CATEGORIES[0],
+  const [categoryPath, setCategoryPath] = useState<string[]>(
+    article?.categoryPath ?? [article?.category, article?.subcategory].filter(
+      (value): value is string => Boolean(value),
+    ),
   );
-  const [subcategory, setSubcategory] = useState(article?.subcategory ?? "");
   const [condition, setCondition] = useState(
     article?.condition ?? ARTICLE_CONDITIONS[1],
   );
@@ -181,8 +182,9 @@ export function ArticleForm({
     result: Awaited<ReturnType<typeof analyzeImage>>,
   ) {
     setDescription(result.description);
-    setCategory(result.category);
-    setSubcategory(result.subcategory ?? "");
+    setCategoryPath([result.category, result.subcategory].filter(
+      (value): value is string => Boolean(value),
+    ));
   }
 
   async function writeDescriptionWithAI() {
@@ -204,6 +206,7 @@ export function ArticleForm({
 
   async function handleSave(desiredStatus?: "disponible" | "attente") {
     if (!title.trim()) return setError("Le titre est requis.");
+    if (categoryPath.length === 0) return setError("Choisissez une catégorie.");
     const priceNum = Number(price);
     if (Number.isNaN(priceNum) || priceNum < 0)
       return setError("Prix invalide.");
@@ -240,8 +243,9 @@ export function ArticleForm({
           originalPrice: originalPriceNum,
           internalReference,
           gdrReference: gdrReference.trim(),
-          category,
-          subcategory: subcategory || undefined,
+          category: categoryPath[0] ?? "Maison",
+          subcategory: categoryPath[1] || undefined,
+          categoryPath: categoryPath.length ? categoryPath : undefined,
           condition,
           keywords: keywords
             .split(",")
@@ -262,8 +266,9 @@ export function ArticleForm({
           site: site || undefined,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
-          category,
-          subcategory: subcategory || undefined,
+          category: categoryPath[0] ?? "Maison",
+          subcategory: categoryPath[1] || undefined,
+          categoryPath: categoryPath.length ? categoryPath : undefined,
           condition,
           keywords: keywords
             .split(",")
@@ -565,30 +570,27 @@ export function ArticleForm({
               placeholder="Référence GDR"
             />
           </Field>
-          <Field label="Catégorie">
-            <Select
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setSubcategory("");
-              }}
-            >
-              {ARTICLE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Sous-catégorie">
-            <Select
-              value={subcategory}
-              onChange={(e) => setSubcategory(e.target.value)}
-            >
-              <option value="">— Aucune —</option>
-              {(ARTICLE_SUBCATEGORIES[category] ?? []).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </Select>
-          </Field>
+          {Array.from({ length: 4 }, (_, level) => {
+            const prefix = categoryPath.slice(0, level);
+            const options = childCategories(emmausCategories, prefix);
+            if (level > 0 && options.length === 0) return null;
+            return (
+              <Field key={level} label={level === 0 ? "Catégorie" : `Niveau ${level + 1}`}>
+                <Select
+                  value={categoryPath[level] ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCategoryPath(value ? [...prefix, value] : prefix);
+                  }}
+                >
+                  <option value="">{level === 0 ? "— Choisir une catégorie —" : "— Aucune —"}</option>
+                  {options.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </Select>
+              </Field>
+            );
+          })}
           <Field label="État">
             <Select
               value={condition}
