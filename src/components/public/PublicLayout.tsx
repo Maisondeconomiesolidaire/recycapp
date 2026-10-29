@@ -11,11 +11,11 @@ import {
 } from "react-router-dom";
 import { ArrowRight, Heart, Menu, Search, ShoppingCart, Trash2, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import {
   ARTICLE_CATEGORIES,
   ARTICLE_CATEGORY_SLUGS,
 } from "../../lib/constants";
-import { Id } from "../../../convex/_generated/dataModel";
 import { cn } from "../../lib/cn";
 import { Input } from "../ui/Field";
 import { Field } from "../ui/Field";
@@ -264,22 +264,16 @@ function Header() {
   useEffect(() => { setQuery(params.get("q") ?? ""); }, [params]);
 
   useEffect(() => {
-    if (!searchOpen && !cartOpen) return;
+    if (!searchOpen) return;
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!searchRef.current?.contains(target) && !cartRef.current?.contains(target)) {
+      if (!searchRef.current?.contains(target)) {
         setSearchOpen(false);
-        setCartOpen(false);
       }
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [searchOpen, cartOpen]);
-
-  // Close mini-cart when navigating to the cart page
-  useEffect(() => {
-    if (location.pathname === "/boutique/panier") setCartOpen(false);
-  }, [location.pathname]);
+  }, [searchOpen]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -318,8 +312,8 @@ function Header() {
   }
 
   const cartTotal = (cartArticles ?? [])
-    .filter((a) => a.status === "disponible")
-    .reduce((sum, a) => sum + a.price, 0);
+    .filter((article) => article.status === "disponible")
+    .reduce((sum, article) => sum + article.price, 0);
 
   return (
     <header
@@ -423,7 +417,7 @@ function Header() {
               </Link>
             )}
 
-            {isBoutiqueArea && (
+            {false && isBoutiqueArea && (
               <div ref={cartRef} className="relative shrink-0">
                 <button
                   type="button"
@@ -596,19 +590,9 @@ function Header() {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate("/boutique/panier");
-                  }}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(241,16,79,0.28)]"
-                  style={{ backgroundColor: BRAND }}
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  Panier
-                  {cart.count > 0 ? ` (${cart.count})` : ""}
-                </button>
+                <p className="mt-4 rounded-full bg-zinc-100 px-4 py-3 text-center text-sm font-semibold text-zinc-700">
+                  Achats uniquement en boutique
+                </p>
 
                 <div className="mt-5">
                   <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">

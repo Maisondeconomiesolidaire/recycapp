@@ -81,18 +81,10 @@ export function ArticleForm({
   const [site, setSite] = useState<Site | "">(article?.site ?? "");
   const [caisseScanOpen, setCaisseScanOpen] = useState(false);
   const [caisseScanError, setCaisseScanError] = useState("");
-  /**
-   * QR code déjà imprimé et collé sur l'objet. Renseigné, il devient la
-   * référence interne de l'article : plus besoin d'imprimer une étiquette après
-   * coup ni de retrouver l'objet pour la coller.
-   */
-  const [qrReference, setQrReference] = useState("");
-  const [qrScanOpen, setQrScanOpen] = useState(false);
-  const [qrError, setQrError] = useState("");
-  const scannedQr = useQuery(
-    api.articleQrCodes.getByReference,
-    qrReference.length === 6 ? { reference: qrReference } : "skip",
+  const [storageKind, setStorageKind] = useState<"meuble" | "autre">(
+    article?.caisseId ? "autre" : "meuble",
   );
+  const [location, setLocation] = useState(article?.location ?? "");
   const [originalPrice, setOriginalPrice] = useState(
     article?.originalPrice !== undefined ? String(article.originalPrice) : "",
   );
@@ -108,7 +100,7 @@ export function ArticleForm({
     article?.condition ?? ARTICLE_CONDITIONS[1],
   );
   const [keywords] = useState((article?.keywords ?? []).join(", "));
-  const [themeKey, setThemeKey] = useState(article?.themeKey ?? "");
+  const [themeKey] = useState(article?.themeKey ?? "");
   const [status, setStatus] = useState<Doc<"articles">["status"]>(
     article?.status ?? "disponible",
   );
@@ -242,7 +234,8 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          caisseId: caisseId || undefined,
+          caisseId: storageKind === "autre" ? caisseId || undefined : undefined,
+          location: storageKind === "meuble" ? location.trim() || undefined : undefined,
           site: site || undefined,
           originalPrice: originalPriceNum,
           internalReference,
@@ -264,9 +257,9 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          caisseId: caisseId || undefined,
+          caisseId: storageKind === "autre" ? caisseId || undefined : undefined,
+          location: storageKind === "meuble" ? location.trim() || undefined : undefined,
           site: site || undefined,
-          qrReference: qrReference || undefined,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
           category,
@@ -514,39 +507,46 @@ export function ArticleForm({
               ))}
             </Select>
           </Field>
-          <Field
-            label="Caisse"
-            hint="Tapez le numéro pour filtrer, ou scannez le QR code collé sur la caisse."
-            error={caisseScanError || undefined}
-          >
-            <div className="flex gap-2">
-              <SearchableSelect
-                className="flex-1"
-                value={caisseId}
-                onChange={(next) => {
-                  setCaisseId(next as Id<"caisses"> | "");
-                  setCaisseScanError("");
-                }}
-                options={(caisses ?? []).map((caisse) => ({
-                  value: caisse._id,
-                  label: caisse.label ? `${caisse.code} — ${caisse.label}` : caisse.code,
-                  hint: caisse.zone,
-                }))}
-                placeholder="— Aucune caisse —"
-                searchPlaceholder="Numéro ou nom de caisse…"
-                emptyLabel="Aucune caisse ne correspond."
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setCaisseScanOpen(true)}
-                title="Scanner le QR code de la caisse"
-              >
-                <ScanLine className="h-4 w-4" />
-                <span className="hidden sm:inline">Scanner</span>
-              </Button>
-            </div>
+          <Field label="Emplacement">
+            <Select value={storageKind} onChange={(e) => setStorageKind(e.target.value as "meuble" | "autre")}>
+              <option value="meuble">Meuble</option>
+              <option value="autre">Autre (caisse)</option>
+            </Select>
           </Field>
+          {storageKind === "meuble" ? (
+            <Field label="Emplacement meuble" hint="Indiquez librement le meuble, l'étagère ou le rayon.">
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ex : Meuble entrée, étagère 2" />
+            </Field>
+          ) : (
+            <Field
+              label="Caisse"
+              hint="Tapez le numéro pour filtrer, ou scannez le QR code collé sur la caisse."
+              error={caisseScanError || undefined}
+            >
+              <div className="flex gap-2">
+                <SearchableSelect
+                  className="flex-1"
+                  value={caisseId}
+                  onChange={(next) => {
+                    setCaisseId(next as Id<"caisses"> | "");
+                    setCaisseScanError("");
+                  }}
+                  options={(caisses ?? []).map((caisse) => ({
+                    value: caisse._id,
+                    label: caisse.label ? `${caisse.code} — ${caisse.label}` : caisse.code,
+                    hint: caisse.zone,
+                  }))}
+                  placeholder="— Aucune caisse —"
+                  searchPlaceholder="Numéro ou nom de caisse…"
+                  emptyLabel="Aucune caisse ne correspond."
+                />
+                <Button type="button" variant="outline" onClick={() => setCaisseScanOpen(true)} title="Scanner le QR code de la caisse">
+                  <ScanLine className="h-4 w-4" />
+                  <span className="hidden sm:inline">Scanner</span>
+                </Button>
+              </div>
+            </Field>
+          )}
           {article ? (
             <Field label="Référence interne" hint="6 chiffres, générée automatiquement.">
               <Input
@@ -557,53 +557,7 @@ export function ArticleForm({
                 placeholder="000123"
               />
             </Field>
-          ) : (
-            <Field
-              label="QR code de l'article"
-              hint="Scannez une étiquette déjà collée sur l'objet, ou laissez vide pour générer une référence."
-              error={qrError || undefined}
-            >
-              <div className="flex gap-2">
-                <Input
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={qrReference}
-                  onChange={(e) => {
-                    setQrReference(e.target.value.replace(/\D/g, "").slice(0, 6));
-                    setQrError("");
-                  }}
-                  placeholder="Génération automatique"
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setQrScanOpen(true)}
-                  title="Scanner un QR code déjà imprimé"
-                >
-                  <ScanLine className="h-4 w-4" />
-                  <span className="hidden sm:inline">Scanner</span>
-                </Button>
-              </div>
-              {qrReference.length === 6 && scannedQr !== undefined && (
-                <p
-                  className={`mt-1.5 text-xs ${
-                    scannedQr === null
-                      ? "text-red-400"
-                      : scannedQr.articleId
-                        ? "text-amber-400"
-                        : "text-emerald-400"
-                  }`}
-                >
-                  {scannedQr === null
-                    ? "Ce QR code n'existe pas — générez-en depuis « Nouveau QR code »."
-                    : scannedQr.articleId
-                      ? `Déjà utilisé par « ${scannedQr.articleTitle ?? "un autre article"} ».`
-                      : "QR code libre, il sera attribué à cet article."}
-                </p>
-              )}
-            </Field>
-          )}
+          ) : null}
           <Field label="Réf. GDR" hint="Facultatif.">
             <Input
               value={gdrReference}
@@ -644,13 +598,6 @@ export function ArticleForm({
                 <option key={c} value={c}>{c}</option>
               ))}
             </Select>
-          </Field>
-          <Field label="Thème du lot" hint="Ex : mario, playmobil-pirates.">
-            <Input
-              value={themeKey}
-              onChange={(e) => setThemeKey(e.target.value)}
-              placeholder="mario"
-            />
           </Field>
           {article && (
             <Field label="Statut">
@@ -699,33 +646,6 @@ export function ArticleForm({
           )}
         </div>
       </div>
-
-      {/* Scan d'un QR code d'article déjà imprimé et collé sur l'objet. */}
-      {qrScanOpen && (
-        <div className="fixed inset-0 z-[300] bg-black">
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
-              </div>
-            }
-          >
-            <CameraScanner
-              onDetected={(code) => {
-                setQrScanOpen(false);
-                const digits = code.replace(/\D/g, "").slice(0, 6);
-                if (digits.length === 6) {
-                  setQrReference(digits);
-                  setQrError("");
-                } else {
-                  setQrError(`« ${code} » n'est pas un QR code d'article.`);
-                }
-              }}
-              onClose={() => setQrScanOpen(false)}
-            />
-          </Suspense>
-        </div>
-      )}
 
       {/* Scan du QR code de la caisse dans laquelle ranger l'article. */}
       {caisseScanOpen && (

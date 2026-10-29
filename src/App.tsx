@@ -5,8 +5,6 @@ import { Boutique } from "./pages/public/Boutique";
 import { Kiosk } from "./pages/public/Kiosk";
 import { KioskArticle } from "./pages/public/KioskArticle";
 import { ArticleDetail } from "./pages/public/ArticleDetail";
-import { CartPage } from "./pages/public/CartPage";
-import { CheckoutPage } from "./pages/public/CheckoutPage";
 import { PaymentLinkPage } from "./pages/public/PaymentLinkPage";
 import { Favoris } from "./pages/public/Favoris";
 import { TourneeTracking } from "./pages/public/TourneeTracking";
@@ -30,7 +28,6 @@ import {
 import { Compte } from "./pages/crm/Compte";
 import { CrmLayout } from "./components/crm/CrmLayout";
 import { RequireCrmPermission } from "./components/crm/RequireCrmPermission";
-import { Dashboard } from "./pages/crm/Dashboard";
 import { Demandes } from "./pages/crm/Demandes";
 import { Calendrier } from "./pages/crm/Calendrier";
 import { Articles } from "./pages/crm/Articles";
@@ -79,28 +76,8 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Navigate to="/boutique" replace />} />
         <Route path="/boutique" element={<Boutique />} />
-        <Route
-          path="/boutique/panier"
-          element={
-            <RequirePublicAccount
-              title="Connectez-vous pour réserver"
-              description="Votre compte permet de suivre votre demande boutique, d'échanger avec notre équipe et de retrouver vos informations."
-            >
-              <CartPage />
-            </RequirePublicAccount>
-          }
-        />
-        <Route
-          path="/boutique/paiement"
-          element={
-            <RequirePublicAccount
-              title="Connectez-vous pour payer"
-              description="Votre compte permet de suivre votre commande et de retrouver vos justificatifs."
-            >
-              <CheckoutPage />
-            </RequirePublicAccount>
-          }
-        />
+        <Route path="/boutique/panier" element={<Navigate to="/boutique" replace />} />
+        <Route path="/boutique/paiement" element={<Navigate to="/boutique" replace />} />
         {/* Lien de paiement envoyé par le CRM : accessible sans compte. */}
         <Route path="/paiement/:token" element={<PaymentLinkPage />} />
         <Route path="/favoris" element={<Favoris />} />
@@ -178,7 +155,7 @@ export default function App() {
 
       {/* CRM (dark mode, protégé Clerk) */}
       <Route path="/crm" element={<CrmLayout />}>
-        <Route index element={<RequireCrmPermission page="dashboard"><Dashboard /></RequireCrmPermission>} />
+        <Route index element={<Navigate to="/crm/demandes" replace />} />
         <Route path="notifications" element={<RequireCrmPermission page="notifications"><Notifications /></RequireCrmPermission>} />
         <Route path="messages" element={<RequireCrmPermission page="messages"><Messages /></RequireCrmPermission>} />
         <Route path="documents" element={<RequireCrmPermission page="documents"><Documents /></RequireCrmPermission>} />

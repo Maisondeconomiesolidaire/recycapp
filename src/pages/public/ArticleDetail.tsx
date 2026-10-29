@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { useClerk, useUser } from "@clerk/clerk-react";
 import {
@@ -10,18 +10,14 @@ import {
   Heart,
   PackageOpen,
   ShieldCheck,
-  ShoppingCart,
-  Truck,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { formatPrice } from "../../lib/format";
 import { PRICE_BG, PRICE_SHADOW } from "../../lib/publicColors";
 import { FullSpinner } from "../../components/ui/Spinner";
-import { Button } from "../../components/ui/Button";
 import { Lightbox } from "../../components/ui/Lightbox";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { useCart } from "../../lib/useCart";
 
 function createViewSessionId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -35,8 +31,6 @@ export function ArticleDetail() {
   const article = useQuery(api.articles.getPublic, {
     id: id as Id<"articles">,
   });
-  const cart = useCart();
-  const navigate = useNavigate();
   const viewerCount = useQuery(
     api.articles.viewerCount,
     id ? { articleId: id as Id<"articles"> } : "skip",
@@ -147,12 +141,6 @@ export function ArticleDetail() {
     bundledArticles.find((item) => item._id === selectedBundledId) ?? null;
   const displayImage =
     selectedBundledArticle?.imageUrls[0] ?? currentArticle.imageUrls[activeImage];
-  const inCart = cart.has(currentArticle._id);
-
-  function reserveNow() {
-    if (!inCart) cart.add(currentArticle._id);
-    navigate("/boutique/panier");
-  }
 
   return (
     <div className="bg-[#f6f4ef]">
@@ -365,14 +353,14 @@ export function ArticleDetail() {
                   <p className="mt-1 text-sm leading-6 text-zinc-600">Objet choisi et préparé par l’équipe.</p>
                 </div>
                 <div className="p-1">
-                  <Truck className="h-5 w-5 text-brand-500" />
+                  <PackageOpen className="h-5 w-5 text-brand-500" />
                   <p className="mt-3 text-sm font-semibold text-zinc-900">Retrait accompagné</p>
-                  <p className="mt-1 text-sm leading-6 text-zinc-600">Nous vous recontactons pour organiser le retrait.</p>
+                  <p className="mt-1 text-sm leading-6 text-zinc-600">Passez en boutique pour voir l'article et échanger avec l'équipe.</p>
                 </div>
                 <div className="p-1">
                   <BadgeCheck className="h-5 w-5 text-brand-500" />
-                  <p className="mt-3 text-sm font-semibold text-zinc-900">Réservation simple</p>
-                  <p className="mt-1 text-sm leading-6 text-zinc-600">Laissez vos coordonnées, nous faisons le reste.</p>
+                  <p className="mt-3 text-sm font-semibold text-zinc-900">Vente en boutique</p>
+                  <p className="mt-1 text-sm leading-6 text-zinc-600">Aucun panier ni réservation en ligne.</p>
                 </div>
               </div>
             </div>
@@ -380,31 +368,9 @@ export function ArticleDetail() {
             <div className="rounded-[32px] border border-black/5 bg-white p-6 shadow-[0_22px_60px_rgba(24,24,27,0.08)]">
               {available ? (
                 <>
-                  <h2 className="text-2xl font-bold tracking-tight text-zinc-950">
-                    Réserver cet article
-                  </h2>
+                  <h2 className="text-2xl font-bold tracking-tight text-zinc-950">Disponible en boutique</h2>
                   <p className="mt-2 text-sm leading-6 text-zinc-500">
-                    Ajoutez l’article à votre panier puis finalisez votre réservation en laissant
-                    simplement vos coordonnées.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => cart.add(currentArticle._id)}
-                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-3.5 text-base font-bold text-white shadow-[0_12px_30px_rgba(249,115,22,0.28)] transition hover:bg-orange-600"
-                  >
-                    {inCart ? <Check className="h-5 w-5" /> : <ShoppingCart className="h-5 w-5" />}
-                    {inCart ? "Ajouté au panier" : "Ajouter au panier"}
-                  </button>
-                  <Button
-                    type="button"
-                    size="lg"
-                    onClick={reserveNow}
-                    className="mt-3 w-full rounded-2xl"
-                  >
-                    Réserver maintenant
-                  </Button>
-                  <p className="mt-3 text-center text-xs text-zinc-400">
-                    Article mis de côté 48 h après la réservation.
+                    Passez en boutique pour acheter cet article. La réservation et le panier en ligne ne sont pas disponibles.
                   </p>
                 </>
               ) : (

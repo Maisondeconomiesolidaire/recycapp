@@ -1,14 +1,10 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Check, Heart, PackageOpen, ShoppingCart, UserRound, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, Heart, PackageOpen, UserRound } from "lucide-react";
 import { formatPrice } from "../../lib/format";
-import { useCart } from "../../lib/useCart";
 
 import { PRICE_BG, PRICE_SHADOW } from "../../lib/publicColors";
 
 const BRAND = "#f1104f";
-const ORANGE = "#f97316";
-const ORANGE_DARK = "#ea6a0c";
 
 /**
  * Consigne de la vitrine : on n'achète pas sur l'écran, un encadrant conclut
@@ -63,11 +59,7 @@ export function ArticleCard({
 }) {
   const kiosk = variant === "kiosk";
   const bundleCount = article.bundledArticleIds?.length ?? 0;
-  const cart = useCart();
-  const navigate = useNavigate();
-  const inCart = cart.has(article._id);
   const reserved = article.status === "reserve";
-  const [showPopup, setShowPopup] = useState(false);
 
   return (
     <>
@@ -195,94 +187,12 @@ export function ArticleCard({
             </span>
           </div>
         ) : !reserved && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (!inCart) cart.add(article._id);
-              setShowPopup(true);
-            }}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-bold text-white shadow-[0_10px_26px_rgba(249,115,22,0.28)] transition hover:-translate-y-0.5"
-            style={{ backgroundColor: inCart ? ORANGE_DARK : ORANGE }}
-          >
-            {inCart ? <Check className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
-            {inCart ? "Ajouté au panier" : "Ajouter au panier"}
-          </button>
+          <p className="mt-3 rounded-full bg-zinc-100 px-3 py-2 text-center text-xs font-semibold text-zinc-700">
+            Passez en boutique
+          </p>
         )}
       </div>
     </Link>
-
-    {/* Add to cart popup */}
-    {showPopup && !kiosk && (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        onClick={() => setShowPopup(false)}
-      >
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
-        <div
-          className="relative w-full max-w-sm overflow-hidden rounded-[28px] bg-white shadow-[0_32px_80px_rgba(24,24,27,0.24)]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Green check banner */}
-          <div className="flex items-center gap-2.5 px-5 py-4" style={{ backgroundColor: BRAND }}>
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
-              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-            </span>
-            <span className="text-sm font-bold text-white">Article ajouté au panier</span>
-            <button
-              type="button"
-              onClick={() => setShowPopup(false)}
-              className="ml-auto rounded-full p-0.5 text-white/70 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Product preview */}
-          <div className="flex items-center gap-4 border-b border-zinc-100 p-5">
-            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-[#f2eee7]">
-              {article.imageUrls[0] && (
-                <img
-                  src={article.imageUrls[0]}
-                  alt={article.title}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
-                />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-950">{article.title}</p>
-              <p className="mt-1 text-xs text-zinc-400">{article.condition}</p>
-              <p className="mt-1.5 text-lg font-extrabold" style={{ color: BRAND }}>
-                {formatPrice(article.price)}
-              </p>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="space-y-2.5 p-5">
-            <button
-              type="button"
-              onClick={() => { setShowPopup(false); navigate("/boutique/panier"); }}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(241,16,79,0.32)] transition hover:-translate-y-0.5"
-              style={{ backgroundColor: BRAND }}
-            >
-              Réserver maintenant
-              <ArrowRight className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPopup(false)}
-              className="flex w-full items-center justify-center rounded-2xl border border-zinc-200 py-3.5 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
-            >
-              Poursuivre mes achats
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
   </>
   );
 }
