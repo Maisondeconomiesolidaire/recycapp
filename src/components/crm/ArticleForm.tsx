@@ -582,24 +582,24 @@ export function ArticleForm({
                   setCategoryPickerLevel(0);
                   setCategoryPickerOpen((open) => !open);
                 }}
-                className="flex h-11 w-full items-center justify-between rounded-lg border border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] px-3 text-left text-sm text-zinc-100 transition hover:border-brand-500/60"
+                className="flex h-11 w-full items-center justify-between rounded-lg border border-[var(--crm-border-strong)] bg-[var(--crm-surface-2)] px-3 text-left text-sm text-[var(--foreground)] transition hover:border-brand-500/60"
               >
                 <span className={categoryPath.length ? "truncate" : "text-zinc-500"}>
                   {categoryPath.at(-1) ?? "Choisir une catégorie"}
                 </span>
-                <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
+                <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
               </button>
               {categoryPickerOpen && (() => {
                 const prefix = categoryPath.slice(0, categoryPickerLevel);
                 const options = childCategories(emmausCategories, prefix);
                 return (
                   <div className="absolute z-30 mt-2 w-[min(28rem,calc(100vw-3rem))] overflow-hidden rounded-xl border border-[var(--crm-border-strong)] bg-[var(--crm-surface)] shadow-2xl">
-                    <div className="flex items-center gap-2 border-b border-[var(--crm-border)] px-3 py-2 text-xs text-zinc-400">
+                    <div className="flex items-center gap-2 border-b border-[var(--crm-border)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
                       {categoryPickerLevel > 0 && (
                         <button
                           type="button"
                           onClick={() => setCategoryPickerLevel((level) => level - 1)}
-                          className="rounded p-1 hover:bg-[var(--crm-surface-2)] hover:text-zinc-100"
+                          className="rounded p-1 hover:bg-[var(--crm-surface-2)] hover:text-[var(--foreground)]"
                           aria-label="Revenir au niveau précédent"
                         >
                           <ChevronLeft className="h-4 w-4" />
@@ -621,7 +621,7 @@ export function ArticleForm({
                               setCategoryPickerOpen(false);
                             }
                           }}
-                          className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-100 transition hover:bg-brand-500/15 hover:text-brand-100"
+                          className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-[var(--foreground)] transition hover:bg-brand-500/15"
                         >
                           {option}
                         </button>
