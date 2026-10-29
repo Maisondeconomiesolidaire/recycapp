@@ -5,7 +5,8 @@ import { PortalButton } from "../../components/PortalButton";
 import { api } from "../../../convex/_generated/api";
 import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { ARTICLE_CATEGORIES } from "../../lib/constants";
+import { ARTICLE_CATEGORIES, ARTICLE_SITES } from "../../lib/constants";
+import type { Site } from "../../lib/constants";
 import {
   ArticleCard,
   KIOSK_CALL_MESSAGE_GENERAL,
@@ -28,9 +29,11 @@ const BRAND = "#f1104f";
 export function Kiosk() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | null>(null);
+  const [site, setSite] = useState<Site | "all">("all");
 
   const articles = useQuery(api.articles.listPublic, {
     categories: category ? [category] : undefined,
+    site: site === "all" ? undefined : site,
   });
   const productOfDay = useQuery(api.articles.getProductOfDay, {});
   // La mise en avant s'efface dès qu'on filtre ou qu'on cherche : elle
@@ -124,6 +127,23 @@ export function Kiosk() {
                 {filteredArticles?.length ?? 0} article
                 {(filteredArticles?.length ?? 0) > 1 ? "s" : ""}
               </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Lieu</span>
+              <div className="inline-flex rounded-full border border-white/40 bg-white/60 p-1 shadow-sm">
+                {[{ value: "all", label: "Tous" }, ...ARTICLE_SITES].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSite(option.value as Site | "all")}
+                    className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                      site === option.value ? "bg-brand-500 text-white" : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

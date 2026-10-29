@@ -38,7 +38,7 @@ function SiteFilter({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-        Recyclerie
+        Lieu
       </span>
       <div className="inline-flex rounded-full border border-white/40 bg-white/60 p-1 shadow-[0_10px_24px_rgba(24,24,27,0.08)] backdrop-blur">
         {options.map((option) => {

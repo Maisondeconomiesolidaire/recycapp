@@ -30,6 +30,7 @@ type NavItem = (typeof CRM_PAGES)[number];
 // Modules temporairement masqués de la navigation (les pages/routes restent
 // accessibles et seront réintégrées plus tard).
 const HIDDEN_NAV_KEYS: CrmPageKey[] = [
+  "dashboard",
   "tournees",
   "arrivages",
   "sorties",
@@ -45,7 +46,7 @@ function visibleNav(access: ReturnType<typeof useQuery<typeof api.permissions.my
     (item) =>
       !HIDDEN_NAV_KEYS.includes(item.key) &&
       (item.adminOnly ? access?.isAdmin : canAccess(access, item.key)),
-  );
+  ).sort((a, b) => (a.key === "demandes" ? -1 : b.key === "demandes" ? 1 : 0));
 }
 
 function useTheme() {
