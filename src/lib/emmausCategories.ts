@@ -5,6 +5,13 @@ export type EmmausCategory = {
   label: string;
 };
 
+const HIDDEN_ROOT_CATEGORIES = new Set([
+  "Mode",
+  "Fait main",
+  "Cartes cadeaux",
+  "Bons plans",
+]);
+
 function parseCsvLine(line: string) {
   const cells: string[] = [];
   let current = "";
@@ -50,6 +57,7 @@ export function childCategories(categories: EmmausCategory[], path: string[]) {
       categories
         .filter((category) =>
           category.path.length > level &&
+          !(level === 0 && HIDDEN_ROOT_CATEGORIES.has(category.path[0])) &&
           path.every((part, index) => category.path[index] === part),
         )
         .map((category) => category.path[level]),
