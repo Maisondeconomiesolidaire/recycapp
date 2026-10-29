@@ -79,15 +79,22 @@ export function ArticleForm({
     // backend partagé ; il reste modifiable pour les fiches existantes.
     article?.weightKg !== undefined ? String(article.weightKg) : "0",
   );
-  // Rangement : l'article vit dans une caisse, identifiée par son QR code.
+  // Rangement : une caisse est identifiée par son QR code ; les autres
+  // emplacements sont enregistrés comme texte libre dans `location`.
   const [caisseId, setCaisseId] = useState<Id<"caisses"> | "">(
     article?.caisseId ?? "",
   );
   const [site, setSite] = useState<Site | "">(article?.site ?? "");
   const [caisseScanOpen, setCaisseScanOpen] = useState(false);
   const [caisseScanError, setCaisseScanError] = useState("");
-  const [storageKind, setStorageKind] = useState<"meuble" | "autre">(
-    article?.caisseId ? "autre" : "meuble",
+  const [storageKind, setStorageKind] = useState<
+    "meuble" | "grillager" | "caisse" | "autre"
+  >(
+    article?.caisseId
+      ? "caisse"
+      : article?.location === "grillager"
+        ? "grillager"
+        : "meuble",
   );
   const [location, setLocation] = useState(article?.location ?? "");
   const [originalPrice, setOriginalPrice] = useState(
@@ -244,8 +251,13 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          caisseId: storageKind === "autre" ? caisseId || undefined : undefined,
-          location: storageKind === "meuble" ? location.trim() || undefined : undefined,
+          caisseId: storageKind === "caisse" ? caisseId || undefined : undefined,
+          location:
+            storageKind === "grillager"
+              ? "grillager"
+              : storageKind === "meuble" || storageKind === "autre"
+                ? location.trim() || undefined
+                : undefined,
           site: site || undefined,
           originalPrice: originalPriceNum,
           internalReference,
@@ -268,8 +280,13 @@ export function ArticleForm({
           description,
           price: priceNum,
           weightKg: weightNum,
-          caisseId: storageKind === "autre" ? caisseId || undefined : undefined,
-          location: storageKind === "meuble" ? location.trim() || undefined : undefined,
+          caisseId: storageKind === "caisse" ? caisseId || undefined : undefined,
+          location:
+            storageKind === "grillager"
+              ? "grillager"
+              : storageKind === "meuble" || storageKind === "autre"
+                ? location.trim() || undefined
+                : undefined,
           site: site || undefined,
           originalPrice: originalPriceNum,
           gdrReference: gdrReference.trim() || undefined,
@@ -522,16 +539,32 @@ export function ArticleForm({
             </Select>
           </Field>
           <Field label="Emplacement">
-            <Select value={storageKind} onChange={(e) => setStorageKind(e.target.value as "meuble" | "autre")}>
+            <Select
+              value={storageKind}
+              onChange={(e) =>
+                setStorageKind(
+                  e.target.value as "meuble" | "grillager" | "caisse" | "autre",
+                )
+              }
+            >
               <option value="meuble">Meuble</option>
-              <option value="autre">Autre (caisse)</option>
+              <option value="grillager">Grillager</option>
+              <option value="caisse">Caisse</option>
+              <option value="autre">Autre</option>
             </Select>
           </Field>
-          {storageKind === "meuble" ? (
-            <Field label="Emplacement meuble" hint="Indiquez librement le meuble, l'étagère ou le rayon.">
-              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ex : Meuble entrée, étagère 2" />
+          {storageKind === "meuble" || storageKind === "autre" ? (
+            <Field
+              label={storageKind === "meuble" ? "Emplacement meuble" : "Autre emplacement"}
+              hint="Indiquez librement le meuble, l'étagère, le rayon ou l'emplacement."
+            >
+              <Input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder={storageKind === "meuble" ? "Ex : Meuble entrée, étagère 2" : "Ex : Réserve arrière"}
+              />
             </Field>
-          ) : (
+          ) : storageKind === "caisse" ? (
             <Field
               label="Caisse"
               hint="Tapez le numéro pour filtrer, ou scannez le QR code collé sur la caisse."
@@ -560,7 +593,7 @@ export function ArticleForm({
                 </Button>
               </div>
             </Field>
-          )}
+          ) : null}
           {article ? (
             <Field label="Référence interne" hint="6 chiffres, générée automatiquement.">
               <Input
