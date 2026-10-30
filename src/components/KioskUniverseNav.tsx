@@ -5,14 +5,15 @@
  * le Bâtiment (BâtiRe). Cette barre est le seul chemin de l'un à l'autre.
  *
  * Copie IDENTIQUE dans `~/recycapp` et `~/batire` (même chemin) : composant
- * volontairement autonome — liens absolus, couleurs neutres, aucun import
- * local — pour que les deux vitrines affichent exactement la même barre.
+ * volontairement autonome — liens absolus, couleurs et police fixées, aucun
+ * import local — pour que les deux vitrines affichent exactement la même barre,
+ * quelle que soit la typographie de l'app.
  */
 export const KIOSK_UNIVERSES = [
   {
     id: "recyclerie",
     label: "Univers Recyclerie",
-    href: "https://recycapp.groupemes.fr/kiosk",
+    href: "https://mesrecycleries.groupemes.fr/kiosk",
     logo: "/recyclerie-logo.png",
   },
   {
@@ -27,7 +28,10 @@ export type KioskUniverse = (typeof KIOSK_UNIVERSES)[number]["id"];
 
 export function KioskUniverseNav({ current }: { current: KioskUniverse }) {
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/90 backdrop-blur">
+    <header
+      className="sticky top-0 z-50 border-b border-zinc-200 bg-white"
+      style={{ fontFamily: '"Inter Variable", ui-sans-serif, system-ui, sans-serif' }}
+    >
       <nav className="mx-auto flex w-full max-w-[92rem] gap-2 px-5 py-3 sm:px-7 lg:px-8">
         {KIOSK_UNIVERSES.map((universe) => {
           const active = universe.id === current;
