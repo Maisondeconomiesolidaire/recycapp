@@ -7,13 +7,8 @@ import { FullSpinner } from "../../components/ui/Spinner";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ARTICLE_CATEGORIES, ARTICLE_SITES } from "../../lib/constants";
 import type { Site } from "../../lib/constants";
-import {
-  ArticleCard,
-  KIOSK_CALL_MESSAGE_GENERAL,
-} from "../../components/public/ArticleCard";
+import { ArticleCard } from "../../components/public/ArticleCard";
 import { ProductOfDayHero } from "../../components/public/ProductOfDayHero";
-
-const BRAND = "#f1104f";
 
 /**
  * Vitrine physique (mode kiosque).
@@ -76,16 +71,6 @@ export function Kiosk() {
             />
           </div>
         </div>
-      </section>
-
-      {/* Consigne d'achat : c'est la seule action possible ici. */}
-      <section className="mx-auto w-full max-w-[92rem] px-5 sm:px-7 lg:px-8">
-        <p
-          className="rounded-[28px] px-6 py-5 text-center text-base font-bold text-white shadow-[0_18px_45px_rgba(241,16,79,0.24)] sm:text-lg"
-          style={{ backgroundColor: BRAND }}
-        >
-          {KIOSK_CALL_MESSAGE_GENERAL}
-        </p>
       </section>
 
       {showFeatured && productOfDay && (

@@ -10,8 +10,6 @@ const BRAND = "#f1104f";
  * Consigne de la vitrine : on n'achète pas sur l'écran, un encadrant conclut
  * la vente puis passe l'article en « vendu » depuis le CRM.
  */
-export const KIOSK_CALL_MESSAGE_GENERAL = "Intéressé(e) ? Faites appel à un vendeur.";
-
 export const KIOSK_SCAN_LABEL = "Intéressé(e) ? Faites appel à un vendeur";
 
 export type ShopArticleCard = {
