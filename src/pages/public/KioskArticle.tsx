@@ -9,6 +9,7 @@ import { Lightbox } from "../../components/ui/Lightbox";
 import { formatPrice } from "../../lib/format";
 import { PRICE_BG, PRICE_SHADOW } from "../../lib/publicColors";
 import { KIOSK_SCAN_LABEL } from "../../components/public/ArticleCard";
+import { KioskUniverseNav } from "../../components/KioskUniverseNav";
 
 /**
  * Fiche article en vitrine.
@@ -182,7 +183,9 @@ function KioskShell({ children }: { children: React.ReactNode }) {
         </video>
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(246,244,239,0.48)_0%,rgba(246,244,239,0.64)_16%,rgba(246,244,239,0.78)_34%,rgba(246,244,239,0.88)_100%)]" />
       </div>
-      <div className="relative z-10 mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
+      <div className="relative z-10">
+      <KioskUniverseNav current="recyclerie" />
+      <div className="mx-auto w-full max-w-[92rem] px-5 py-8 sm:px-7 sm:py-10 lg:px-8">
         <Link
           to="/kiosk"
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 shadow-sm transition hover:text-zinc-900"
@@ -191,6 +194,7 @@ function KioskShell({ children }: { children: React.ReactNode }) {
           Retour à la vitrine
         </Link>
         {children}
+      </div>
       </div>
     </div>
   );

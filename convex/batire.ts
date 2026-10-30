@@ -11,7 +11,8 @@
 import { ConvexError, v } from "convex/values";
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { thumbnailUrl } from "./thumbnails";
 import { api, internal } from "./_generated/api";
 import {
   accessAllows,
@@ -27,14 +28,12 @@ const PAGE_MATERIAUX = "batire:materiaux";
 const PAGE_DEMANDES = "batire:demandes";
 
 /** Photos et fiche technique signées : un identifiant de stockage ne s'ouvre pas. */
-async function withPhotoUrls(
-  ctx: { storage: { getUrl: (id: Id<"_storage">) => Promise<string | null> } },
-  material: Doc<"btMaterials">,
-) {
+async function withPhotoUrls(ctx: QueryCtx, material: Doc<"btMaterials">) {
   const photoUrls = await Promise.all(material.photos.map((id) => ctx.storage.getUrl(id)));
   return {
     ...material,
     photoUrls: photoUrls.filter((url): url is string => Boolean(url)),
+    thumbUrl: material.photos[0] ? await thumbnailUrl(ctx, material.photos[0]) : null,
     datasheetUrl: material.datasheet ? await ctx.storage.getUrl(material.datasheet) : null,
   };
 }
@@ -449,10 +448,7 @@ export const removeMaterial = mutation({
  * vient un lot et par qui il est passé : elles regardent l'équipe, pas
  * l'acheteur.
  */
-async function publicMaterial(
-  ctx: { storage: { getUrl: (id: Id<"_storage">) => Promise<string | null> } },
-  material: Doc<"btMaterials">,
-) {
+async function publicMaterial(ctx: QueryCtx, material: Doc<"btMaterials">) {
   const photoUrls = await Promise.all(material.photos.map((id) => ctx.storage.getUrl(id)));
   return {
     _id: material._id,
@@ -491,6 +487,8 @@ async function publicMaterial(
     /** Mise en ligne, pour classer les nouveautés. À défaut, la création. */
     publishedAt: material.publishedAt ?? material.createdAt,
     photoUrls: photoUrls.filter((url): url is string => Boolean(url)),
+    /** Miniature de la couverture pour les cartes (repli : la photo). */
+    thumbUrl: material.photos[0] ? await thumbnailUrl(ctx, material.photos[0]) : null,
   };
 }
 
@@ -831,6 +829,55 @@ async function nextOrderReference(ctx: { db: { query: (t: "btOrders") => any } }
   return `BT${String(all.length + 1).padStart(5, "0")}`;
 }
 
+/** Fige prix et quantité d'une commande, payée en ligne ou réservée. */
+async function insertOrder(
+  ctx: MutationCtx,
+  args: {
+    materialId: Id<"btMaterials">;
+    quantity: number;
+    customer: Doc<"btOrders">["customer"];
+    channel: Doc<"btOrders">["channel"];
+    pickupLocation?: Doc<"btOrders">["pickupLocation"];
+    userId?: string;
+  },
+  status: "en_attente" | "reservee",
+) {
+  const material = await ctx.db.get(args.materialId);
+  if (!material) throw new ConvexError("Matériau introuvable.");
+  if (material.status !== "disponible") {
+    throw new ConvexError(`« ${material.title} » n'est plus disponible.`);
+  }
+  if (material.price <= 0) throw new ConvexError("Ce matériau n'a pas de prix.");
+  const quantity = Math.max(0, Number(args.quantity) || 0);
+  if (quantity <= 0) throw new ConvexError("Indiquez une quantité.");
+  if (quantity > material.quantity) {
+    throw new ConvexError(
+      `Stock insuffisant : ${material.quantity} ${material.unit} disponible.`,
+    );
+  }
+
+  const amountCents = Math.round(material.price * quantity * 100);
+  if (amountCents <= 0) throw new ConvexError("Le montant doit être supérieur à 0 €.");
+
+  const reference = await nextOrderReference(ctx);
+  const orderId = await ctx.db.insert("btOrders", {
+    reference,
+    materialId: args.materialId,
+    materialTitle: material.title,
+    quantity,
+    unit: material.unit,
+    unitPrice: material.price,
+    amountCents,
+    customer: { ...args.customer, email: args.customer.email.trim().toLowerCase() },
+    pickupLocation: args.pickupLocation,
+    channel: args.channel,
+    status,
+    userId: args.userId,
+    createdAt: Date.now(),
+  });
+  return { orderId, reference, amountCents, title: material.title, unit: material.unit };
+}
+
 /** Commande en attente de paiement : c'est elle qui fige prix et quantité. */
 export const createOrder = internalMutation({
   args: {
@@ -842,39 +889,53 @@ export const createOrder = internalMutation({
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const material = await ctx.db.get(args.materialId);
-    if (!material) throw new ConvexError("Matériau introuvable.");
-    if (material.status !== "disponible") {
-      throw new ConvexError(`« ${material.title} » n'est plus disponible.`);
-    }
-    if (material.price <= 0) throw new ConvexError("Ce matériau n'a pas de prix.");
-    const quantity = Math.max(0, Number(args.quantity) || 0);
-    if (quantity <= 0) throw new ConvexError("Indiquez une quantité.");
-    if (quantity > material.quantity) {
-      throw new ConvexError(
-        `Stock insuffisant : ${material.quantity} ${material.unit} disponible.`,
-      );
-    }
+    const { orderId, amountCents, title, unit } = await insertOrder(ctx, args, "en_attente");
+    return { orderId, amountCents, title, unit };
+  },
+});
 
-    const amountCents = Math.round(material.price * quantity * 100);
-    if (amountCents <= 0) throw new ConvexError("Le montant doit être supérieur à 0 €.");
-
-    const orderId = await ctx.db.insert("btOrders", {
-      reference: await nextOrderReference(ctx),
-      materialId: args.materialId,
-      materialTitle: material.title,
-      quantity,
-      unit: material.unit,
-      unitPrice: material.price,
-      amountCents,
-      customer: { ...args.customer, email: args.customer.email.trim().toLowerCase() },
-      pickupLocation: args.pickupLocation,
-      channel: args.channel,
-      status: "en_attente",
-      userId: args.userId,
-      createdAt: Date.now(),
+/**
+ * Réservation depuis la boutique : le client choisit son lieu de retrait et
+ * règle sur place. Le stock n'est pas décompté ici — il l'est à l'encaissement.
+ */
+export const reserveMaterial = mutation({
+  args: {
+    materialId: v.id("btMaterials"),
+    quantity: v.number(),
+    customer: customerValidator,
+    pickupLocation: pickupLocationValidator,
+  },
+  handler: async (ctx, args): Promise<{ reference: string }> => {
+    const email = args.customer.email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) throw new ConvexError("Adresse email invalide.");
+    if (!args.customer.firstName.trim() || !args.customer.lastName.trim()) {
+      throw new ConvexError("Indiquez votre prénom et votre nom.");
+    }
+    const identity = await ctx.auth.getUserIdentity();
+    const order = await insertOrder(
+      ctx,
+      {
+        materialId: args.materialId,
+        quantity: args.quantity,
+        customer: { ...args.customer, email },
+        channel: "boutique",
+        pickupLocation: args.pickupLocation,
+        userId: identity?.subject,
+      },
+      "reservee",
+    );
+    const { reference } = order;
+    await ctx.scheduler.runAfter(0, internal.batireEmails.sendReservationConfirmation, {
+      to: email,
+      firstName: args.customer.firstName,
+      reference,
+      title: order.title,
+      quantity: args.quantity,
+      unit: order.unit,
+      amountCents: order.amountCents,
+      pickupLocation: pickupLocations[args.pickupLocation],
     });
-    return { orderId, amountCents, title: material.title, unit: material.unit };
+    return { reference };
   },
 });
 
@@ -2113,7 +2174,26 @@ export const BT_MATERIALS = [
 
 /** Unité dans laquelle sont saisies les dimensions. */
 export const BT_DIMENSION_UNITS = ["mm", "cm", "m"];
-const CONDITIONS = ["Neuf", "Très bon", "Bon", "Usagé"];
+/** Les cinq états de Leboncoin, mot pour mot (voir `btCondition`). */
+const CONDITIONS = ["État neuf", "Très bon état", "Bon état", "État satisfaisant", "Pour pièces"];
+
+/**
+ * Ancien état → état actuel. Sert à l'import Excel (un fichier préparé avec
+ * l'ancienne liste reste importable) et à la migration des fiches existantes.
+ */
+const LEGACY_CONDITIONS: Record<string, string> = {
+  Neuf: "État neuf",
+  Déstockage: "État neuf",
+  "Très bon": "Très bon état",
+  Reconditionné: "Très bon état",
+  Bon: "Bon état",
+  Usagé: "État satisfaisant",
+  "À reconditionner": "État satisfaisant",
+  "À rénover": "État satisfaisant",
+};
+
+const currentCondition = (value: string | undefined) =>
+  value && CONDITIONS.includes(value) ? value : (value && LEGACY_CONDITIONS[value]) || "Bon état";
 
 
 /** Appel OpenAI en JSON strict, partagé par les deux passes du classement. */
@@ -2540,7 +2620,7 @@ La liste est classée par proximité de vocabulaire, pas par justesse : lis-la e
     ];
     if (result.materials.length > 0) result.material = result.materials.join(", ");
 
-    if (!CONDITIONS.includes(result.condition)) result.condition = "Bon";
+    result.condition = currentCondition(result.condition);
     if (!UNITS.includes(result.unit)) result.unit = "unité";
     const positive = (value: unknown) => {
       const parsed = Number(value);
@@ -2795,7 +2875,6 @@ export const importMaterials = mutation({
     if (rows.length > 500) throw new ConvexError("500 lignes au maximum par import.");
 
     const units = ["unité", "m²", "m³", "ml", "kg", "tonne", "palette", "sac", "lot"];
-    const conditions = CONDITIONS;
     const now = Date.now();
     const errors: Array<{ line: number; reason: string }> = [];
     let imported = 0;
@@ -2816,7 +2895,7 @@ export const importMaterials = mutation({
           ? row.subcategory
           : undefined;
       const unit = units.includes(row.unit ?? "") ? row.unit! : "unité";
-      const condition = conditions.includes(row.condition ?? "") ? row.condition! : "Bon";
+      const condition = currentCondition(row.condition);
 
       await ctx.db.insert("btMaterials", {
         title,
@@ -2845,5 +2924,40 @@ export const importMaterials = mutation({
       imported++;
     }
     return { imported, errors };
+  },
+});
+
+/**
+ * Migration ponctuelle : passe les états des fiches et des dons sur les
+ * libellés Leboncoin. Interne (lancée à la main), et en simulation par
+ * défaut :
+ *   npx convex run batire:migrateConditionsToLeboncoin '{}' --prod
+ *   npx convex run batire:migrateConditionsToLeboncoin '{"apply": true}' --prod
+ * Idempotente : une fiche déjà migrée n'est plus touchée.
+ */
+export const migrateConditionsToLeboncoin = internalMutation({
+  args: { apply: v.optional(v.boolean()) },
+  handler: async (ctx, { apply }) => {
+    // Une liste plutôt qu'un objet : Convex refuse les clés non ASCII (« é »).
+    const changes: Array<{ table: string; from: string; to: string; count: number }> = [];
+    const count = (table: string, from: string, to: string) => {
+      const entry = changes.find((change) => change.table === table && change.from === from);
+      if (entry) entry.count += 1;
+      else changes.push({ table, from, to, count: 1 });
+    };
+
+    for (const material of await ctx.db.query("btMaterials").collect()) {
+      const next = LEGACY_CONDITIONS[material.condition];
+      if (!next) continue;
+      count("btMaterials", material.condition, next);
+      if (apply) await ctx.db.patch(material._id, { condition: next as Doc<"btMaterials">["condition"] });
+    }
+    for (const donation of await ctx.db.query("btDonations").collect()) {
+      const next = donation.condition && LEGACY_CONDITIONS[donation.condition];
+      if (!next) continue;
+      count("btDonations", donation.condition!, next);
+      if (apply) await ctx.db.patch(donation._id, { condition: next as Doc<"btMaterials">["condition"] });
+    }
+    return { applied: Boolean(apply), changes };
   },
 });
