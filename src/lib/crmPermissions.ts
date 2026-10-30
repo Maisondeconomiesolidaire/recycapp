@@ -1,5 +1,6 @@
 import {
   Bell,
+  Bike,
   CalendarClock,
   CalendarDays,
   FolderOpen,
@@ -153,6 +154,16 @@ export const CRM_PAGES: CrmPageDefinition[] = [
     to: "/crm/articles",
     icon: Package,
     actions: ["read", "create", "update", "delete", "print", "analyze"],
+  },
+  {
+    // Même clé de permission que le stock : le backend des vélos (`bikes.*`)
+    // accepte `recycapp:articles`. Les vélos finissent dans Cycle en Bray.
+    key: "articles",
+    label: "Vélos",
+    description: "Vélos publiés dans la boutique Cycle en Bray.",
+    to: "/crm/velos",
+    icon: Bike,
+    actions: ["read", "create", "update", "delete"],
   },
   {
     key: "caisse",

@@ -31,6 +31,7 @@ import { RequireCrmPermission } from "./components/crm/RequireCrmPermission";
 import { Demandes } from "./pages/crm/Demandes";
 import { Calendrier } from "./pages/crm/Calendrier";
 import { Articles } from "./pages/crm/Articles";
+import { Velos } from "./pages/crm/Velos";
 import { ArticleFiche } from "./pages/crm/ArticleFiche";
 import { Clients } from "./pages/crm/Clients";
 import { Taches } from "./pages/crm/AgentsPolyvalents";
@@ -164,6 +165,7 @@ export default function App() {
         <Route path="clients" element={<RequireCrmPermission page="clients"><Clients /></RequireCrmPermission>} />
         <Route path="articles" element={<RequireCrmPermission page="articles"><Articles /></RequireCrmPermission>} />
         <Route path="articles/:id" element={<RequireCrmPermission page="articles"><ArticleFiche /></RequireCrmPermission>} />
+        <Route path="velos" element={<RequireCrmPermission page="articles"><Velos /></RequireCrmPermission>} />
         <Route path="arrivages" element={<RequireCrmPermission page="arrivages"><Arrivages /></RequireCrmPermission>} />
         <Route path="caisse" element={<RequireCrmPermission page="caisse"><Caisse /></RequireCrmPermission>} />
         <Route path="ateliers" element={<RequireCrmPermission page="ateliers"><Ateliers /></RequireCrmPermission>} />
