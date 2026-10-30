@@ -1,10 +1,12 @@
 /**
  * Bascule entre les vitrines du dépôt.
  *
- * Le même écran d'entrée présente deux univers : la Recyclerie (Recycapp) et
- * le Bâtiment (BâtiRe). Cette barre est le seul chemin de l'un à l'autre.
+ * Le même écran d'entrée présente plusieurs univers : la Recyclerie
+ * (Recycapp), les Vélos (Cycle en Bray) et le Bâtiment (BâtiRe). Cette barre
+ * est le seul chemin de l'un à l'autre.
  *
- * Copie IDENTIQUE dans `~/recycapp` et `~/batire` (même chemin) : composant
+ * Copie IDENTIQUE dans `~/recycapp`, `~/cycleenbray` et `~/batire` (même
+ * chemin) : composant
  * volontairement autonome — liens absolus, couleurs et police fixées, aucun
  * import local — pour que les deux vitrines affichent exactement la même barre,
  * quelle que soit la typographie de l'app.
@@ -25,6 +27,19 @@ export const KIOSK_UNIVERSES = [
     marqueeBg: "#f1104f",
   },
   {
+    id: "velos",
+    label: "Univers Vélos",
+    href: "https://cycleenbray.groupemes.fr/kiosk",
+    logo: "/cycle-en-bray-logo.webp",
+    marquee: [
+      "Vélos de réemploi à petit prix",
+      "Achat ou location, quantités limitées",
+      "Retrait accompagné par notre équipe",
+    ],
+    // Vert du logo Cycle en Bray.
+    marqueeBg: "#196b24",
+  },
+  {
     id: "batiment",
     label: "Univers Bâtiment",
     href: "https://batire.groupemes.fr/kiosk",
@@ -40,6 +55,12 @@ export const KIOSK_UNIVERSES = [
 ] as const;
 
 export type KioskUniverse = (typeof KIOSK_UNIVERSES)[number]["id"];
+
+/**
+ * Univers masqués de la barre. BâtiRe l'est pour l'instant : sa vitrine reste
+ * en ligne, mais aucun onglet n'y mène.
+ */
+const HIDDEN_UNIVERSES: KioskUniverse[] = ["batiment"];
 
 export function KioskUniverseNav({ current }: { current: KioskUniverse }) {
   const { marquee, marqueeBg } = KIOSK_UNIVERSES.find((universe) => universe.id === current)!;
@@ -68,7 +89,7 @@ export function KioskUniverseNav({ current }: { current: KioskUniverse }) {
         </div>
       </div>
       <nav className="mx-auto flex w-full max-w-[92rem] gap-2 px-5 py-3 sm:px-7 lg:px-8">
-        {KIOSK_UNIVERSES.map((universe) => {
+        {KIOSK_UNIVERSES.filter((universe) => !HIDDEN_UNIVERSES.includes(universe.id)).map((universe) => {
           const active = universe.id === current;
           const content = (
             <>
